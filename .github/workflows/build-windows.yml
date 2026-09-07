@@ -42,16 +42,24 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
-
-      - name: Configure npm for MSVC
-        run: npm config set msvs_version 2022
+      - name: Install Inno Setup
+        if: ${{ inputs.build_installer == 'true' || inputs.build_installer == true }}
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          $innoPath = "${env:ProgramFiles(x86)}\Inno Setup 6"
+          if (-not (Test-Path $innoPath)) {
+            $innoPath = "${env:ProgramFiles}\Inno Setup 6"
+          }
+          echo "$innoPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Inno Setup added to PATH: $innoPath"
 
       - name: Install dependencies
         run: npm ci
         env:
           npm_config_arch: x64
           npm_config_build_from_source: false
+          GYP_MSVS_VERSION: '2022'
 
       - name: Build Arni Agent extension
         shell: pwsh
