@@ -1,0 +1,133 @@
+name: Build Arni Code — Windows x64
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_installer:
+        description: 'Build Windows installer (.exe)'
+        required: false
+        default: 'true'
+        type: boolean
+      build_archive:
+        description: 'Build portable archive (.zip)'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read .nvmrc
+        id: nvmrc
+        shell: bash
+        run: |
+          if [ -f .nvmrc ]; then
+            echo "node_version=$(cat .nvmrc | tr -d '\n\r')" >> $GITHUB_OUTPUT
+          else
+            echo "node_version=20" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvmrc.outputs.node_version }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure npm for MSVC
+        run: npm config set msvs_version 2022
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          npm_config_arch: x64
+          npm_config_build_from_source: false
+
+      - name: Build Arni Agent extension
+        shell: pwsh
+        run: |
+          $extensionDir = "extensions\arni-agent"
+          if (Test-Path $extensionDir) {
+            Push-Location $extensionDir
+            npm install
+            if (Test-Path "esbuild.js") {
+              node esbuild.js --production
+            }
+            Pop-Location
+            Write-Host "Arni Agent extension built successfully."
+          } else {
+            Write-Warning "Arni Agent extension directory not found."
+          }
+
+      - name: Build Arni Code (production)
+        run: npm run gulp vscode-win32-x64-min
+        env:
+          npm_config_arch: x64
+
+      - name: Build Windows installer
+        if: ${{ inputs.build_installer == 'true' || inputs.build_installer == true }}
+        run: npm run gulp vscode-win32-x64-inno-setup
+
+      - name: Build portable archive
+        if: ${{ inputs.build_archive == 'true' || inputs.build_archive == true }}
+        run: npm run gulp vscode-win32-x64-archive
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts\windows -Force | Out-Null
+          
+          # Find and collect installer
+          $installerFiles = Get-ChildItem -Path ".build" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "*Setup*" -or $_.Name -like "*ArniCode*" }
+          foreach ($f in $installerFiles) {
+            Copy-Item $f.FullName -Destination "artifacts\windows\" -Force
+            Write-Host "Found installer: $($f.FullName)"
+          }
+          
+          # Find and collect archive
+          $archiveFiles = Get-ChildItem -Path ".build" -Recurse -Filter "*.zip" -ErrorAction SilentlyContinue
+          foreach ($f in $archiveFiles) {
+            Copy-Item $f.FullName -Destination "artifacts\windows\" -Force
+            Write-Host "Found archive: $($f.FullName)"
+          }
+          
+          # List artifacts
+          Write-Host "`nCollected artifacts:"
+          Get-ChildItem "artifacts\windows" | ForEach-Object {
+            $sizeMB = [math]::Round($_.Length / 1MB, 2)
+            Write-Host "  $($_.Name) ($sizeMB MB)"
+          }
+
+      - name: Upload installer
+        if: ${{ inputs.build_installer == 'true' || inputs.build_installer == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArniCodeSetup-x64
+          path: artifacts/windows/*Setup*.exe
+          if-no-files-found: warn
+
+      - name: Upload portable archive
+        if: ${{ inputs.build_archive == 'true' || inputs.build_archive == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArniCode-win32-x64
+          path: artifacts/windows/*.zip
+          if-no-files-found: warn
+
+      - name: Upload all build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArniCode-build-output
+          path: artifacts/windows/
+          if-no-files-found: warn
