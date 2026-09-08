@@ -38,7 +38,7 @@
       "properties": {
         "yandex.clientId": {
           "type": "string",
-          "default": "",
+          "default": "5255b6b242694d51b97d71483148321f",
           "description": "Yandex OAuth Client ID. Register at https://oauth.yandex.ru/"
         },
         "yandex.clientSecret": {

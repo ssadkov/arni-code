@@ -15,7 +15,7 @@ interface StoredSession {
 }
 
 const SESSIONS_SECRET_KEY = 'yandex.auth.sessions';
-const DEFAULT_CLIENT_ID = 'arni-code-yandex-client'; // Placeholder or configured in settings
+const DEFAULT_CLIENT_ID = '5255b6b242694d51b97d71483148321f';
 
 export class YandexAuthenticationProvider implements vscode.AuthenticationProvider, vscode.Disposable {
     private _onDidChangeSessions = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
@@ -42,39 +42,8 @@ export class YandexAuthenticationProvider implements vscode.AuthenticationProvid
 
     async createSession(scopes: readonly string[]): Promise<vscode.AuthenticationSession> {
         const config = vscode.workspace.getConfiguration('yandex');
-        let clientId = config.get<string>('clientId')?.trim() || '';
+        const clientId = config.get<string>('clientId')?.trim() || DEFAULT_CLIENT_ID;
         const clientSecret = config.get<string>('clientSecret')?.trim() || '';
-
-        if (!clientId) {
-            // Check if user wants to enter client ID or use default
-            const userChoice = await vscode.window.showInformationMessage(
-                'Для авторизации через Яндекс ID требуется Client ID приложения в Яндекс OAuth.',
-                'Указать Client ID',
-                'Создать приложение в Яндекс OAuth',
-                'Продолжить с тестовым'
-            );
-
-            if (userChoice === 'Указать Client ID') {
-                const input = await vscode.window.showInputBox({
-                    title: 'Яндекс OAuth Client ID',
-                    prompt: 'Введите Client ID вашего приложения из https://oauth.yandex.ru/',
-                    ignoreFocusOut: true
-                });
-                if (input?.trim()) {
-                    clientId = input.trim();
-                    await config.update('clientId', clientId, vscode.ConfigurationTarget.Global);
-                } else {
-                    throw new Error('Авторизация отменена: не указан Client ID');
-                }
-            } else if (userChoice === 'Создать приложение в Яндекс OAuth') {
-                await vscode.env.openExternal(vscode.Uri.parse('https://oauth.yandex.ru/client/new'));
-                throw new Error('Зарегистрируйте приложение в Яндекс OAuth и укажите Client ID в настройках');
-            } else if (userChoice === 'Продолжить с тестовым') {
-                clientId = DEFAULT_CLIENT_ID;
-            } else {
-                throw new Error('Авторизация отменена');
-            }
-        }
 
         const effectiveScopes = scopes && scopes.length > 0
             ? Array.from(new Set([...scopes, 'login:info', 'login:email']))
