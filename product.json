@@ -100,12 +100,12 @@
 		"documentationUrl": "https://github.com/ArnionCode/arni-code",
 		"provider": {
 			"default": {
-				"id": "arni",
-				"name": "Arni"
+				"id": "github",
+				"name": "GitHub"
 			},
 			"enterprise": {
-				"id": "arni-enterprise",
-				"name": "Arni Enterprise"
+				"id": "github-enterprise",
+				"name": "GitHub Enterprise"
 			},
 			"google": {
 				"id": "google",
