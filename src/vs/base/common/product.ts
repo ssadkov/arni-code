@@ -442,6 +442,7 @@ export interface IDefaultChatAgent {
 		google: { id: string; name: string };
 		apple: { id: string; name: string };
 		microsoft: { id: string; name: string };
+		yandex?: { id: string; name: string };
 	};
 
 	readonly providerExtensionId: string;

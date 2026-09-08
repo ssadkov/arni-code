@@ -46,6 +46,7 @@ const fallbackProviders = {
 	apple: { id: '', name: '' },
 	google: { id: '', name: '' },
 	microsoft: { id: '', name: '' },
+	yandex: { id: 'yandex', name: 'Яндекс ID' },
 };
 
 const configuredProviders = product.defaultChatAgent?.provider;
@@ -58,6 +59,7 @@ const defaultChat = {
 		apple: configuredProviders?.apple ?? fallbackProviders.apple,
 		google: configuredProviders?.google ?? fallbackProviders.google,
 		microsoft: configuredProviders?.microsoft ?? fallbackProviders.microsoft,
+		yandex: (configuredProviders as any)?.yandex ?? fallbackProviders.yandex,
 	},
 	chatRefreshTokenCommand: product.defaultChatAgent?.chatRefreshTokenCommand ?? '',
 	termsStatementUrl: product.defaultChatAgent?.termsStatementUrl ?? '',
@@ -76,6 +78,7 @@ export interface IChatSetupDialogProviders {
 	readonly apple: { readonly name: string };
 	readonly google: { readonly name: string };
 	readonly microsoft: { readonly name: string };
+	readonly yandex?: { readonly name: string };
 }
 
 export interface IChatSetupDialogFooterContent {
@@ -107,6 +110,7 @@ function entersProviderAuthentication(strategy: ChatSetupStrategy): boolean {
 		case ChatSetupStrategy.SetupWithGoogleProvider:
 		case ChatSetupStrategy.SetupWithAppleProvider:
 		case ChatSetupStrategy.SetupWithMicrosoftProvider:
+		case ChatSetupStrategy.SetupWithYandexProvider:
 			return true;
 		default:
 			return false;
@@ -233,8 +237,9 @@ export function getChatSetupDialogButtons(entitlement: ChatEntitlement, options:
 		const googleProviderButton = button(localize('continueWith', "Continue with {0}", providers.google.name), ChatSetupStrategy.SetupWithGoogleProvider, 'continue-button', 'google');
 		const appleProviderButton = button(localize('continueWith', "Continue with {0}", providers.apple.name), ChatSetupStrategy.SetupWithAppleProvider, 'continue-button', 'apple');
 		const microsoftProviderButton = button(localize('continueWith', "Continue with {0}", providers.microsoft.name), ChatSetupStrategy.SetupWithMicrosoftProvider, 'continue-button', 'microsoft');
+		const yandexProviderButton = providers.yandex ? button(localize('continueWith', "Continue with {0}", providers.yandex.name), ChatSetupStrategy.SetupWithYandexProvider, 'continue-button', 'yandex') : undefined;
 
-		const socialProviderButtons = [googleProviderButton, appleProviderButton, ...(showMicrosoftProvider ? [microsoftProviderButton] : [])];
+		const socialProviderButtons = [...(yandexProviderButton ? [yandexProviderButton] : []), googleProviderButton, appleProviderButton, ...(showMicrosoftProvider ? [microsoftProviderButton] : [])];
 		const providerButtons = enterpriseAuthentication
 			? [enterpriseProviderButton, ...socialProviderButtons, defaultProviderLink]
 			: [defaultProviderButton, ...socialProviderButtons, enterpriseProviderLink];
@@ -294,6 +299,7 @@ export class ChatSetup {
 		@IWorkspaceTrustManagementService private readonly workspaceTrustManagementService: IWorkspaceTrustManagementService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ICommandService private readonly commandService: ICommandService,
 	) { }
 
 	skipDialog(): void {
@@ -391,6 +397,15 @@ export class ChatSetup {
 					break;
 				case ChatSetupStrategy.SetupWithMicrosoftProvider:
 					success = await this.controller.value.setupWithProvider({ useEnterpriseProvider: false, useSocialProvider: 'microsoft', additionalScopes: options?.additionalScopes, forceAnonymous: options?.forceAnonymous, cancellationToken: setupCancellation.token });
+					break;
+				case ChatSetupStrategy.SetupWithYandexProvider:
+					try {
+						const session = await this.commandService.executeCommand<unknown>('yandex.signIn');
+						success = Boolean(session);
+					} catch (e) {
+						this.logService.error(`[chat setup] Yandex sign in failed: ${toErrorMessage(e)}`);
+						success = false;
+					}
 					break;
 				case ChatSetupStrategy.DefaultSetup:
 					success = await this.controller.value.setup({ ...options, forceAnonymous: options?.forceAnonymous, cancellationToken: setupCancellation.token });

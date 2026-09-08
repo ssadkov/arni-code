@@ -14,7 +14,9 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onAuthenticationRequest:yandex"
+    "onAuthenticationRequest:yandex",
+    "onCommand:yandex.signIn",
+    "onCommand:yandex.signOut"
   ],
   "contributes": {
     "authentication": [

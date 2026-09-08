@@ -27,6 +27,10 @@
 		background-image: url('./google.svg');
 	}
 
+	.dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.yandex::before {
+		background-image: url('./yandex.svg');
+	}
+
 	/* Link Buttons */
 
 	.dialog-buttons-row > .dialog-buttons > .monaco-button.link-button {

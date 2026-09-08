@@ -12,8 +12,10 @@ export function activate(context: vscode.ExtensionContext) {
                 if (session) {
                     vscode.window.showInformationMessage(`Авторизован в Яндекс ID: ${session.account.label}`);
                 }
+                return session;
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Ошибка авторизации Яндекс ID: ${err.message}`);
+                return undefined;
             }
         })
     );

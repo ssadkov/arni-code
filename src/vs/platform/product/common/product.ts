@@ -98,6 +98,22 @@ else {
 					enterprise: {
 						id: 'github-enterprise',
 						name: 'GitHub Enterprise',
+					},
+					google: {
+						id: 'google',
+						name: 'Google',
+					},
+					apple: {
+						id: 'apple',
+						name: 'Apple',
+					},
+					microsoft: {
+						id: 'microsoft',
+						name: 'Microsoft',
+					},
+					yandex: {
+						id: 'yandex',
+						name: 'Яндекс ID',
 					}
 				},
 				providerScopes: []

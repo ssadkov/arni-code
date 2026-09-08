@@ -188,5 +188,10 @@
 		}
 	],
 	"builtInExtensionsEnabledWithAutoUpdates": [],
-	"sessionsWindowAllowedExtensions": []
+	"sessionsWindowAllowedExtensions": [
+		"arnion.yandex-authentication",
+		"yandex-authentication",
+		"arnion.arni-agent",
+		"arni-agent"
+	]
 }
