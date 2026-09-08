@@ -39,6 +39,7 @@ import { IHostService } from '../../../../services/host/browser/host.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 import { raceTimeout } from '../../../../../base/common/async.js';
+import { IAuthenticationService } from '../../../../services/authentication/common/authentication.js';
 
 const fallbackProviders = {
 	default: { id: '', name: '' },
@@ -300,6 +301,7 @@ export class ChatSetup {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICommandService private readonly commandService: ICommandService,
+		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
 	) { }
 
 	skipDialog(): void {
@@ -400,8 +402,15 @@ export class ChatSetup {
 					break;
 				case ChatSetupStrategy.SetupWithYandexProvider:
 					try {
-						const session = await this.commandService.executeCommand<unknown>('yandex.signIn');
-						success = Boolean(session);
+						// Trigger Yandex sign-in via the extension command
+						await this.commandService.executeCommand('yandex.signIn');
+						// Verify session was actually created via the authentication service
+						// (executeCommand return value may not serialize across IPC)
+						const sessions = await this.authenticationService.getSessions('yandex');
+						success = sessions.length > 0;
+						if (!success) {
+							this.logService.warn('[chat setup] Yandex sign-in command completed but no session found');
+						}
 					} catch (e) {
 						this.logService.error(`[chat setup] Yandex sign in failed: ${toErrorMessage(e)}`);
 						success = false;
