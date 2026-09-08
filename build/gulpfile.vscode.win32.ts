@@ -129,16 +129,6 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 	};
 }
 
-function defineWin32SetupTasks(arch: string, target: string) {
-	const cleanTask = util.rimraf(setupDir(arch, target));
-	task.task(task.define(`vscode-win32-${arch}-${target}-setup`, task.series(cleanTask, buildWin32Setup(arch, target))));
-}
-
-defineWin32SetupTasks('x64', 'system');
-defineWin32SetupTasks('arm64', 'system');
-defineWin32SetupTasks('x64', 'user');
-defineWin32SetupTasks('arm64', 'user');
-
 function copyInnoUpdater(arch: string) {
 	return () => {
 		return gulp.src('build/win32/{inno_updater.exe,vcruntime140.dll}', { base: 'build/win32' })
@@ -146,12 +136,32 @@ function copyInnoUpdater(arch: string) {
 	};
 }
 
-function updateIcon(executablePath: string): task.CallbackTask {
+function updateInnoUpdaterIcon(arch: string): task.CallbackTask {
 	return cb => {
+		const executablePath = path.join(buildPath(arch), 'tools', 'inno_updater.exe');
+		if (!fs.existsSync(executablePath)) {
+			return cb();
+		}
 		const icon = path.join(repoPath, 'resources', 'win32', 'code.ico');
-		rcedit(executablePath, { icon }, cb);
+		rcedit(executablePath, { icon }, (err) => {
+			if (err) {
+				console.warn('Could not update icon for ' + executablePath + ': ' + err);
+			}
+			cb();
+		});
 	};
 }
 
-task.task(task.define('vscode-win32-x64-inno-updater', task.series(copyInnoUpdater('x64'), updateIcon(path.join(buildPath('x64'), 'tools', 'inno_updater.exe')))));
-task.task(task.define('vscode-win32-arm64-inno-updater', task.series(copyInnoUpdater('arm64'), updateIcon(path.join(buildPath('arm64'), 'tools', 'inno_updater.exe')))));
+function defineWin32SetupTasks(arch: string, target: string) {
+	const cleanTask = util.rimraf(setupDir(arch, target));
+	task.task(task.define(`vscode-win32-${arch}-${target}-setup`, task.series(cleanTask, copyInnoUpdater(arch), updateInnoUpdaterIcon(arch), buildWin32Setup(arch, target))));
+}
+
+defineWin32SetupTasks('x64', 'system');
+defineWin32SetupTasks('arm64', 'system');
+defineWin32SetupTasks('x64', 'user');
+defineWin32SetupTasks('arm64', 'user');
+
+task.task(task.define('vscode-win32-x64-inno-updater', task.series(copyInnoUpdater('x64'), updateInnoUpdaterIcon('x64'))));
+task.task(task.define('vscode-win32-arm64-inno-updater', task.series(copyInnoUpdater('arm64'), updateInnoUpdaterIcon('arm64'))));
+
