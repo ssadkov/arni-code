@@ -62,17 +62,17 @@
             "openrouter",
             "custom"
           ],
-          "default": "arni",
+          "default": "openrouter",
           "description": "The AI provider to use."
         },
         "arni.apiBaseUrl": {
           "type": "string",
-          "default": "",
+          "default": "https://openrouter.ai/api/v1",
           "description": "Custom API Base URL. Leave empty to use provider default."
         },
         "arni.modelId": {
           "type": "string",
-          "default": "",
+          "default": "qwen/qwen-2.5-coder-32b-instruct",
           "description": "Model ID to use."
         },
         "arni.enableStreaming": {

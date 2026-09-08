@@ -1,0 +1,62 @@
+{
+  "name": "yandex-authentication",
+  "displayName": "Yandex Authentication",
+  "description": "Yandex ID authentication provider for Arni Code",
+  "publisher": "arnion",
+  "version": "1.0.0",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "icon": "resources/yandex-icon.svg",
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onAuthenticationRequest:yandex"
+  ],
+  "contributes": {
+    "authentication": [
+      {
+        "id": "yandex",
+        "label": "Яндекс ID"
+      }
+    ],
+    "commands": [
+      {
+        "command": "yandex.signIn",
+        "title": "Arni: Sign In with Yandex ID"
+      },
+      {
+        "command": "yandex.signOut",
+        "title": "Arni: Sign Out from Yandex ID"
+      }
+    ],
+    "configuration": {
+      "title": "Yandex Authentication",
+      "properties": {
+        "yandex.clientId": {
+          "type": "string",
+          "default": "",
+          "description": "Yandex OAuth Client ID. Register at https://oauth.yandex.ru/"
+        },
+        "yandex.clientSecret": {
+          "type": "string",
+          "default": "",
+          "description": "Yandex OAuth Client Secret (optional if using PKCE)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.93.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.x"
+  }
+}

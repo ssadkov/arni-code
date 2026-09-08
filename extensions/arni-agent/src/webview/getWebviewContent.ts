@@ -102,20 +102,25 @@ export function getWebviewContent() {
     <div class="header">Arni Agent</div>
     
     <div id="setup-container">
-        <h2>Welcome to Arni!</h2>
-        <p>Please enter your API Key to get started. It will be securely stored in your IDE.</p>
-        <input type="password" id="api-key-input" placeholder="Enter API Key..." style="width: 100%; padding: 8px; margin: 10px 0; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px;" />
-        <button id="save-key-btn">Save Key</button>
+        <h2>Добро пожаловать в Arni!</h2>
+        <p style="font-size: 13px; color: var(--vscode-descriptionForeground); margin-bottom: 14px;">
+            Arni готов к работе через <b>OpenRouter</b> с моделью <code>Qwen 2.5 Coder 32B</code>.
+        </p>
+        <button id="get-free-key-btn" style="background-color: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); margin-bottom: 10px; width: 100%;" type="button">
+            🔑 Получить ключ на OpenRouter (бесплатно)
+        </button>
+        <input type="password" id="api-key-input" placeholder="Вставьте API-ключ (sk-or-v1-...)" style="width: 100%; box-sizing: border-box; padding: 8px; margin: 6px 0 12px 0; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px;" />
+        <button id="save-key-btn" style="width: 100%;" type="button">Сохранить ключ</button>
     </div>
 
     <div id="chat-wrapper" style="display: flex; flex-direction: column; height: 100%;">
         <div id="chat-container">
-            <div class="message arni-message">Hello! I am Arni, your intelligent coding assistant. How can I help you today?</div>
+            <div class="message arni-message">Привет! Я Arni — ваш умный AI-ассистент по коду. Чем я могу помочь сегодня?</div>
         </div>
         
         <div class="input-area">
-            <textarea id="message-input" rows="3" placeholder="Ask Arni a question..."></textarea>
-            <button id="send-btn">Send</button>
+            <textarea id="message-input" rows="3" placeholder="Задайте вопрос Arni..."></textarea>
+            <button id="send-btn">Отправить</button>
         </div>
     </div>
 
@@ -129,6 +134,13 @@ export function getWebviewContent() {
         const sendBtn = document.getElementById('send-btn');
         const apiKeyInput = document.getElementById('api-key-input');
         const saveKeyBtn = document.getElementById('save-key-btn');
+        const getFreeKeyBtn = document.getElementById('get-free-key-btn');
+
+        if (getFreeKeyBtn) {
+            getFreeKeyBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'openUrl', value: 'https://openrouter.ai/keys' });
+            });
+        }
 
         let currentArniMessage = null;
 

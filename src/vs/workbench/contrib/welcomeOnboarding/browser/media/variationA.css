@@ -545,6 +545,10 @@
 	background-image: url('../../../chat/browser/chatSetup/media/apple-dark.svg');
 }
 
+.onboarding-a-provider-mark.yandex {
+	background-image: url('../../../chat/browser/chatSetup/media/yandex.svg');
+}
+
 /* Personalize step */
 .onboarding-a-personalize {
 	display: flex;

@@ -557,6 +557,15 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this._handleSignIn('apple');
 		}));
 
+		const yandexBtn = this._registerStepFocusable(this._createSignInButton(actions, 'yandex', localize('onboarding.signIn.yandex', "Continue with Yandex ID"), {
+			iconOnly: true,
+			label: localize('onboarding.signIn.yandex', "Continue with Yandex ID")
+		}));
+		this.stepDisposables.add(addDisposableListener(yandexBtn, EventType.CLICK, () => {
+			this._logAction('signIn', undefined, 'yandex');
+			this._handleSignIn('yandex');
+		}));
+
 		const gheBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github-enterprise', localize('onboarding.signIn.ghe', "GHE"), {
 			textOnly: true,
 			label: localize('onboarding.signIn.ghe.aria', "Continue with GitHub Enterprise")
@@ -679,7 +688,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		}
 	}
 
-	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'google' | 'apple', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
+	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'google' | 'apple' | 'yandex', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
 		const isCompact = options?.iconOnly || options?.textOnly;
 		const btn = append(parent, $<HTMLButtonElement>(isCompact ? 'button.onboarding-a-signin-icon-btn' : 'button.onboarding-a-signin-btn'));
 		btn.type = 'button';
@@ -710,6 +719,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		const provider = socialProvider ?? 'github';
 		const watch = StopWatch.create();
 		try {
+			if (socialProvider === 'yandex') {
+				await this.commandService.executeCommand('yandex.signIn');
+				this._userSignedIn = true;
+				this._nextStep();
+				return;
+			}
 			const account = await this.defaultAccountService.signIn({
 				extraAuthorizeParameters: { get_started_with: 'copilot-vscode' },
 				provider: socialProvider,

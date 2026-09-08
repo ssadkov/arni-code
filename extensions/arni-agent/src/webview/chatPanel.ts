@@ -42,6 +42,11 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                         this._view?.webview.postMessage({ type: 'requestApiKey' });
                     }
                     break;
+                case 'openUrl':
+                    if (data.value) {
+                        vscode.env.openExternal(vscode.Uri.parse(data.value));
+                    }
+                    break;
             }
         });
     }

@@ -53,6 +53,8 @@ export const dirs = [
 	'extensions/vscode-colorize-tests',
 	'extensions/vscode-colorize-perf-tests',
 	'extensions/vscode-test-resolver',
+	'extensions/arni-agent',
+	'extensions/yandex-authentication',
 	'remote',
 	'remote/web',
 	'test/automation',

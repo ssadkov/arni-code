@@ -1,4 +1,4 @@
-﻿# Arni Code — Бэклог разработки
+# Arni Code — Бэклог разработки
 
 В этом документе зафиксированы приоритетные задачи и фичи для будущих версий IDE **Arni Code** от компании **Arnion**.
 
@@ -15,13 +15,14 @@
   - Безопасное хранение Access Token и Refresh Token в Windows Credential Manager (`SecretStorage`).
   - Отображение аватара и имени пользователя VK в нижнем статус-баре и меню аккаунтов.
 
-### 1.2. Интеграция Яндекс ID (`yandex-authentication`)
-- **Цель**: Авторизация пользователей через Яндекс ID для синхронизации настроек и персонализации AI-сервисов.
-- **Требования**:
-  - Регистрация OAuth-клиента в [Яндекс OAuth](https://oauth.yandex.ru/) с правами доступа к базовому профилю (логин, аватар, email).
-  - Разработка расширения `extensions/yandex-authentication` с реализацией провайдера аутентификации `yandex`.
-  - Поддержка PKCE (Proof Key for Code Exchange) для безопасной авторизации в нативном десктопном приложении.
-  - Синхронизация профиля и интеграция с облачными сервисами Yandex Cloud (опционально: подключение YandexGPT в качестве AI-бэкенда).
+### 1.2. Интеграция Яндекс ID (`yandex-authentication`) — ✅ РЕАЛИЗОВАНО (v1.0.0)
+- **Статус**: Встроено в кодовую базу как нативное расширение `extensions/yandex-authentication/`.
+- **Реализовано**:
+  - Провайдер `yandex` через VS Code Authentication API (`vscode.authentication.registerAuthenticationProvider`).
+  - Локальный HTTP loopback сервер (`http://127.0.0.1:<port>/callback`) с защитой от CSRF (`state`) и поддержкой стандарта PKCE (S256).
+  - Интеграция кнопки «Войти через Яндекс ID» в мастер первого запуска (Onboarding Wizard).
+  - Запрос профиля через API `https://login.yandex.ru/info` и сохранение сессии в безопасном хранилище `SecretStorage` (Windows Credential Manager).
+  - Добавлена настройка `yandex.clientId` и `yandex.clientSecret` для подключения корпоративного приложения Яндекс OAuth.
 
 ### 1.3. Прямой Google OAuth 2.0 (`google-authentication`)
 - **Цель**: Автономный вход через Google без промежуточного перенаправления через GitHub Social Auth.

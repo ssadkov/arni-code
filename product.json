@@ -118,6 +118,10 @@
 			"microsoft": {
 				"id": "microsoft",
 				"name": "Microsoft"
+			},
+			"yandex": {
+				"id": "yandex",
+				"name": "Яндекс ID"
 			}
 		},
 		"providerExtensionId": "arnion.arni-agent",
@@ -126,7 +130,12 @@
 		"completionsAdvancedSetting": "arni.advanced",
 		"completionsMenuCommand": "arni.openAgent"
 	},
-	"trustedExtensionAuthAccess": {},
+	"trustedExtensionAuthAccess": {
+		"arnion.arni-agent": [
+			"yandex",
+			"github"
+		]
+	},
 	"onboardingKeymaps": [
 		{
 			"id": "vscode",

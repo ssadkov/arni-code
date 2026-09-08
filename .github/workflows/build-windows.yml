@@ -86,6 +86,22 @@ jobs:
             Write-Warning "Arni Agent extension directory not found."
           }
 
+      - name: Build Yandex Authentication extension
+        shell: pwsh
+        run: |
+          $yandexDir = "extensions\yandex-authentication"
+          if (Test-Path $yandexDir) {
+            Push-Location $yandexDir
+            npm install
+            if (Test-Path "esbuild.js") {
+              node esbuild.js --production
+            }
+            Pop-Location
+            Write-Host "Yandex Authentication extension built successfully."
+          } else {
+            Write-Warning "Yandex Authentication extension directory not found."
+          }
+
       - name: Build Arni Code (production)
         run: npm run gulp vscode-win32-x64-min
         env:
