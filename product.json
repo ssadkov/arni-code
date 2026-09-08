@@ -102,8 +102,29 @@
 			"default": {
 				"id": "arni",
 				"name": "Arni"
+			},
+			"enterprise": {
+				"id": "arni-enterprise",
+				"name": "Arni Enterprise"
+			},
+			"google": {
+				"id": "google",
+				"name": "Google"
+			},
+			"apple": {
+				"id": "apple",
+				"name": "Apple"
+			},
+			"microsoft": {
+				"id": "microsoft",
+				"name": "Microsoft"
 			}
-		}
+		},
+		"providerExtensionId": "arnion.arni-agent",
+		"providerUriSetting": "arni.apiBaseUrl",
+		"providerScopes": [],
+		"completionsAdvancedSetting": "arni.advanced",
+		"completionsMenuCommand": "arni.openAgent"
 	},
 	"trustedExtensionAuthAccess": {},
 	"onboardingKeymaps": [
