@@ -1,133 +1,138 @@
 {
-  "name": "arni-agent",
-  "displayName": "Arni",
-  "description": "Arni AI Agent by Arnion - Your intelligent coding assistant",
-  "publisher": "arnion",
-  "version": "1.0.0",
-  "engines": {
-    "vscode": "^1.93.0"
-  },
-  "main": "./dist/extension.js",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "arni-sidebar",
-          "title": "Arni",
-          "icon": "resources/arni-icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "arni-sidebar": [
-        {
-          "id": "arni.chatView",
-          "name": "Arni Agent",
-          "type": "webview"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "arni.openAgent",
-        "title": "Arni: Open Agent"
-      },
-      {
-        "command": "arni.newChat",
-        "title": "Arni: New Chat"
-      },
-      {
-        "command": "arni.openSettings",
-        "title": "Arni: Settings"
-      },
-      {
-        "command": "arni.setApiKey",
-        "title": "Arni: Set API Key"
-      }
-    ],
-    "configuration": {
-      "title": "Arni",
-      "properties": {
-        "arni.provider": {
-          "type": "string",
-          "enum": [
-            "arni",
-            "openai",
-            "anthropic",
-            "deepseek",
-            "ollama",
-            "openrouter",
-            "custom"
-          ],
-          "default": "openrouter",
-          "description": "The AI provider to use."
-        },
-        "arni.apiBaseUrl": {
-          "type": "string",
-          "default": "https://openrouter.ai/api/v1",
-          "description": "Custom API Base URL. Leave empty to use provider default."
-        },
-        "arni.modelId": {
-          "type": "string",
-          "default": "qwen/qwen-2.5-coder-32b-instruct",
-          "description": "Model ID to use."
-        },
-        "arni.enableStreaming": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable streaming responses."
-        },
-        "arni.temperature": {
-          "type": "number",
-          "default": 0.7,
-          "description": "Temperature for generation."
-        },
-        "arni.maxTokens": {
-          "type": "number",
-          "default": 4096,
-          "description": "Max tokens to generate."
-        },
-        "arni.systemPrompt": {
-          "type": "string",
-          "default": "",
-          "description": "Custom system prompt."
-        }
-      }
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "arni.newChat",
-          "when": "view == arni.chatView",
-          "group": "navigation"
-        },
-        {
-          "command": "arni.openSettings",
-          "when": "view == arni.chatView",
-          "group": "navigation"
-        }
-      ]
-    },
-    "keybindings": [
-      {
-        "command": "arni.openAgent",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a"
-      }
-    ]
-  },
-  "scripts": {
-    "build": "node esbuild.js",
-    "watch": "node esbuild.js --watch",
-    "compile": "tsc -p ./"
-  },
-  "devDependencies": {
-    "@types/node": "^18.x",
-    "@types/vscode": "^1.93.0",
-    "esbuild": "^0.20.0",
-    "typescript": "^5.x"
-  }
+    "name":  "arni-agent",
+    "displayName":  "Arni",
+    "description":  "Arni AI Agent by Arnion - Your intelligent coding assistant",
+    "publisher":  "arnion",
+    "version":  "1.0.0",
+    "engines":  {
+                    "vscode":  "^1.93.0"
+                },
+    "main":  "./dist/extension.js",
+    "activationEvents":  [
+                             "onStartupFinished"
+                         ],
+    "contributes":  {
+                        "viewsContainers":  {
+                                                "activitybar":  [
+                                                                    {
+                                                                        "id":  "arni-sidebar",
+                                                                        "title":  "Arni",
+                                                                        "icon":  "resources/arni-icon.svg"
+                                                                    }
+                                                                ]
+                                            },
+                        "views":  {
+                                      "arni-sidebar":  [
+                                                           {
+                                                               "id":  "arni.chatView",
+                                                               "name":  "Arni Agent",
+                                                               "type":  "webview"
+                                                           }
+                                                       ]
+                                  },
+                        "commands":  [
+                                         {
+                                             "command":  "arni.openAgent",
+                                             "title":  "Arni: Open Agent"
+                                         },
+                                         {
+                                             "command":  "arni.newChat",
+                                             "title":  "Arni: New Chat"
+                                         },
+                                         {
+                                             "command":  "arni.openSettings",
+                                             "title":  "Arni: Settings"
+                                         },
+                                         {
+                                             "command":  "arni.setApiKey",
+                                             "title":  "Arni: Set API Key"
+                                         }
+                                     ],
+                        "configuration":  {
+                                              "title":  "Arni",
+                                              "properties":  {
+                                                                 "arni.provider":  {
+                                                                                       "type":  "string",
+                                                                                       "enum":  [
+                                                                                                    "arni",
+                                                                                                    "openai",
+                                                                                                    "anthropic",
+                                                                                                    "deepseek",
+                                                                                                    "ollama",
+                                                                                                    "openrouter",
+                                                                                                    "custom"
+                                                                                                ],
+                                                                                       "default":  "openrouter",
+                                                                                       "description":  "The AI provider to use."
+                                                                                   },
+                                                                 "arni.apiBaseUrl":  {
+                                                                                         "type":  "string",
+                                                                                         "default":  "https://openrouter.ai/api/v1",
+                                                                                         "description":  "Custom API Base URL. Leave empty to use provider default."
+                                                                                     },
+                                                                 "arni.modelId":  {
+                                                                                      "type":  "string",
+                                                                                      "default":  "qwen/qwen-2.5-coder-32b-instruct",
+                                                                                      "description":  "Model ID to use."
+                                                                                  },
+                                                                 "arni.enableStreaming":  {
+                                                                                              "type":  "boolean",
+                                                                                              "default":  true,
+                                                                                              "description":  "Enable streaming responses."
+                                                                                          },
+                                                                 "arni.temperature":  {
+                                                                                          "type":  "number",
+                                                                                          "default":  0.7,
+                                                                                          "description":  "Temperature for generation."
+                                                                                      },
+                                                                 "arni.maxTokens":  {
+                                                                                        "type":  "number",
+                                                                                        "default":  4096,
+                                                                                        "description":  "Max tokens to generate."
+                                                                                    },
+                                                                 "arni.systemPrompt":  {
+                                                                                           "type":  "string",
+                                                                                           "default":  "",
+                                                                                           "description":  "Custom system prompt."
+                                                                                       },
+                                                                 "arni.backendUrl":  {
+                                                                                         "description":  "URL of the Arni Backend Proxy",
+                                                                                         "default":  "https://arni-backend.vercel.app",
+                                                                                         "type":  "string"
+                                                                                     }
+                                                             }
+                                          },
+                        "menus":  {
+                                      "view/title":  [
+                                                         {
+                                                             "command":  "arni.newChat",
+                                                             "when":  "view == arni.chatView",
+                                                             "group":  "navigation"
+                                                         },
+                                                         {
+                                                             "command":  "arni.openSettings",
+                                                             "when":  "view == arni.chatView",
+                                                             "group":  "navigation"
+                                                         }
+                                                     ]
+                                  },
+                        "keybindings":  [
+                                            {
+                                                "command":  "arni.openAgent",
+                                                "key":  "ctrl+shift+a",
+                                                "mac":  "cmd+shift+a"
+                                            }
+                                        ]
+                    },
+    "scripts":  {
+                    "build":  "node esbuild.js",
+                    "watch":  "node esbuild.js --watch",
+                    "compile":  "tsc -p ./"
+                },
+    "devDependencies":  {
+                            "@types/node":  "^18.x",
+                            "@types/vscode":  "^1.93.0",
+                            "esbuild":  "^0.20.0",
+                            "typescript":  "^5.x"
+                        }
 }
