@@ -17,6 +17,9 @@ import { BYOKModelCapabilities } from '../common/byokProvider';
 import { OpenAIEndpoint } from '../node/openAIEndpoint';
 import { AbstractOpenAICompatibleLMProvider, LanguageModelChatConfiguration, OpenAICompatibleLanguageModelChatInformation } from './abstractLanguageModelChatProvider';
 import { IBYOKStorageService } from './byokStorageService';
+import * as vscode from 'vscode';
+import { PrepareLanguageModelChatModelOptions } from './abstractLanguageModelChatProvider';
+import { CancellationToken } from 'vscode';
 
 interface OpenRouterModelData {
 	id: string;
@@ -73,12 +76,98 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		);
 	}
 
+	
+	override async provideLanguageModelChatInformation(options: PrepareLanguageModelChatModelOptions, token: CancellationToken): Promise<OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>[]> {
+		let arniJwt = '';
+		try {
+			// 1. Get Yandex Session
+			let session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
+			if (!session && !options.silent) {
+				session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
+			}
+			
+			// 2. Exchange for ARNI_JWT
+			if (session) {
+				const backendUrl = vscode.workspace.getConfiguration('arni').get<string>('backendUrl') || 'https://arni-backend.vercel.app';
+				// Node 20 has native fetch
+				const response = await fetch(`${backendUrl}/api/auth/exchange`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ provider: 'yandex', token: session.accessToken })
+				});
+				if (response.ok) {
+					const data: any = await response.json();
+					arniJwt = data.token;
+				} else {
+					this._logService.error('Failed to exchange Yandex token: ' + await response.text());
+				}
+			}
+		} catch (e) {
+			this._logService.error(e as Error, 'Yandex Auth Error');
+		}
+
+		// Fallback to manual API key if not signed in or error
+		let apiKey: string | undefined = arniJwt || (options.configuration as any)?.apiKey;
+		if (!apiKey) {
+			apiKey = await this.configureDefaultGroupWithApiKeyOnly();
+		}
+
+		// We MUST pass an empty API key if we don't have one, but we intercept getAllModels to NOT send ARNI_JWT to OpenRouter for models discovery.
+		// Wait, getAllModels calls getModelsFromEndpoint which passes the apiKey. If we pass ARNI_JWT to OpenRouter /models, it gives 401.
+		// We'll override getAllModels directly!
+		
+		const models = await this.getAllModels(options.silent, apiKey, options.configuration as any);
+		return models.map(model => ({
+			...model,
+			isBYOK: true,
+			apiKey,
+			configuration: options.configuration
+		}));
+	}
+
+	protected override async getAllModels(silent: boolean, apiKey: string | undefined, configuration: any | undefined): Promise<OpenAICompatibleLanguageModelChatInformation<any>[]> {
+		const modelsUrl = this.getModelsBaseUrl();
+		let models: any = {};
+		
+		try {
+			// Fetch models from OpenRouter DIRECTLY without any API key to bypass 401 error.
+			const res = await fetch(this.getModelsDiscoveryUrl(''));
+			if (res.ok) {
+				const json = await res.json();
+				// Manually convert openrouter models
+				for (const m of json.data || []) {
+					models[m.id] = m;
+				}
+			}
+		} catch (e) {
+			this._logService.error(e as Error, 'Error fetching OpenRouter models');
+		}
+
+		// Map to standard BYOK format
+		const result: OpenAICompatibleLanguageModelChatInformation<any>[] = [];
+		for (const [id, m] of Object.entries(models)) {
+			result.push({
+				id,
+				name: (m as any).name || id,
+				url: modelsUrl!, // Route chat requests to OUR backend
+				capabilities: this.resolveModelCapabilities(m) || {
+					name: (m as any).name || id,
+					toolCalling: false,
+					vision: false,
+					maxInputTokens: 8000,
+					maxOutputTokens: 4000
+				}
+			} as any);
+		}
+		return result;
+	}
+
 	protected override getModelsBaseUrl(): string | undefined {
-		return 'https://openrouter.ai/api/v1';
+		return vscode.workspace.getConfiguration('arni').get<string>('backendUrl') || 'https://arni-backend.vercel.app/api';
 	}
 
 	protected override getModelsDiscoveryUrl(modelsBaseUrl: string): string {
-		return `${modelsBaseUrl}/models?supported_parameters=tools`;
+		return `https://openrouter.ai/api/v1/models?supported_parameters=tools`;
 	}
 
 	protected override resolveModelCapabilities(modelData: unknown): BYOKModelCapabilities | undefined {
