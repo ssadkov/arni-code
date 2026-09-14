@@ -96,7 +96,7 @@
                                                                                            "description":  "Custom system prompt."
                                                                                        },
                                                                  "arni.backendUrl":  {
-                                                                                         "description":  "URL of the Arni Backend Proxy",
+                                                                                         "description":  "Origin of the Arni backend (without /api). Chat and auth calls are sent to {backendUrl}/api/...",
                                                                                          "default":  "https://arni-backend.vercel.app",
                                                                                          "type":  "string"
                                                                                      }
@@ -127,7 +127,8 @@
     "scripts":  {
                     "build":  "node esbuild.js",
                     "watch":  "node esbuild.js --watch",
-                    "compile":  "tsc -p ./"
+                    "compile":  "tsc -p ./",
+                    "test":  "node --experimental-strip-types --test src/arniBackend.test.ts"
                 },
     "devDependencies":  {
                             "@types/node":  "^18.x",
