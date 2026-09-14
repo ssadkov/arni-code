@@ -20,6 +20,7 @@ import { IBYOKStorageService } from './byokStorageService';
 import * as vscode from 'vscode';
 import { PrepareLanguageModelChatModelOptions } from './abstractLanguageModelChatProvider';
 import { CancellationToken } from 'vscode';
+import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
 
 interface OpenRouterModelData {
 	id: string;
@@ -112,10 +113,6 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			apiKey = await this.configureDefaultGroupWithApiKeyOnly();
 		}
 
-		// We MUST pass an empty API key if we don't have one, but we intercept getAllModels to NOT send ARNI_JWT to OpenRouter for models discovery.
-		// Wait, getAllModels calls getModelsFromEndpoint which passes the apiKey. If we pass ARNI_JWT to OpenRouter /models, it gives 401.
-		// We'll override getAllModels directly!
-		
 		const models = await this.getAllModels(options.silent, apiKey, options.configuration as any);
 		return models.map(model => ({
 			...model,
@@ -134,32 +131,25 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			const res = await fetch(this.getModelsDiscoveryUrl(''));
 			if (res.ok) {
 				const json = await res.json();
-				// Manually convert openrouter models
 				for (const m of json.data || []) {
-					models[m.id] = m;
+					models[m.id] = this.resolveModelCapabilities(m) || {
+						name: m.name || m.id,
+						toolCalling: false,
+						vision: false,
+						maxInputTokens: 8000,
+						maxOutputTokens: 4000
+					};
 				}
 			}
 		} catch (e) {
 			this._logService.error(e as Error, 'Error fetching OpenRouter models');
 		}
 
-		// Map to standard BYOK format
-		const result: OpenAICompatibleLanguageModelChatInformation<any>[] = [];
-		for (const [id, m] of Object.entries(models)) {
-			result.push({
-				id,
-				name: (m as any).name || id,
-				url: modelsUrl!, // Route chat requests to OUR backend
-				capabilities: this.resolveModelCapabilities(m) || {
-					name: (m as any).name || id,
-					toolCalling: false,
-					vision: false,
-					maxInputTokens: 8000,
-					maxOutputTokens: 4000
-				}
-			} as any);
-		}
-		return result;
+		const byokModels = byokKnownModelsToAPIInfoWithEffort(this._name, models);
+		return byokModels.map(model => ({
+			...model,
+			url: modelsUrl!
+		})) as OpenAICompatibleLanguageModelChatInformation<any>[];
 	}
 
 	protected override getModelsBaseUrl(): string | undefined {
