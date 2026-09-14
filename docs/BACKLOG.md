@@ -23,6 +23,7 @@
   - Интеграция кнопки «Войти через Яндекс ID» в мастер первого запуска (Onboarding Wizard).
   - Запрос профиля через API `https://login.yandex.ru/info` и сохранение сессии в безопасном хранилище `SecretStorage` (Windows Credential Manager).
   - Добавлена настройка `yandex.clientId` и `yandex.clientSecret` для подключения корпоративного приложения Яндекс OAuth.
+  - Контракт Yandex → JWT → chat: см. [AUTH_CHAIN.md](./AUTH_CHAIN.md).
 
 ### 1.3. Прямой Google OAuth 2.0 (`google-authentication`)
 - **Цель**: Автономный вход через Google без промежуточного перенаправления через GitHub Social Auth.

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getWebviewContent } from './getWebviewContent';
 import { ArniProvider } from '../providers/arniProvider';
+import { readArniJwtFromExchangeBody, resolveArniApiBaseUrl, resolveArniAuthExchangeUrl } from '../arniBackend';
 
 export class ChatPanelProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -47,27 +48,30 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     }
 
     private async getArniToken(): Promise<string | undefined> {
-        // 1. Проверяем, есть ли уже токен от бэкенда
-        let arniJwt = await this._secrets.get('arni.jwtToken');
-        if (arniJwt) return arniJwt;
-
-        // 2. Получаем сессию Яндекса (через системный провайдер, который мы починили)
         let session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
         if (!session) {
+            await this._secrets.delete('arni.jwtToken');
             try {
                 session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
-            } catch (e) {
+            } catch {
                 return undefined;
             }
         }
-        if (!session) return undefined;
+        if (!session) {
+            await this._secrets.delete('arni.jwtToken');
+            return undefined;
+        }
 
-        // 3. Обмениваем токен Яндекса на универсальный JWT нашего бэкенда
+        const cachedJwt = await this._secrets.get('arni.jwtToken');
+        if (cachedJwt) {
+            return cachedJwt;
+        }
+
         const config = vscode.workspace.getConfiguration('arni');
-        const backendUrl = config.get<string>('backendUrl') || 'https://arni-backend.vercel.app';
-        
+        const backendUrl = config.get<string>('backendUrl');
+
         try {
-            const response = await fetch(`${backendUrl}/api/auth/exchange`, {
+            const response = await fetch(resolveArniAuthExchangeUrl(backendUrl), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ provider: 'yandex', token: session.accessToken })
@@ -78,14 +82,14 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             }
 
             const data: any = await response.json();
-            arniJwt = data.token;
+            const arniJwt = readArniJwtFromExchangeBody(data);
             if (arniJwt) {
                 await this._secrets.store('arni.jwtToken', arniJwt);
                 return arniJwt;
             }
         } catch (error) {
             console.error('Token exchange failed:', error);
-            throw new Error('Не удалось авторизоваться на сервере Arni.');
+            throw new Error('Could not authorize with the Arni backend.');
         }
 
         return undefined;
@@ -103,16 +107,14 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         }
 
         if (!arniToken) {
-            this._view.webview.postMessage({ type: 'error', value: 'Для использования ИИ необходимо войти через Яндекс.' });
+            this._view.webview.postMessage({ type: 'error', value: 'Sign in with Yandex ID to use Arni.' });
             return;
         }
 
         try {
             const config = vscode.workspace.getConfiguration('arni');
-            const backendUrl = config.get<string>('backendUrl') || 'https://arni-backend.vercel.app';
-            
-            // Используем наш прокси-провайдер с JWT токеном
-            const provider = new ArniProvider(arniToken, backendUrl, 'openrouter/auto', true);
+            const apiBase = resolveArniApiBaseUrl(config.get<string>('backendUrl'));
+            const provider = new ArniProvider(arniToken, apiBase, 'openrouter/auto', true);
             
             let fullResponse = '';
             await provider.chat(message, (chunk: string) => {
@@ -131,15 +133,14 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             });
         } catch (error: any) {
             if (error.message?.includes('401')) {
-                // Если JWT протух, удаляем его, чтобы при следующем запросе получить новый
                 await this._secrets.delete('arni.jwtToken');
-                this._view.webview.postMessage({ type: 'error', value: 'Сессия устарела. Пожалуйста, отправьте сообщение еще раз для переавторизации.' });
+                this._view.webview.postMessage({ type: 'error', value: 'Session expired. Send the message again to re-authorize.' });
             } else if (error.message?.includes('402')) {
-                this._view.webview.postMessage({ type: 'error', value: 'На вашем балансе закончились токены. Перейдите в настройки для пополнения.' });
+                this._view.webview.postMessage({ type: 'error', value: 'Your token balance is empty. Open settings to top up.' });
             } else {
                 this._view.webview.postMessage({ 
                     type: 'error', 
-                    value: error.message || 'Ошибка связи с сервером.'
+                    value: error.message || 'Could not reach the Arni backend.'
                 });
             }
         }

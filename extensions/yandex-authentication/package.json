@@ -52,7 +52,8 @@
                     },
     "scripts":  {
                     "build":  "node esbuild.js",
-                    "compile":  "tsc -p ./"
+                    "compile":  "tsc -p ./",
+                    "test":  "node --experimental-strip-types --test src/loopbackServer.test.ts"
                 },
     "devDependencies":  {
                             "@types/node":  "^20.x",

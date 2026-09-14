@@ -21,6 +21,7 @@ import * as vscode from 'vscode';
 import { PrepareLanguageModelChatModelOptions } from './abstractLanguageModelChatProvider';
 import { CancellationToken } from 'vscode';
 import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
+import { readArniJwtFromExchangeBody, resolveArniApiBaseUrl, resolveArniAuthExchangeUrl } from './arniBackendUrl';
 
 interface OpenRouterModelData {
 	id: string;
@@ -81,24 +82,21 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	override async provideLanguageModelChatInformation(options: PrepareLanguageModelChatModelOptions, token: CancellationToken): Promise<OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>[]> {
 		let arniJwt = '';
 		try {
-			// 1. Get Yandex Session
 			let session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
 			if (!session && !options.silent) {
 				session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
 			}
-			
-			// 2. Exchange for ARNI_JWT
+
 			if (session) {
-				const backendUrl = vscode.workspace.getConfiguration('arni').get<string>('backendUrl') || 'https://arni-backend.vercel.app';
-				// Node 20 has native fetch
-				const response = await fetch(`${backendUrl}/api/auth/exchange`, {
+				const backendUrl = vscode.workspace.getConfiguration('arni').get<string>('backendUrl');
+				const response = await fetch(resolveArniAuthExchangeUrl(backendUrl), {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ provider: 'yandex', token: session.accessToken })
 				});
 				if (response.ok) {
 					const data: any = await response.json();
-					arniJwt = data.token;
+					arniJwt = readArniJwtFromExchangeBody(data) ?? '';
 				} else {
 					this._logService.error('Failed to exchange Yandex token: ' + await response.text());
 				}
@@ -107,18 +105,21 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			this._logService.error(e as Error, 'Yandex Auth Error');
 		}
 
-		// Fallback to manual API key if not signed in or error
 		let apiKey: string | undefined = arniJwt || (options.configuration as any)?.apiKey;
 		if (!apiKey) {
 			apiKey = await this.configureDefaultGroupWithApiKeyOnly();
 		}
 
 		const models = await this.getAllModels(options.silent, apiKey, options.configuration as any);
+		const configuration: LanguageModelChatConfiguration = {
+			...(options.configuration as LanguageModelChatConfiguration | undefined),
+			apiKey
+		};
 		return models.map(model => ({
 			...model,
 			isBYOK: true,
 			apiKey,
-			configuration: options.configuration
+			configuration
 		}));
 	}
 
@@ -153,7 +154,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	}
 
 	protected override getModelsBaseUrl(): string | undefined {
-		return vscode.workspace.getConfiguration('arni').get<string>('backendUrl') || 'https://arni-backend.vercel.app/api';
+		return resolveArniApiBaseUrl(vscode.workspace.getConfiguration('arni').get<string>('backendUrl'));
 	}
 
 	protected override getModelsDiscoveryUrl(modelsBaseUrl: string): string {
@@ -190,30 +191,12 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 
 	protected override async createOpenAIEndPoint(model: OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>): Promise<OpenAIEndpoint> {
 		const modelInfo = this.getModelInfo(model.id, model.url);
-		const isAnthropic = isAnthropicModelId(model.id);
-
-		if (isAnthropic) {
-			// Anthropic models on OpenRouter use the native Messages API which
-			// provides full cache_control, thinking, and tool support identical
-			// to the direct Anthropic API.
-			modelInfo.supported_endpoints = [ModelSupportedEndpoint.Messages];
-		}
-
-		const url = isAnthropic
-			? `${model.url}/messages`
-			: `${model.url}/chat/completions`;
-
-		return this._instantiationService.createInstance(OpenRouterEndpoint, modelInfo, model.configuration?.apiKey ?? '', url);
+		// Arni backend only exposes OpenAI-compatible `/api/chat/completions`.
+		// Do not switch Anthropic models to `/messages` — that route 404s on the proxy.
+		const apiKey = (model as { apiKey?: string }).apiKey || model.configuration?.apiKey || '';
+		const url = `${model.url.replace(/\/$/, '')}/chat/completions`;
+		return this._instantiationService.createInstance(OpenRouterEndpoint, modelInfo, apiKey, url);
 	}
-}
-
-/**
- * Checks whether an OpenRouter model ID refers to an Anthropic model.
- * OpenRouter model IDs follow the format `provider/model-name`, e.g.
- * `anthropic/claude-sonnet-4` or `anthropic/claude-opus-4`.
- */
-function isAnthropicModelId(modelId: string): boolean {
-	return modelId.startsWith('anthropic/');
 }
 
 /**

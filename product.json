@@ -131,9 +131,9 @@
         "completionsMenuCommand": "arni.openAgent"
     },
     "trustedExtensionAuthAccess": {
-        "arnion.arni-agent": [
-            "yandex",
-            "github"
+        "yandex": [
+            "arnion.arni-agent",
+            "github.copilot-chat"
         ]
     },
     "onboardingKeymaps": [

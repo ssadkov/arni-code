@@ -10,11 +10,11 @@ export function activate(context: vscode.ExtensionContext) {
             try {
                 const session = await vscode.authentication.getSession('yandex', ['login:info', 'login:email'], { createIfNone: true });
                 if (session) {
-                    vscode.window.showInformationMessage(`Авторизован в Яндекс ID: ${session.account.label}`);
+                    vscode.window.showInformationMessage(`Signed in with Yandex ID: ${session.account.label}`);
                 }
                 return session;
             } catch (err: any) {
-                vscode.window.showErrorMessage(`Ошибка авторизации Яндекс ID: ${err.message}`);
+                vscode.window.showErrorMessage(`Yandex ID sign-in failed: ${err.message}`);
                 return undefined;
             }
         })
@@ -27,10 +27,10 @@ export function activate(context: vscode.ExtensionContext) {
                 if (session) {
                     await provider.removeSession(session.id);
                 } else {
-                    vscode.window.showInformationMessage('Вы не авторизованы в Яндекс ID.');
+                    vscode.window.showInformationMessage('You are not signed in with Yandex ID.');
                 }
             } catch (err: any) {
-                vscode.window.showErrorMessage(`Ошибка: ${err.message}`);
+                vscode.window.showErrorMessage(`Yandex ID sign-out failed: ${err.message}`);
             }
         })
     );
