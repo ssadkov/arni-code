@@ -131,7 +131,7 @@ export class YandexAuthenticationProvider implements vscode.AuthenticationProvid
                 throw new Error(`Failed to fetch Yandex profile: ${userInfoResponse.statusText}`);
             }
 
-            const userInfo: YandexUserInfo = await userInfoResponse.json();
+            const userInfo = await userInfoResponse.json() as YandexUserInfo;
             const yandexId = userInfo.id || crypto.randomUUID();
             const displayName = userInfo.real_name || userInfo.display_name || userInfo.login || 'Yandex user';
             const email = userInfo.default_email || (userInfo.emails && userInfo.emails[0]) || '';

@@ -39,6 +39,20 @@ describe('LoopbackServer OAuth callback', () => {
         assert.ok(Date.now() - startedAt < 2000, 'CSRF failure must not wait for the 5 minute timeout');
     });
 
+    it('escapes error_description in the loopback HTML (C6 XSS)', async () => {
+        const { port, instance } = await started();
+        const wait = instance.waitForCode('expected-state', 5000);
+        const payload = '<img src=x onerror=alert(1)>';
+        const [res] = await Promise.all([
+            fetch(`http://127.0.0.1:${port}/callback?error=access_denied&error_description=${encodeURIComponent(payload)}&state=expected-state`),
+            assert.rejects(wait, /onerror/)
+        ]);
+        const html = await res.text();
+        assert.equal(res.status, 400);
+        assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+        assert.ok(!html.includes('<img src=x'));
+    });
+
     it('rejects OAuth error redirects immediately', async () => {
         const { port, instance } = await started();
         const wait = instance.waitForCode('expected-state', 300000);

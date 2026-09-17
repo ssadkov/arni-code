@@ -19,8 +19,8 @@ Two chat surfaces share this chain:
 
 | Surface | Extension | Default in product.json |
 | --- | --- | --- |
-| Arni sidebar webview | `arnion.arni-agent` | Yes (`defaultChatAgent.extensionId`) |
-| Copilot Chat → OpenRouter BYOK | `GitHub.copilot-chat` | Secondary |
+| Arni sidebar webview | `arnion.arni-agent` | `completionsMenuCommand` / sidebar view `arni.chatView` |
+| Copilot Chat → OpenRouter BYOK | `GitHub.copilot-chat` | `defaultChatAgent.chatExtensionId` |
 
 ## Client endpoints
 
@@ -63,7 +63,7 @@ Probed live (2026-09-14):
 
 Expected success body (client reads the first present field): `{ "token": "<jwt>" }` or `access_token` / `jwt`.
 
-Arni Agent caches the JWT in SecretStorage key `arni.jwtToken` until a 401 or Yandex sign-out.
+Arni Agent caches the JWT in SecretStorage key `arni.jwtToken` as JSON `{ token, expiresAt }`. `expiresAt` comes from the JWT `exp` claim when present, otherwise a 45-minute fallback TTL. The client re-exchanges when the token is missing, malformed, or within 5 minutes of expiry. The cache is also cleared on Yandex sign-out and on chat HTTP 401.
 
 ### 3. Chat completion
 
@@ -73,7 +73,7 @@ Content-Type: application/json
 Authorization: Bearer <arni JWT>
 
 {
-  "model": "openrouter/auto",
+  "model": "<arni.modelId, default qwen/qwen-2.5-coder-32b-instruct>",
   "messages": [{ "role": "user", "content": "<prompt>" }],
   "stream": true
 }
@@ -115,6 +115,8 @@ These were true before the fixes in this change:
 | Chat 402 | Entitlement / balance | Backend-side quota (not implemented in this repo) |
 | Copilot prompts “allow access to Yandex ID” | Trust list | `product.json` `trustedExtensionAuthAccess.yandex` |
 
+Workbench Chat setup with Yandex (`ChatSetupStrategy.SetupWithYandexProvider`) signs in via `yandex.signIn` and then calls `ChatSetupController.setup({ skipSignIn: true })` so the bundled `GitHub.copilot-chat` extension is installed/enabled without GitHub Copilot entitlement.
+
 There is no `/api/entitlement` route on the deployed backend. GitHub Copilot entitlement is a separate chain and is not required for the Arni sidebar.
 
 ## Manual verification (needs a real Yandex account)
@@ -136,6 +138,10 @@ The following cannot be completed in CI or with a synthetic token.
 - `extensions/yandex-authentication/src/yandexAuthProvider.ts`
 - `extensions/yandex-authentication/src/loopbackServer.ts`
 - `extensions/arni-agent/src/webview/chatPanel.ts`
+- `extensions/arni-agent/src/arniBackend.ts`
 - `extensions/arni-agent/src/providers/arniProvider.ts`
+- `extensions/arni-agent/src/providers/providerFactory.ts`
 - `extensions/copilot/src/extension/byok/vscode-node/openRouterProvider.ts`
-- `product.json` (`trustedExtensionAuthAccess`, `defaultChatAgent`)
+- `src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts`
+- `src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupController.ts`
+- `product.json` (`trustedExtensionAuthAccess`, `defaultChatAgent.chatExtensionId` = `GitHub.copilot-chat`)

@@ -95,8 +95,8 @@
         }
     ],
     "defaultChatAgent": {
-        "extensionId": "arnion.arni-agent",
-        "chatExtensionId": "arnion.arni-agent",
+        "extensionId": "GitHub.copilot",
+        "chatExtensionId": "GitHub.copilot-chat",
         "documentationUrl": "https://github.com/ArnionCode/arni-code",
         "provider": {
             "default": {
