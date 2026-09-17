@@ -511,6 +511,7 @@ export class AgentUserMessage extends PromptElement<AgentUserMessageProps> {
 			hasReplaceStringTool,
 			hasMultiReplaceStringTool,
 			hasMemoryTool,
+			hasCreateFileTool,
 		};
 		const ToolReferencesHintClass = this.props.ToolReferencesHintClass ?? DefaultToolReferencesHint;
 		const toolReferencesHintProps: ToolReferencesHintProps = {

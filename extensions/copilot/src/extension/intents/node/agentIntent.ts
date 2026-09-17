@@ -301,6 +301,14 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 		allowTools[ToolName.MultiReplaceString] = true;
 	}
 
+	// insert_edit_into_file applies through Copilot CAPI instant-apply. Without a
+	// Copilot token (Arni BYOK / OpenRouter) models pick it instead of create_file
+	// and the write never lands. Hide it so the only write tools are create_file /
+	// replace_string_in_file / apply_patch.
+	if (!authenticationService.hasCopilotTokenSource) {
+		allowTools[ToolName.EditFile] = false;
+	}
+
 	const tools = toolsService.getEnabledTools(request, model, tool => {
 		if (typeof allowTools[tool.name] === 'boolean') {
 			return allowTools[tool.name];

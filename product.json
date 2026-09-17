@@ -195,6 +195,9 @@
         "arni-agent"
     ],
     "configurationDefaults": {
-        "workbench.startupEditor": "none"
+        "workbench.startupEditor": "none",
+        "workbench.secondarySideBar.defaultVisibility": "maximized",
+        "chat.byokUtilityModelDefault": "mainAgent",
+        "chat.defaultModel": "nvidia/nemotron-3-ultra-550b-a55b:free"
     }
 }

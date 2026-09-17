@@ -36,7 +36,7 @@ export function detectToolCapabilities(availableTools: readonly LanguageModelToo
 
 	return {
 		...toolMap,
-		hasSomeEditTool: !!(toolMap[ToolName.EditFile] || toolMap[ToolName.ReplaceString] || toolMap[ToolName.ApplyPatch]),
+		hasSomeEditTool: !!(toolMap[ToolName.EditFile] || toolMap[ToolName.ReplaceString] || toolMap[ToolName.ApplyPatch] || toolMap[ToolName.CreateFile]),
 		hasAgenticBrowserTools: agenticBrowserTools.some(tool => toolMap[tool]),
 	};
 }
@@ -73,6 +73,19 @@ export interface ReminderInstructionsProps extends BasePromptElementProps {
 	readonly hasReplaceStringTool: boolean;
 	readonly hasMultiReplaceStringTool: boolean;
 	readonly hasMemoryTool: boolean;
+	readonly hasCreateFileTool?: boolean;
+}
+
+/**
+ * Cheap / BYOK models often dump XML/DSML instead of emitting native tool_calls.
+ * Repeat this next to the user message so file writes actually execute.
+ */
+export function getNativeToolCallingReminder(hasCreateFileTool?: boolean, hasReplaceStringTool?: boolean) {
+	return <>
+		IMPORTANT: You MUST invoke tools through the native tool-calling API. Do NOT describe, narrate, or simulate tool calls in plain text, XML, HTML, DSML, or markdown. Fake tags such as &lt;tool_call&gt;, &lt;invoke&gt;, or JSON in a fenced code block are ignored and will not save files. When you need to perform an action, call the tool directly.<br />
+		{hasCreateFileTool && <>To create a new file, call the {ToolName.CreateFile} tool with the complete file contents. Do not paste the file into chat.<br /></>}
+		{hasReplaceStringTool && <>To edit an existing file, call the {ToolName.ReplaceString} tool. Never print a replacement as a chat code block.<br /></>}
+	</>;
 }
 
 export function getEditingReminder(hasEditFileTool: boolean, hasReplaceStringTool: boolean, useStrongReplaceStringHint: boolean, hasMultiStringReplace: boolean) {
@@ -102,7 +115,9 @@ export class DefaultReminderInstructions extends PromptElement<ReminderInstructi
 	async render(state: void, sizing: PromptSizing) {
 		return <>
 			{/* Tool-dependent editing reminders that apply to all models */}
-			{getEditingReminder(this.props.hasEditFileTool, this.props.hasReplaceStringTool, false /* useStrongReplaceStringHint */, this.props.hasMultiReplaceStringTool)}
+			{getEditingReminder(this.props.hasEditFileTool, this.props.hasReplaceStringTool, true /* useStrongReplaceStringHint */, this.props.hasMultiReplaceStringTool)}
+			<br />
+			{getNativeToolCallingReminder(this.props.hasCreateFileTool, this.props.hasReplaceStringTool)}
 		</>;
 	}
 }
@@ -134,6 +149,7 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 			</Tag>
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
+				{getNativeToolCallingReminder(!!tools[ToolName.CreateFile], !!tools[ToolName.ReplaceString])}
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />
 				No need to ask permission before using a tool.<br />
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />
@@ -155,6 +171,9 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				Tools can be disabled by the user. You may see tools used previously in the conversation that are not currently available. Be careful to only use the tools that are currently available to you.
 			</Tag>
 			{this.props.codesearchMode && <CodesearchModeInstructions {...this.props} />}
+			{tools[ToolName.CreateFile] && <Tag name='createFileInstructions'>
+				To create a new file, call the {ToolName.CreateFile} tool with the complete file contents. Do not paste the file into chat and do not use {ToolName.EditFile} for new files.<br />
+			</Tag>}
 			{tools[ToolName.EditFile] && !tools[ToolName.ApplyPatch] && <Tag name='editFileInstructions'>
 				{tools[ToolName.ReplaceString] ?
 					<>
@@ -296,6 +315,7 @@ export class AlternateGPTPrompt extends PromptElement<DefaultAgentPromptProps> {
 			{/* Include the rest of the existing tool instructions but maintain GPT 4.1 specific workflow */}
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
+				{getNativeToolCallingReminder(!!tools[ToolName.CreateFile], !!tools[ToolName.ReplaceString])}
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />
 				No need to ask permission before using a tool.<br />
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />

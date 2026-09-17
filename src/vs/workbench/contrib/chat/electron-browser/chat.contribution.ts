@@ -9,6 +9,7 @@ import { timeout } from '../../../../base/common/async.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { resolve } from '../../../../base/common/path.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
+import Severity from '../../../../base/common/severity.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ipcRenderer } from '../../../../base/parts/sandbox/electron-browser/globals.js';
 import { localize } from '../../../../nls.js';
@@ -22,6 +23,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../platform/in
 import { registerSharedProcessRemoteService } from '../../../../platform/ipc/electron-browser/services.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INativeHostService } from '../../../../platform/native/common/native.js';
+import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
 import { ViewContainerLocation } from '../../../common/views.js';
@@ -30,7 +32,7 @@ import { INativeWorkbenchEnvironmentService } from '../../../services/environmen
 import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 import { ILifecycleService, ShutdownReason } from '../../../services/lifecycle/common/lifecycle.js';
-import { ACTION_ID_NEW_CHAT, CHAT_OPEN_ACTION_ID, IChatViewOpenOptions } from '../browser/actions/chatActions.js';
+import { ACTION_ID_NEW_CHAT, CHAT_OPEN_ACTION_ID, CHAT_SETUP_ACTION_ID, IChatViewOpenOptions } from '../browser/actions/chatActions.js';
 import './codexCustomizationSettings.contribution.js';
 import { AgentSessionProviders, getAgentSessionProviderName } from '../browser/agentSessions/agentSessions.js';
 import { IAgentSessionsService } from '../browser/agentSessions/agentSessionsService.js';
@@ -236,6 +238,71 @@ registerChatExportZipAction();
 registerExportAgentTracesDbAction();
 registerInstallDictationModelAction();
 
+class ArniStartupChatContribution extends Disposable {
+
+	static readonly ID = 'workbench.contrib.arniStartupChat';
+
+	constructor(
+		@IChatWidgetService chatWidgetService: IChatWidgetService,
+		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@ICommandService commandService: ICommandService,
+		@ILogService logService: ILogService,
+		@IWorkspaceContextService workspaceContextService: IWorkspaceContextService,
+		@IDialogService dialogService: IDialogService,
+		@INativeWorkbenchEnvironmentService environmentService: INativeWorkbenchEnvironmentService,
+	) {
+		super();
+		this.openChat(chatWidgetService, layoutService, commandService, logService, workspaceContextService, dialogService, environmentService);
+	}
+
+	private async openChat(
+		chatWidgetService: IChatWidgetService,
+		layoutService: IWorkbenchLayoutService,
+		commandService: ICommandService,
+		logService: ILogService,
+		workspaceContextService: IWorkspaceContextService,
+		dialogService: IDialogService,
+		environmentService: INativeWorkbenchEnvironmentService,
+	): Promise<void> {
+		try {
+			layoutService.setAuxiliaryBarMaximized(true);
+			const widget = await chatWidgetService.revealWidget();
+			if (!widget) {
+				await commandService.executeCommand(CHAT_SETUP_ACTION_ID);
+			}
+
+			if (environmentService.enableSmokeTestDriver) {
+				return;
+			}
+
+			// File tools need a folder. An empty window makes the agent dump code into chat.
+			if (workspaceContextService.getWorkbenchState() === WorkbenchState.EMPTY) {
+				const choice = await dialogService.prompt({
+					type: Severity.Info,
+					message: localize('arni.openFolder.title', "Open a folder to use the agent"),
+					detail: localize('arni.openFolder.message', "Arni can create and edit files only inside an open folder. Without a workspace the agent has nowhere to save files and will paste code into chat instead."),
+					buttons: [
+						{
+							label: localize('arni.openFolder.confirm', "Open Folder..."),
+							run: () => true
+						}
+					],
+					cancelButton: {
+						label: localize('arni.openFolder.skip', "Continue without a folder"),
+						run: () => false
+					}
+				});
+				if (choice.result) {
+					await commandService.executeCommand('workbench.action.files.openFolder');
+				}
+			}
+		} catch (err) {
+			logService.error(err, 'Failed to open chat on startup');
+		}
+	}
+}
+
+registerWorkbenchContribution2(ArniStartupChatContribution.ID, ArniStartupChatContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(KeywordActivationContribution.ID, KeywordActivationContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(NativeBuiltinToolsContribution.ID, NativeBuiltinToolsContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(ChatCommandLineHandler.ID, ChatCommandLineHandler, WorkbenchPhase.BlockRestore);

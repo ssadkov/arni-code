@@ -43,14 +43,16 @@ export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPa
 	mark('code/willGenerateNls');
 
 	if (
-		process.env['VSCODE_DEV'] ||
 		userLocale === 'pseudo' ||
 		userLocale.startsWith('en') ||
-		!commit ||
 		!userDataPath
 	) {
 		return defaultNLSConfiguration(userLocale, osLocale, nlsMetadataPath);
 	}
+
+	// Dev / unpackaged builds have no product commit. Language-pack cache still
+	// needs a stable folder name so translations can apply on the next launch.
+	const packCommit = commit || 'dev';
 
 	try {
 		const languagePacks = await getLanguagePackConfigurations(userDataPath);
@@ -77,7 +79,7 @@ export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPa
 
 		const languagePackId = `${languagePack.hash}.${resolvedLanguage}`;
 		const globalLanguagePackCachePath = join(userDataPath, 'clp', languagePackId);
-		const commitLanguagePackCachePath = join(globalLanguagePackCachePath, commit);
+		const commitLanguagePackCachePath = join(globalLanguagePackCachePath, packCommit);
 		const languagePackMessagesFile = join(commitLanguagePackCachePath, 'nls.messages.json');
 		const translationsConfigFile = join(globalLanguagePackCachePath, 'tcf.json');
 		const languagePackCorruptMarkerFile = join(globalLanguagePackCachePath, 'corrupted.info');
@@ -112,6 +114,31 @@ export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPa
 			touch(commitLanguagePackCachePath).catch(() => { }); // We don't wait for this. No big harm if we can't touch
 			mark('code/didGenerateNls');
 			return result;
+		}
+
+		const nlsKeysPath = join(nlsMetadataPath, 'nls.keys.json');
+		const nlsMessagesPath = join(nlsMetadataPath, 'nls.messages.json');
+		if (!(await Promises.exists(nlsKeysPath)) || !(await Promises.exists(nlsMessagesPath))) {
+			// Dev transpile does not emit NLS metadata. Core `localize()` stays
+			// English until a production compile, but extension translations
+			// still resolve through the language pack's tcf.json.
+			await promises.mkdir(globalLanguagePackCachePath, { recursive: true });
+			await promises.writeFile(translationsConfigFile, JSON.stringify(languagePack.translations), 'utf-8');
+			mark('code/didGenerateNls');
+			return {
+				userLocale,
+				osLocale,
+				resolvedLanguage,
+				defaultMessagesFile: join(nlsMetadataPath, 'nls.messages.json'),
+				locale: userLocale,
+				availableLanguages: { '*': resolvedLanguage },
+				_languagePackId: languagePackId,
+				_languagePackSupport: true,
+				_translationsConfigFile: translationsConfigFile,
+				_cacheRoot: globalLanguagePackCachePath,
+				_resolvedLanguagePackCoreLocation: commitLanguagePackCachePath,
+				_corruptedFile: languagePackCorruptMarkerFile
+			};
 		}
 
 		const [
@@ -204,7 +231,7 @@ function defaultNLSConfiguration(userLocale: string, osLocale: string, nlsMetada
 	return {
 		userLocale,
 		osLocale,
-		resolvedLanguage: 'en',
+		resolvedLanguage: userLocale.startsWith('en') ? 'en' : userLocale,
 		defaultMessagesFile: join(nlsMetadataPath, 'nls.messages.json'),
 
 		// NLS: below 2 are a relic from old times only used by vscode-nls and deprecated

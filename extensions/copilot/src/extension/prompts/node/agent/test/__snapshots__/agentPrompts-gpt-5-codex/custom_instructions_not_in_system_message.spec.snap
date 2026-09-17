@@ -172,6 +172,8 @@ Repository memory (/memories/repo/) is empty. No workspace-scoped notes have bee
 </context>
 <reminderInstructions>
 
+IMPORTANT: You MUST invoke tools through the native tool-calling API. Do NOT describe, narrate, or simulate tool calls in plain text, XML, HTML, DSML, or markdown. Fake tags such as <tool_call>, <invoke>, or JSON in a fenced code block are ignored and will not save files. When you need to perform an action, call the tool directly.
+
 </reminderInstructions>
 <userRequest>
 hello

@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { BYOKModelCapabilities } from '../../common/byokProvider';
-import { OpenRouterLMProvider } from '../openRouterProvider';
+import { DEFAULT_OPENROUTER_MODEL_ID, isOpenRouterBaseUrl, OpenRouterLMProvider, rankOpenRouterModelId, resolveArniApiBaseUrl, resolveArniBackendOrigin } from '../openRouterProvider';
 
 /**
  * Tests for issue #324671:
@@ -20,6 +20,18 @@ import { OpenRouterLMProvider } from '../openRouterProvider';
 class TestableOpenRouterLMProvider extends OpenRouterLMProvider {
 	public resolveCapabilities(modelData: unknown): BYOKModelCapabilities | undefined {
 		return this.resolveModelCapabilities(modelData);
+	}
+
+	protected override getModelsBaseUrl(): string {
+		return 'https://arni-backend.vercel.app/api';
+	}
+
+	public listModels(silent: boolean) {
+		return this.getAllModels(silent, undefined, undefined);
+	}
+
+	public modelInfoFor(modelId: string) {
+		return this.getModelInfo(modelId, 'https://arni-backend.vercel.app/api');
 	}
 }
 
@@ -105,5 +117,67 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 		// Reserve is capped at half the window, so the prompt budget stays positive.
 		expect(caps?.maxOutputTokens).toBe(4000);
 		expect(caps?.maxInputTokens).toBe(4000);
+	});
+});
+
+describe('Arni backend URL', () => {
+	it('uses the default origin and /api chat base', () => {
+		expect(resolveArniBackendOrigin(undefined)).toBe('https://arni-backend.vercel.app');
+		expect(resolveArniApiBaseUrl(undefined)).toBe('https://arni-backend.vercel.app/api');
+	});
+
+	it('strips a trailing /api so chat completions hit /api/chat/completions', () => {
+		expect(resolveArniApiBaseUrl('https://arni-backend.vercel.app/api')).toBe('https://arni-backend.vercel.app/api');
+		expect(resolveArniApiBaseUrl('https://arni-backend.vercel.app/api/')).toBe('https://arni-backend.vercel.app/api');
+		expect(resolveArniApiBaseUrl('https://arni-backend.vercel.app')).toBe('https://arni-backend.vercel.app/api');
+	});
+});
+
+describe('Model discovery records capabilities', () => {
+	it('keeps tool calling enabled so the request is not stripped of its tools', async () => {
+		const provider = createProvider();
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				data: [{
+					id: 'anthropic/claude-haiku-4.5',
+					name: 'Claude Haiku 4.5',
+					supported_parameters: ['tools'],
+					context_length: 200000,
+					top_provider: { context_length: 200000, max_completion_tokens: 8192 },
+				}],
+			}),
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		try {
+			await provider.listModels(true);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		expect(provider.modelInfoFor('anthropic/claude-haiku-4.5').capabilities.supports.tool_calls).toBe(true);
+	});
+});
+
+describe('Anthropic Messages API availability', () => {
+	it('is limited to direct OpenRouter hosts', () => {
+		expect(isOpenRouterBaseUrl('https://openrouter.ai/api/v1')).toBe(true);
+		expect(isOpenRouterBaseUrl('https://api.openrouter.ai/v1')).toBe(true);
+	});
+
+	it('excludes the Arni proxy, which serves only /chat/completions', () => {
+		expect(isOpenRouterBaseUrl(resolveArniApiBaseUrl(undefined))).toBe(false);
+		expect(isOpenRouterBaseUrl('https://arni-backend.vercel.app/api')).toBe(false);
+		expect(isOpenRouterBaseUrl('not a url')).toBe(false);
+	});
+});
+
+describe('OpenRouter free-model ranking', () => {
+	it('puts preferred free coding models ahead of paid ones', () => {
+		expect(DEFAULT_OPENROUTER_MODEL_ID).toBe('nvidia/nemotron-3-ultra-550b-a55b:free');
+		expect(rankOpenRouterModelId(DEFAULT_OPENROUTER_MODEL_ID)).toBe(0);
+		expect(rankOpenRouterModelId('cohere/north-mini-code:free')).toBeLessThan(rankOpenRouterModelId('aion-labs/aion-2.0'));
+		expect(rankOpenRouterModelId('google/gemma-4-31b-it:free')).toBeLessThan(rankOpenRouterModelId('anthropic/claude-sonnet-4.5'));
 	});
 });

@@ -19,6 +19,7 @@ Don't make assumptions about the situation- gather context first, then perform t
 Think creatively and explore the workspace in order to make a complete fix.
 Don't repeat yourself after a tool call, pick up where you left off.
 When a tool call is intended, you MUST actually invoke the tool rather than describing or simulating the call in text. Never write out a tool call as prose—use the provided tool-calling mechanism directly.
+NEVER print out a codeblock with file changes unless the user asked for it. Use the appropriate edit tool instead.
 You don't need to read a file if it's already provided in context.
 </instructions>
 <toolUseInstructions>
@@ -33,7 +34,6 @@ If semantic_search returns the full contents of the text files in the workspace,
 You can use the grep_search to get an overview of a file by searching for a string within that one file, instead of using read_file many times.
 If you don't know exactly the string or filename pattern you're looking for, use semantic_search to do a semantic search across the workspace.
 When invoking a tool that takes a file path, always use the absolute file path. If the file has a scheme like untitled: or vscode-userdata:, then use a URI with the scheme.
-You don't currently have any tools available for editing files. If the user asks you to edit a file, you can ask the user to enable editing tools or print a codeblock with the suggested changes.
 You don't currently have any tools available for running terminal commands. If the user asks you to run a terminal command, you can ask the user to enable terminal tools or print a codeblock with the suggested command.
 Tools can be disabled by the user. You may see tools used previously in the conversation that are not currently available. Be careful to only use the tools that are currently available to you.
 </toolUseInstructions>

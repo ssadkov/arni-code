@@ -1803,13 +1803,10 @@
             "apiKey": {
               "type": "string",
               "secret": true,
-              "description": "API key for OpenRouter",
+              "description": "Optional API key. Leave empty to sign in with Yandex ID.",
               "title": "API Key"
             }
-          },
-          "required": [
-            "apiKey"
-          ]
+          }
         }
       },
       {

@@ -318,12 +318,22 @@ export class CodeMapper {
 
 	public async mapCode(request: ICodeMapperRequestInput, resultStream: MappedEditsResponseStream, telemetryInfo: ICodeMapperTelemetryInfo | undefined, token: CancellationToken): Promise<CodeMapperOutcome | undefined> {
 
-		const fastEdit = await this.mapCodeUsingFastEdit(request, resultStream, telemetryInfo, token);
-		if (!(fastEdit instanceof CodeMapperRefusal)) {
+		// Instant apply talks to GitHub Copilot CAPI. Without a Copilot token
+		// (BYOK / OpenRouter), skip it and rewrite with the utility endpoint.
+		const skipCopilotInstantApply = !this.authenticationService.hasCopilotTokenSource;
+		const fastEdit = skipCopilotInstantApply
+			? new CodeMapperRefusal()
+			: await this.mapCodeUsingFastEdit(request, resultStream, telemetryInfo, token);
+		if (!(fastEdit instanceof CodeMapperRefusal) && !fastEdit.errorDetails) {
 			return fastEdit;
 		}
+		if (skipCopilotInstantApply) {
+			this.logService.info('[code mapper] Skipping Copilot instant apply because no Copilot token is available; using the rewrite endpoint');
+		} else if (!(fastEdit instanceof CodeMapperRefusal) && fastEdit.errorDetails) {
+			this.logService.info(`[code mapper] Fast apply failed, falling back to rewrite: ${fastEdit.errorDetails.message}`);
+		}
 		// continue with "slow rewrite endpoint" when fast rewriting was not possible
-		// use copilot base as fallback
+		// use copilot-utility (BYOK main agent when configured) as fallback
 		const chatEndpoint = await this.endpointProvider.getChatEndpoint('copilot-utility');
 
 		// Only attempt a full file rewrite if the original document fits into 3/4 of the max output token limit, leaving space for the model to add code. The limit is currently a flat 4K tokens from CAPI across all our models.

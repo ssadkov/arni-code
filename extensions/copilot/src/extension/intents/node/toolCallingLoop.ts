@@ -29,6 +29,7 @@ import { getCurrentCapturingToken } from '../../../platform/requestLogger/node/r
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { computePromptTokenDetails } from '../../../platform/tokenizer/node/promptTokenDetails';
+import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { tryFinalizeResponseStream } from '../../../util/common/chatResponseStreamImpl';
 import { ChatExtPerfMark, markChatExt } from '../../../util/common/performance';
 import { DeferredPromise, timeout } from '../../../util/vs/base/common/async';
@@ -58,6 +59,7 @@ import { IToolsService, ToolCallCancelledError } from '../../tools/common/toolsS
 import { ReadFileParams } from '../../tools/node/readFileTool';
 import { isHookAbortError, processHookResults } from './hookResultProcessor';
 import { applyConfiguredPromptOverrides } from './promptOverride';
+import { recoverToolCallsFromAssistantText } from './recoveredToolCalls';
 
 export const enum ToolCallLimitBehavior {
 	Confirm,
@@ -1945,6 +1947,23 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		const fetchResult = await this.fetch(fetchOptions, token).finally(() => {
 			this.stopHookUserInitiated = false;
 		});
+		if (fetchResult.type === ChatFetchResponseType.Success && toolCalls.length === 0) {
+			const recovered = recoverToolCallsFromAssistantText({
+				text: fetchResult.value,
+				userQuery: this.options.request.prompt,
+				availableToolNames: new Set(availableTools.map(tool => tool.name)),
+				workspaceFolders: this._instantiationService
+					.invokeFunction(accessor => accessor.get(IWorkspaceService).getWorkspaceFolders())
+					.map(folder => folder.fsPath),
+			});
+			if (recovered.length) {
+				toolCalls.push(...recovered.map(call => ({
+					...call,
+					id: this.createInternalToolCallId(call.id),
+				})));
+				this._logService.info(`[ToolCallingLoop] Recovered ${recovered.length} simulated tool call(s) from assistant text`);
+			}
+		}
 		this.processVoiceProgressToolCalls(outputStream, toolCalls);
 		markChatExt(this.options.conversation.sessionId, ChatExtPerfMark.DidFetch);
 

@@ -24,6 +24,7 @@ You don't need to read a file if it's already provided in context.
 </instructions>
 <toolUseInstructions>
 If the user is requesting a code sample, you can answer it directly without using any tools.
+IMPORTANT: You MUST invoke tools through the native tool-calling API. Do NOT describe, narrate, or simulate tool calls in plain text, XML, HTML, DSML, or markdown. Fake tags such as <tool_call>, <invoke>, or JSON in a fenced code block are ignored and will not save files. When you need to perform an action, call the tool directly.
 When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.
 No need to ask permission before using a tool.
 NEVER say the name of a tool to a user. For example, instead of saying that you'll use the run_in_terminal tool, say "I'll run the command in a terminal".
@@ -198,6 +199,8 @@ success
 <reminderInstructions>
 You are an agent - you must keep going until the user's query is completely resolved, before ending your turn and yielding back to the user. ONLY terminate your turn when you are sure that the problem is solved, or you absolutely cannot continue.
 You take action when possible- the user is expecting YOU to take action and go to work for them. Don't ask unnecessary questions about the details if you can simply DO something useful instead.
+
+IMPORTANT: You MUST invoke tools through the native tool-calling API. Do NOT describe, narrate, or simulate tool calls in plain text, XML, HTML, DSML, or markdown. Fake tags such as <tool_call>, <invoke>, or JSON in a fenced code block are ignored and will not save files. When you need to perform an action, call the tool directly.
 
 </reminderInstructions>
 <userRequest>

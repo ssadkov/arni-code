@@ -11,7 +11,7 @@ import { ResponseTranslationRules } from '../../base/responseTranslationRules';
 import { Tag } from '../../base/tag';
 import { EXISTING_CODE_MARKER } from '../../panel/codeBlockFormattingRules';
 import { ResponseRenderingRules } from '../../panel/editorIntegrationRules';
-import { ApplyPatchInstructions, CodesearchModeInstructions, DefaultAgentPromptProps, detectToolCapabilities, GenericEditingTips, getEditingReminder, McpToolInstructions, NotebookInstructions, ReminderInstructionsProps } from '../defaultAgentInstructions';
+import { ApplyPatchInstructions, CodesearchModeInstructions, DefaultAgentPromptProps, detectToolCapabilities, GenericEditingTips, getEditingReminder, getNativeToolCallingReminder, McpToolInstructions, NotebookInstructions, ReminderInstructionsProps } from '../defaultAgentInstructions';
 import { FileLinkificationInstructions } from '../fileLinkificationInstructions';
 import { IAgentPrompt, PromptRegistry, ReminderInstructionsConstructor, SystemPrompt } from '../promptRegistry';
 
@@ -49,6 +49,7 @@ export class DefaultOpenAIAgentPrompt extends PromptElement<DefaultAgentPromptPr
 			</Tag>
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
+				{getNativeToolCallingReminder(!!tools[ToolName.CreateFile], !!tools[ToolName.ReplaceString])}
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />
 				No need to ask permission before using a tool.<br />
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />
@@ -143,7 +144,9 @@ class OpenAIReminderInstructions extends PromptElement<ReminderInstructionsProps
 	async render(state: void, sizing: PromptSizing) {
 		return <>
 			<DefaultOpenAIKeepGoingReminder />
-			{getEditingReminder(this.props.hasEditFileTool, this.props.hasReplaceStringTool, false /* useStrongReplaceStringHint */, this.props.hasMultiReplaceStringTool)}
+			{getEditingReminder(this.props.hasEditFileTool, this.props.hasReplaceStringTool, true /* useStrongReplaceStringHint */, this.props.hasMultiReplaceStringTool)}
+			<br />
+			{getNativeToolCallingReminder(this.props.hasCreateFileTool, this.props.hasReplaceStringTool)}
 		</>;
 	}
 }
