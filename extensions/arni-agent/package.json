@@ -63,17 +63,17 @@
                                                                                                     "custom"
                                                                                                 ],
                                                                                        "default":  "openrouter",
-                                                                                       "description":  "The AI provider to use."
+                                                                                       "description":  "AI provider for the Arni sidebar. With a Yandex session, `arni` and `openrouter` use the Arni backend (`{backendUrl}/api/chat/completions`). Direct providers (`openai`, `anthropic`, `deepseek`, `ollama`, `custom`) use a stored API key from `Arni: Set API Key`."
                                                                                    },
                                                                  "arni.apiBaseUrl":  {
                                                                                          "type":  "string",
                                                                                          "default":  "https://openrouter.ai/api/v1",
-                                                                                         "description":  "Custom API Base URL. Leave empty to use provider default."
+                                                                                         "description":  "OpenAI-compatible API base URL for BYOK providers. Ignored on the Yandex JWT path, which always uses `arni.backendUrl`."
                                                                                      },
                                                                  "arni.modelId":  {
                                                                                       "type":  "string",
                                                                                       "default":  "qwen/qwen-2.5-coder-32b-instruct",
-                                                                                      "description":  "Model ID to use."
+                                                                                      "description":  "Model ID sent in chat completions for the Arni sidebar."
                                                                                   },
                                                                  "arni.enableStreaming":  {
                                                                                               "type":  "boolean",
@@ -96,7 +96,7 @@
                                                                                            "description":  "Custom system prompt."
                                                                                        },
                                                                  "arni.backendUrl":  {
-                                                                                         "description":  "URL of the Arni Backend Proxy",
+                                                                                         "description":  "Origin of the Arni backend (without /api). Chat and auth calls are sent to {backendUrl}/api/...",
                                                                                          "default":  "https://arni-backend.vercel.app",
                                                                                          "type":  "string"
                                                                                      }
@@ -127,7 +127,8 @@
     "scripts":  {
                     "build":  "node esbuild.js",
                     "watch":  "node esbuild.js --watch",
-                    "compile":  "tsc -p ./"
+                    "compile":  "tsc -p ./",
+                    "test":  "node --experimental-strip-types --test src/arniBackend.test.ts src/webview/getWebviewContent.test.ts"
                 },
     "devDependencies":  {
                             "@types/node":  "^18.x",

@@ -48,6 +48,11 @@ export interface IChatSetupControllerOptions {
 	readonly additionalScopes?: readonly string[];
 	readonly forceAnonymous?: ChatSetupAnonymous;
 	readonly cancellationToken?: CancellationToken;
+	/**
+	 * Skip GitHub sign-in / Copilot Free signup and only install or enable the
+	 * workbench chat extension. Used after Yandex ID sign-in.
+	 */
+	readonly skipSignIn?: boolean;
 }
 
 export class ChatSetupController extends Disposable {
@@ -124,6 +129,8 @@ export class ChatSetupController extends Disposable {
 			let signIn: boolean;
 			if (options.forceSignIn) {
 				signIn = true; // forced to sign in
+			} else if (options.skipSignIn) {
+				signIn = false; // Yandex (or other) already signed the user in
 			} else if (this.context.state.entitlement === ChatEntitlement.Unknown) {
 				if (options.forceAnonymous) {
 					signIn = false; // forced to anonymous without sign in
@@ -223,6 +230,7 @@ export class ChatSetupController extends Disposable {
 
 		try {
 			if (
+				!options.skipSignIn &&							// Yandex setup must not require GitHub Copilot signup
 				!options.forceAnonymous &&						// User is not asking for anonymous access
 				entitlement !== ChatEntitlement.Free &&			// User is not signed up to Copilot Free
 				!isProUser(entitlement) &&						// User is not signed up for a Copilot subscription

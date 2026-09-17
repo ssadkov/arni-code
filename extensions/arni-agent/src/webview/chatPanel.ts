@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getWebviewContent } from './getWebviewContent';
 import { ArniProvider } from '../providers/arniProvider';
+import { readArniJwtFromExchangeBody, readCachedArniJwt, resolveArniAuthExchangeUrl, resolveSidebarChatRequest, serializeCachedArniJwt } from '../arniBackend';
 
 export class ChatPanelProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -22,16 +23,28 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
-        webviewView.webview.html = getWebviewContent();
+        webviewView.webview.html = getWebviewContent({ language: vscode.env.language });
 
-        webviewView.webview.onDidReceiveMessage(async (data) => {
+        const subscriptions: vscode.Disposable[] = [];
+        webviewView.onDidDispose(() => {
+            for (const sub of subscriptions) {
+                sub.dispose();
+            }
+        });
+
+        subscriptions.push(webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage':
                     await this.handleMessage(data.value);
                     break;
                 case 'checkApiKey':
-                    // Just tell the UI it's OK, we handle auth silently via Yandex now
-                    this._view?.webview.postMessage({ type: 'apiKeySaved' });
+                    await this.postReadyState();
+                    break;
+                case 'saveApiKey':
+                    await this.saveApiKey(data.value);
+                    break;
+                case 'signInYandex':
+                    await this.signInYandexFromWebview();
                     break;
                 case 'openUrl':
                     if (data.value) {
@@ -39,35 +52,89 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                     }
                     break;
             }
-        });
+        }));
+
+        subscriptions.push(this._secrets.onDidChange(async (e) => {
+            if (e.key === 'arni.apiKey' || e.key === 'arni.jwtToken') {
+                await this.postReadyState();
+            }
+        }));
+
+        subscriptions.push(vscode.authentication.onDidChangeSessions(async (e) => {
+            if (e.provider.id === 'yandex') {
+                await this.postReadyState();
+            }
+        }));
     }
 
     public clearChat() {
         this._view?.webview.postMessage({ type: 'clearChat' });
     }
 
-    private async getArniToken(): Promise<string | undefined> {
-        // 1. Проверяем, есть ли уже токен от бэкенда
-        let arniJwt = await this._secrets.get('arni.jwtToken');
-        if (arniJwt) return arniJwt;
+    private async hasStoredApiKey(): Promise<boolean> {
+        const key = await this._secrets.get('arni.apiKey');
+        return !!key && key.trim().length > 0;
+    }
 
-        // 2. Получаем сессию Яндекса (через системный провайдер, который мы починили)
+    private async hasYandexSession(): Promise<boolean> {
+        const session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
+        return !!session;
+    }
+
+    private async postReadyState(): Promise<void> {
+        const ready = await this.hasYandexSession() || await this.hasStoredApiKey();
+        this._view?.webview.postMessage({ type: ready ? 'apiKeySaved' : 'requestApiKey' });
+    }
+
+    private async saveApiKey(value: unknown): Promise<void> {
+        const key = typeof value === 'string' ? value.trim() : '';
+        if (!key) {
+            this._view?.webview.postMessage({ type: 'error', value: 'Введите API-ключ.' });
+            return;
+        }
+        await this._secrets.store('arni.apiKey', key);
+        this._view?.webview.postMessage({ type: 'apiKeySaved' });
+    }
+
+    private async signInYandexFromWebview(): Promise<void> {
+        try {
+            const token = await this.getArniToken();
+            if (token) {
+                this._view?.webview.postMessage({ type: 'apiKeySaved' });
+            } else {
+                this._view?.webview.postMessage({ type: 'requestApiKey' });
+            }
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: 'error', value: e.message || 'Не удалось войти через Яндекс ID.' });
+            this._view?.webview.postMessage({ type: 'requestApiKey' });
+        }
+    }
+
+    private async getArniToken(): Promise<string | undefined> {
         let session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
         if (!session) {
+            await this._secrets.delete('arni.jwtToken');
             try {
                 session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
-            } catch (e) {
+            } catch {
                 return undefined;
             }
         }
-        if (!session) return undefined;
+        if (!session) {
+            await this._secrets.delete('arni.jwtToken');
+            return undefined;
+        }
 
-        // 3. Обмениваем токен Яндекса на универсальный JWT нашего бэкенда
+        const cachedJwt = readCachedArniJwt(await this._secrets.get('arni.jwtToken'));
+        if (cachedJwt) {
+            return cachedJwt;
+        }
+
         const config = vscode.workspace.getConfiguration('arni');
-        const backendUrl = config.get<string>('backendUrl') || 'https://arni-backend.vercel.app';
-        
+        const backendUrl = config.get<string>('backendUrl');
+
         try {
-            const response = await fetch(`${backendUrl}/api/auth/exchange`, {
+            const response = await fetch(resolveArniAuthExchangeUrl(backendUrl), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ provider: 'yandex', token: session.accessToken })
@@ -78,68 +145,88 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             }
 
             const data: any = await response.json();
-            arniJwt = data.token;
+            const arniJwt = readArniJwtFromExchangeBody(data);
             if (arniJwt) {
-                await this._secrets.store('arni.jwtToken', arniJwt);
+                await this._secrets.store('arni.jwtToken', serializeCachedArniJwt(arniJwt));
                 return arniJwt;
             }
         } catch (error) {
             console.error('Token exchange failed:', error);
-            throw new Error('Не удалось авторизоваться на сервере Arni.');
+            throw new Error('Не удалось авторизоваться на бэкенде Arni.');
         }
 
         return undefined;
     }
 
+    private readChatSettings() {
+        const config = vscode.workspace.getConfiguration('arni');
+        return {
+            provider: config.get<string>('provider'),
+            apiBaseUrl: config.get<string>('apiBaseUrl'),
+            backendUrl: config.get<string>('backendUrl'),
+            modelId: config.get<string>('modelId'),
+            enableStreaming: config.get<boolean>('enableStreaming') ?? true
+        };
+    }
+
     private async handleMessage(message: string) {
         if (!this._view) { return; }
 
-        let arniToken: string | undefined;
+        const hasYandexSession = await this.hasYandexSession();
+        const storedApiKey = await this._secrets.get('arni.apiKey');
+        const hasApiKey = !!storedApiKey && storedApiKey.trim().length > 0;
+        const target = resolveSidebarChatRequest({
+            ...this.readChatSettings(),
+            hasYandexSession,
+            hasApiKey
+        });
+
+        let apiKey: string | undefined;
         try {
-            arniToken = await this.getArniToken();
+            if (target.useJwt) {
+                apiKey = await this.getArniToken();
+            } else {
+                apiKey = storedApiKey?.trim();
+            }
         } catch (e: any) {
             this._view.webview.postMessage({ type: 'error', value: e.message });
             return;
         }
 
-        if (!arniToken) {
-            this._view.webview.postMessage({ type: 'error', value: 'Для использования ИИ необходимо войти через Яндекс.' });
+        if (!apiKey) {
+            this._view.webview.postMessage({ type: 'error', value: 'Войдите через Яндекс ID или сохраните API-ключ, чтобы пользоваться Arni.' });
+            await this.postReadyState();
             return;
         }
 
         try {
-            const config = vscode.workspace.getConfiguration('arni');
-            const backendUrl = config.get<string>('backendUrl') || 'https://arni-backend.vercel.app';
-            
-            // Используем наш прокси-провайдер с JWT токеном
-            const provider = new ArniProvider(arniToken, backendUrl, 'openrouter/auto', true);
-            
+            const provider = new ArniProvider(apiKey, target.baseUrl, target.modelId, target.enableStreaming);
+
             let fullResponse = '';
             await provider.chat(message, (chunk: string) => {
                 fullResponse += chunk;
-                this._view?.webview.postMessage({ 
-                    type: 'streamResponse', 
+                this._view?.webview.postMessage({
+                    type: 'streamResponse',
                     value: fullResponse,
                     done: false
                 });
             });
 
-            this._view.webview.postMessage({ 
-                type: 'streamResponse', 
+            this._view.webview.postMessage({
+                type: 'streamResponse',
                 value: fullResponse,
                 done: true
             });
         } catch (error: any) {
             if (error.message?.includes('401')) {
-                // Если JWT протух, удаляем его, чтобы при следующем запросе получить новый
                 await this._secrets.delete('arni.jwtToken');
-                this._view.webview.postMessage({ type: 'error', value: 'Сессия устарела. Пожалуйста, отправьте сообщение еще раз для переавторизации.' });
+                this._view.webview.postMessage({ type: 'error', value: 'Сессия истекла. Отправьте сообщение ещё раз, чтобы войти заново.' });
             } else if (error.message?.includes('402')) {
-                this._view.webview.postMessage({ type: 'error', value: 'На вашем балансе закончились токены. Перейдите в настройки для пополнения.' });
+                this._view.webview.postMessage({ type: 'error', value: 'Баланс токенов пуст. Откройте настройки, чтобы пополнить.' });
             } else {
-                this._view.webview.postMessage({ 
-                    type: 'error', 
-                    value: error.message || 'Ошибка связи с сервером.'
+                this._view.webview.postMessage({
+                    type: 'error',
+                    value: error.message || 'Не удалось связаться с бэкендом Arni.'
                 });
             }
         }

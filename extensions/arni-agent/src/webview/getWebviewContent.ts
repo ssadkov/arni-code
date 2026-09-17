@@ -1,8 +1,42 @@
-export function getWebviewContent() {
+export interface ArniWebviewContentOptions {
+    language?: string;
+}
+
+export const ARNI_GREETING_RU = 'Привет! Я Arni — ваш умный AI-ассистент по коду. Чем я могу помочь сегодня?';
+export const ARNI_GREETING_EN = 'Hello! I am Arni, your intelligent coding assistant. How can I help you today?';
+
+export function isRussianLocale(language?: string): boolean {
+    if (!language || language.trim().length === 0) {
+        return true;
+    }
+    return language.toLowerCase().startsWith('ru');
+}
+
+export function getArniGreeting(language?: string): string {
+    return isRussianLocale(language) ? ARNI_GREETING_RU : ARNI_GREETING_EN;
+}
+
+function getNonce(): string {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let nonce = '';
+    for (let i = 0; i < 32; i++) {
+        nonce += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return nonce;
+}
+
+export function getWebviewContent(options: ArniWebviewContentOptions = {}) {
+    const nonce = getNonce();
+    const language = options.language ?? 'ru';
+    const htmlLang = isRussianLocale(language) ? 'ru' : 'en';
+    const greeting = getArniGreeting(language);
+    const csp = `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${htmlLang}">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arni Agent</title>
     <style>
@@ -104,8 +138,11 @@ export function getWebviewContent() {
     <div id="setup-container">
         <h2>Добро пожаловать в Arni!</h2>
         <p style="font-size: 13px; color: var(--vscode-descriptionForeground); margin-bottom: 14px;">
-            Arni готов к работе через <b>OpenRouter</b> с моделью <code>Qwen 2.5 Coder 32B</code>.
+            Войдите через Яндекс ID или вставьте ключ OpenRouter. Модель по умолчанию: <code>Qwen 2.5 Coder 32B</code>.
         </p>
+        <button id="yandex-signin-btn" style="width: 100%; margin-bottom: 10px;" type="button">
+            Войти через Яндекс ID
+        </button>
         <button id="get-free-key-btn" style="background-color: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); margin-bottom: 10px; width: 100%;" type="button">
             🔑 Получить ключ на OpenRouter (бесплатно)
         </button>
@@ -115,7 +152,7 @@ export function getWebviewContent() {
 
     <div id="chat-wrapper" style="display: flex; flex-direction: column; height: 100%;">
         <div id="chat-container">
-            <div class="message arni-message">Привет! Я Arni — ваш умный AI-ассистент по коду. Чем я могу помочь сегодня?</div>
+            <div class="message arni-message">${escapeHtml(greeting)}</div>
         </div>
         
         <div class="input-area">
@@ -124,8 +161,9 @@ export function getWebviewContent() {
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
+        const ARNI_GREETING = ${JSON.stringify(greeting)};
         
         const chatWrapper = document.getElementById('chat-wrapper');
         const setupContainer = document.getElementById('setup-container');
@@ -135,10 +173,17 @@ export function getWebviewContent() {
         const apiKeyInput = document.getElementById('api-key-input');
         const saveKeyBtn = document.getElementById('save-key-btn');
         const getFreeKeyBtn = document.getElementById('get-free-key-btn');
+        const yandexSignInBtn = document.getElementById('yandex-signin-btn');
 
         if (getFreeKeyBtn) {
             getFreeKeyBtn.addEventListener('click', () => {
                 vscode.postMessage({ type: 'openUrl', value: 'https://openrouter.ai/keys' });
+            });
+        }
+
+        if (yandexSignInBtn) {
+            yandexSignInBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'signInYandex' });
             });
         }
 
@@ -173,13 +218,17 @@ export function getWebviewContent() {
                     const errorMsg = document.createElement('div');
                     errorMsg.className = 'message arni-message';
                     errorMsg.style.color = 'var(--vscode-errorForeground)';
-                    errorMsg.textContent = 'Error: ' + message.value;
+                    errorMsg.textContent = 'Ошибка: ' + message.value;
                     chatContainer.appendChild(errorMsg);
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                     currentArniMessage = null;
                     break;
                 case 'clearChat':
-                    chatContainer.innerHTML = '<div class="message arni-message">Hello! I am Arni, your intelligent coding assistant. How can I help you today?</div>';
+                    chatContainer.replaceChildren();
+                    const hello = document.createElement('div');
+                    hello.className = 'message arni-message';
+                    hello.textContent = ARNI_GREETING;
+                    chatContainer.appendChild(hello);
                     currentArniMessage = null;
                     break;
             }
@@ -217,4 +266,13 @@ export function getWebviewContent() {
     </script>
 </body>
 </html>`;
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }

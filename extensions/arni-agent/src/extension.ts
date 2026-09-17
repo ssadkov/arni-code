@@ -5,6 +5,18 @@ export function activate(context: vscode.ExtensionContext) {
     const chatPanelProvider = new ChatPanelProvider(context.extensionUri, context.secrets);
 
     context.subscriptions.push(
+        vscode.authentication.onDidChangeSessions(async (e) => {
+            if (e.provider.id !== 'yandex') {
+                return;
+            }
+            const session = await vscode.authentication.getSession('yandex', [], { silent: true });
+            if (!session) {
+                await context.secrets.delete('arni.jwtToken');
+            }
+        })
+    );
+
+    context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             'arni.chatView',
             chatPanelProvider,

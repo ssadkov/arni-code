@@ -407,10 +407,16 @@ export class ChatSetup {
 						// Verify session was actually created via the authentication service
 						// (executeCommand return value may not serialize across IPC)
 						const sessions = await this.authenticationService.getSessions('yandex');
-						success = sessions.length > 0;
-						if (!success) {
+						if (sessions.length === 0) {
 							this.logService.warn('[chat setup] Yandex sign-in command completed but no session found');
+							success = false;
+							break;
 						}
+						// Install/enable the workbench chat extension without GitHub entitlement.
+						success = await this.controller.value.setup({
+							skipSignIn: true,
+							cancellationToken: setupCancellation.token,
+						});
 					} catch (e) {
 						this.logService.error(`[chat setup] Yandex sign in failed: ${toErrorMessage(e)}`);
 						success = false;
