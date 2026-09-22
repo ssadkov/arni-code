@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 import type { CancellationToken } from 'vscode';
 import { IChatMLFetcher } from '../../../platform/chat/common/chatMLFetcher';
-import { ChatFetchResponseType, ChatResponse } from '../../../platform/chat/common/commonTypes';
+import { ChatFetchResponseType, ChatResponse, RESPONSE_CONTAINED_NO_CHOICES } from '../../../platform/chat/common/commonTypes';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { isKimiFamily } from '../../../platform/endpoint/common/chatModelCapabilities';
 import { IDomainService } from '../../../platform/endpoint/common/domainService';
@@ -17,7 +17,48 @@ import { RawMessageConversionCallback } from '../../../platform/networking/commo
 import { IChatWebSocketManager } from '../../../platform/networking/node/chatWebSocketManager';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITokenizerProvider } from '../../../platform/tokenizer/node/tokenizer';
+import { timeout } from '../../../util/vs/base/common/async';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+
+/** Backoff before retrying a transient OpenRouter/NVIDIA miss. */
+const DEFAULT_BYOK_TRANSIENT_RETRY_DELAYS_MS: readonly number[] = [2_000, 6_000];
+let byokTransientRetryDelaysMs: readonly number[] = DEFAULT_BYOK_TRANSIENT_RETRY_DELAYS_MS;
+
+export function setByokTransientRetryDelaysMs(delays: readonly number[]): void {
+	byokTransientRetryDelaysMs = delays;
+}
+
+export function resetByokTransientRetryDelaysMs(): void {
+	byokTransientRetryDelaysMs = DEFAULT_BYOK_TRANSIENT_RETRY_DELAYS_MS;
+}
+
+function byokErrorHaystack(response: ChatResponse): string {
+	const reason = 'reason' in response ? response.reason : '';
+	const extra = 'capiError' in response ? JSON.stringify(response.capiError) : 'streamError' in response ? JSON.stringify(response.streamError) : '';
+	return `${response.type} ${reason ?? ''} ${extra}`.toLowerCase();
+}
+
+/**
+ * True when another attempt at the same BYOK model may succeed.
+ * Daily OpenRouter `:free` caps and Arni 402s are not transient.
+ */
+export function shouldRetryBYOKChatResponse(response: ChatResponse): boolean {
+	const haystack = byokErrorHaystack(response);
+	if (/insufficient tokens|free-models-per-day|openrouter_free_tier_daily/.test(haystack)) {
+		return false;
+	}
+	switch (response.type) {
+		case ChatFetchResponseType.Unknown:
+			return haystack.includes('no choices') || response.reason === RESPONSE_CONTAINED_NO_CHOICES;
+		case ChatFetchResponseType.Failed:
+		case ChatFetchResponseType.NetworkError:
+			return true;
+		case ChatFetchResponseType.RateLimited:
+			return /upstream_provider_shared_pool|temporarily rate-limited|overloaded|429/.test(haystack);
+		default:
+			return false;
+	}
+}
 
 function hydrateBYOKErrorMessages(response: ChatResponse): ChatResponse {
 	if (response.type === ChatFetchResponseType.Failed && response.streamError) {
@@ -428,7 +469,23 @@ export class OpenAIEndpoint extends ChatEndpoint {
 	public override async makeChatRequest2(options: IMakeChatRequestOptions, token: CancellationToken): Promise<ChatResponse> {
 		// Use ignoreStatefulMarker: false as the initial request default; the parent retry flow can override it on InvalidStatefulMarker retries.
 		const modifiedOptions: IMakeChatRequestOptions = { ...options, ignoreStatefulMarker: options.ignoreStatefulMarker ?? false };
-		const response = await super.makeChatRequest2(modifiedOptions, token);
-		return hydrateBYOKErrorMessages(response);
+		const delays = byokTransientRetryDelaysMs;
+		let response = hydrateBYOKErrorMessages(await super.makeChatRequest2(modifiedOptions, token));
+		for (let attempt = 0; attempt < delays.length && shouldRetryBYOKChatResponse(response); attempt++) {
+			if (token.isCancellationRequested) {
+				return { type: ChatFetchResponseType.Canceled, reason: 'cancelled', requestId: response.requestId, serverRequestId: response.serverRequestId };
+			}
+			const delayMs = delays[attempt];
+			this.logService.warn(`[BYOK] Transient ${response.type} from ${this.model} (${response.reason}). Retry ${attempt + 1}/${delays.length} after ${delayMs}ms.`);
+			if (delayMs > 0) {
+				try {
+					await timeout(delayMs, token);
+				} catch {
+					return { type: ChatFetchResponseType.Canceled, reason: 'cancelled', requestId: response.requestId, serverRequestId: response.serverRequestId };
+				}
+			}
+			response = hydrateBYOKErrorMessages(await super.makeChatRequest2(modifiedOptions, token));
+		}
+		return response;
 	}
 }

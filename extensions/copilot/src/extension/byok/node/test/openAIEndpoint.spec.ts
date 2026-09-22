@@ -16,7 +16,7 @@ import { CancellationToken } from '../../../../util/vs/base/common/cancellation'
 import { DisposableStore } from '../../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { createExtensionUnitTestingServices } from '../../../test/node/services';
-import { OpenAIEndpoint } from '../openAIEndpoint';
+import { OpenAIEndpoint, resetByokTransientRetryDelaysMs, setByokTransientRetryDelaysMs, shouldRetryBYOKChatResponse } from '../openAIEndpoint';
 
 // Test fixtures for thinking content
 const createThinkingMessage = (thinkingId: string, thinkingText: string): Raw.ChatMessage => ({
@@ -96,6 +96,7 @@ describe('OpenAIEndpoint - Reasoning Properties', () => {
 	let instaService: IInstantiationService;
 
 	beforeEach(() => {
+		setByokTransientRetryDelaysMs([0, 0]);
 		modelMetadata = {
 			id: 'test-model',
 			name: 'Test Model',
@@ -131,6 +132,7 @@ describe('OpenAIEndpoint - Reasoning Properties', () => {
 	});
 
 	afterEach(() => {
+		resetByokTransientRetryDelaysMs();
 		disposables.clear();
 		vi.restoreAllMocks();
 	});
@@ -548,6 +550,70 @@ describe('OpenAIEndpoint - Reasoning Properties', () => {
 			expect(response.type === ChatFetchResponseType.Failed && response.reason).toBe('{"code":0,"message":"something broke","metadata":{"code":"server_error"}}');
 		});
 
+		it('retries an empty NVIDIA reply and returns the later success', async () => {
+			const endpoint = instaService.createInstance(OpenAIEndpoint,
+				modelMetadata,
+				'test-api-key',
+				'https://arni-backend.vercel.app/api');
+			const empty: ChatResponse = {
+				type: ChatFetchResponseType.Unknown,
+				requestId: 'empty',
+				serverRequestId: undefined,
+				reason: 'Response contained no choices.',
+			};
+			const ok: ChatResponse = {
+				type: ChatFetchResponseType.Success,
+				requestId: 'ok',
+				serverRequestId: undefined,
+				value: 'pong',
+				usage: undefined,
+				resolvedModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+			};
+			const spy = vi.spyOn(ChatEndpoint.prototype, 'makeChatRequest2')
+				.mockResolvedValueOnce(empty)
+				.mockResolvedValueOnce(ok);
+
+			const response = await endpoint.makeChatRequest2(
+				createMakeRequestOptions([{
+					role: Raw.ChatRole.User,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' }]
+				}]),
+				CancellationToken.None,
+			);
+
+			expect(spy).toHaveBeenCalledTimes(2);
+			expect(response.type).toBe(ChatFetchResponseType.Success);
+		});
+
+		it('does not retry a daily OpenRouter free-model cap', async () => {
+			const endpoint = instaService.createInstance(OpenAIEndpoint,
+				modelMetadata,
+				'test-api-key',
+				'https://arni-backend.vercel.app/api');
+			const daily: ChatResponse = {
+				type: ChatFetchResponseType.RateLimited,
+				requestId: 'daily',
+				serverRequestId: undefined,
+				reason: 'Rate limit exceeded\n\n{"code":429,"message":"Rate limit exceeded: free-models-per-day"}',
+				rateLimitKey: '',
+				retryAfter: undefined,
+				isAuto: false,
+				capiError: { code: '429', message: 'Rate limit exceeded: free-models-per-day' },
+			};
+			const spy = vi.spyOn(ChatEndpoint.prototype, 'makeChatRequest2').mockResolvedValue(daily);
+
+			const response = await endpoint.makeChatRequest2(
+				createMakeRequestOptions([{
+					role: Raw.ChatRole.User,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' }]
+				}]),
+				CancellationToken.None,
+			);
+
+			expect(spy).toHaveBeenCalledTimes(1);
+			expect(response.type).toBe(ChatFetchResponseType.RateLimited);
+		});
+
 		it('keeps store and marker reuse disabled for ordinary OpenAI BYOK ZDR Responses requests', () => {
 			const endpoint = instaService.createInstance(OpenAIEndpoint,
 				{
@@ -789,5 +855,62 @@ describe('OpenAIEndpoint - Reasoning Properties', () => {
 
 			expect(body.reasoning_effort).toBeUndefined();
 		});
+	});
+});
+
+describe('BYOK transient retries', () => {
+	const failedStream: ChatResponse = {
+		type: ChatFetchResponseType.Failed,
+		requestId: 'request-id',
+		serverRequestId: 'server-request-id',
+		reason: 'Server error. Stream terminated',
+	};
+	const noChoices: ChatResponse = {
+		type: ChatFetchResponseType.Unknown,
+		requestId: 'request-id',
+		serverRequestId: 'server-request-id',
+		reason: 'Response contained no choices.',
+	};
+	const dailyCap: ChatResponse = {
+		type: ChatFetchResponseType.RateLimited,
+		requestId: 'request-id',
+		serverRequestId: 'server-request-id',
+		reason: 'Rate limit exceeded: free-models-per-day',
+		rateLimitKey: '',
+		retryAfter: undefined,
+		isAuto: false,
+		capiError: { code: '429', message: 'Rate limit exceeded: free-models-per-day. Add 5 credits to unlock 1000 free model requests per day' },
+	};
+	const upstream429: ChatResponse = {
+		type: ChatFetchResponseType.RateLimited,
+		requestId: 'request-id',
+		serverRequestId: 'server-request-id',
+		reason: 'Rate limit exceeded',
+		rateLimitKey: '',
+		retryAfter: undefined,
+		isAuto: false,
+		capiError: { metadata: { limit_source: 'upstream_provider_shared_pool', raw: 'temporarily rate-limited upstream' } } as any,
+	};
+
+	it('retries empty NVIDIA replies and mid-stream OpenRouter errors', () => {
+		expect(shouldRetryBYOKChatResponse(noChoices)).toBe(true);
+		expect(shouldRetryBYOKChatResponse(failedStream)).toBe(true);
+		expect(shouldRetryBYOKChatResponse(upstream429)).toBe(true);
+	});
+
+	it('does not retry a daily free-model cap or Arni 402', () => {
+		expect(shouldRetryBYOKChatResponse(dailyCap)).toBe(false);
+		expect(shouldRetryBYOKChatResponse({
+			type: ChatFetchResponseType.Failed,
+			requestId: 'request-id',
+			serverRequestId: undefined,
+			reason: '{"error":"Insufficient tokens"}',
+		})).toBe(false);
+		expect(shouldRetryBYOKChatResponse({
+			type: ChatFetchResponseType.Canceled,
+			requestId: 'request-id',
+			serverRequestId: undefined,
+			reason: 'cancelled',
+		})).toBe(false);
 	});
 });
