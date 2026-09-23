@@ -242,7 +242,7 @@ export class NewChatWidget extends Disposable {
 			hasAdditionalSendContent: hasFeedback,
 			loading,
 			historyKey: constObservable(undefined), // no persisted history for the new-session view
-			placeholder: localize('newSessionPromptPlaceholder', "Pitch your idea"),
+			placeholder: localize('newSessionPromptPlaceholder', "Напишите, что сделать"),
 			supportsBackground: true,
 			deferredNotificationsEnabled,
 			petHostPreferred: this.options.petHostPreferred,
@@ -454,6 +454,17 @@ export class NewChatWidget extends Disposable {
 		}
 
 		this._renderFeedbackBanner(chatWidgetContent);
+		const firstScreenCopy = dom.append(chatWidgetContent, dom.$('.agent-first-copy'));
+		const firstScreenHint = dom.append(firstScreenCopy, dom.$('p.agent-first-hint'));
+		firstScreenHint.textContent = localize('agentFirst.hint', "Напишите, что сделать. Агент создаст и поправит файлы в этой папке.");
+		const firstScreenChip = dom.append(firstScreenCopy, dom.$('span.agent-first-model-chip'));
+		firstScreenChip.textContent = localize('agentFirst.modelChip', "Nemotron · бесплатно · иногда отвечает минуту");
+		const updateFirstScreenCopy = () => {
+			const hasFolder = !!this._workspacePicker.selectedFolderUri;
+			firstScreenCopy.classList.toggle('hidden', !hasFolder);
+		};
+		updateFirstScreenCopy();
+		this._register(this._workspacePicker.onDidChangeSelection(() => updateFirstScreenCopy()));
 		this._newChatInput.render(chatWidgetContent, parent);
 
 		// The tip lives in the input's notice slot, so the presenter is created

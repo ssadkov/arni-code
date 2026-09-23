@@ -1742,7 +1742,7 @@ export class WorkspacePicker extends Disposable {
 		const workspace = noWorkspaceSelected ? undefined : this._selectedResolved?.workspace;
 		const label = noWorkspaceSelected
 			? localize('workspacePicker.noWorkspace', "No workspace")
-			: workspace?.label ?? localize('pickWorkspace', "workspace");
+			: workspace?.label ?? localize('pickWorkspace', "Откройте папку, куда сохранять файлы");
 		const icon = noWorkspaceSelected ? Codicon.commentDiscussion : workspace?.icon ?? Codicon.project;
 
 		trigger.setAttribute('aria-label', noWorkspaceSelected

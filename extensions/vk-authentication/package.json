@@ -1,0 +1,63 @@
+{
+    "name": "vk-authentication",
+    "displayName": "VK Authentication",
+    "description": "VK ID authentication provider for Arni Code",
+    "publisher": "arnion",
+    "version": "1.0.0",
+    "license": "MIT",
+    "engines": {
+        "vscode": "^1.93.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "main": "./dist/extension.js",
+    "activationEvents": [
+        "onAuthenticationRequest:vk",
+        "onCommand:vk.signIn",
+        "onCommand:vk.signOut"
+    ],
+    "contributes": {
+        "authentication": [
+            {
+                "id": "vk",
+                "label": "VK ID"
+            }
+        ],
+        "commands": [
+            {
+                "command": "vk.signIn",
+                "title": "Arni: Sign In with VK ID"
+            },
+            {
+                "command": "vk.signOut",
+                "title": "Arni: Sign Out from VK ID"
+            }
+        ],
+        "configuration": {
+            "title": "VK Authentication",
+            "properties": {
+                "vk.clientId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "VK ID app id. In the VK ID cabinet set the base domain to 127.0.0.1 and the trusted redirect URL to http://127.0.0.1."
+                },
+                "vk.redirectPort": {
+                    "type": "number",
+                    "default": 80,
+                    "description": "Loopback port. VK ID local apps only allow http://127.0.0.1 on port 80. Change this only if the cabinet allows another redirect."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "build": "node esbuild.js",
+        "compile": "tsc -p ./"
+    },
+    "devDependencies": {
+        "@types/node": "^20.x",
+        "@types/vscode": "^1.93.0",
+        "esbuild": "^0.20.0",
+        "typescript": "^5.x"
+    }
+}

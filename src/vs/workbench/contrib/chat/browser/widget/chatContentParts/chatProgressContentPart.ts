@@ -29,6 +29,8 @@ import { ILanguageModelToolsService } from '../../../common/tools/languageModelT
 import { isEqual } from '../../../../../../base/common/resources.js';
 import { buildPhrasePool, defaultThinkingMessages, maybePickFunWorkingMessage } from './chatThinkingContentPart.js';
 import { getCompactCodicon } from '../../chatIcons.js';
+import { decideAgentStatus } from '../../../common/agentStatusLine.js';
+import { IWorkbenchEnvironmentService } from '../../../../../services/environment/common/environmentService.js';
 
 export class ChatProgressContentPart extends Disposable implements IChatContentPart {
 	public readonly domNode: HTMLElement;
@@ -50,10 +52,20 @@ export class ChatProgressContentPart extends Disposable implements IChatContentP
 		shimmer: boolean | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatMarkdownAnchorService private readonly chatMarkdownAnchorService: IChatMarkdownAnchorService,
-		@IConfigurationService private readonly configurationService: IConfigurationService
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 	) {
 		super();
-		this.currentContent = progress.content;
+		const agentContent = this.toAgentFacingContent(progress.content);
+		if (!agentContent) {
+			this.currentContent = progress.content;
+			this.showSpinner = false;
+			this.isHidden = true;
+			this.domNode = $('');
+			return;
+		}
+		progress = { ...progress, content: agentContent };
+		this.currentContent = agentContent;
 
 		const followingContent = context.content.slice(context.contentIndex + 1);
 		this.showSpinner = forceShowSpinner ?? shouldShowSpinner(followingContent, context.element);
@@ -153,10 +165,32 @@ export class ChatProgressContentPart extends Disposable implements IChatContentP
 		return spans;
 	}
 
+	private toAgentFacingContent(content: IMarkdownString): IMarkdownString | undefined {
+		if (!this.environmentService.isSessionsWindow) {
+			return content;
+		}
+		const decision = decideAgentStatus(renderAsPlaintext(content));
+		if (decision.kind === 'hide') {
+			return undefined;
+		}
+		if (decision.kind === 'replace') {
+			return new MarkdownString(decision.text);
+		}
+		return content;
+	}
+
 	updateMessage(content: IMarkdownString): void {
 		if (this.isHidden) {
 			return;
 		}
+
+		const agentContent = this.toAgentFacingContent(content);
+		if (!agentContent) {
+			this.renderedMessage.value?.element.remove();
+			this.renderedMessage.clear();
+			return;
+		}
+		content = agentContent;
 
 		// Render the new message
 		const result = this._register(this.chatContentMarkdownRenderer.render(content));
@@ -320,13 +354,14 @@ export class ChatWorkingProgressContentPart extends ChatProgressContentPart impl
 		@IChatMarkdownAnchorService chatMarkdownAnchorService: IChatMarkdownAnchorService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@ILanguageModelToolsService languageModelToolsService: ILanguageModelToolsService,
+		@IWorkbenchEnvironmentService environmentService: IWorkbenchEnvironmentService,
 	) {
 		const explicitContent = workingProgress.content;
 		const progressMessage: IChatProgressMessage = {
 			kind: 'progressMessage',
-			content: explicitContent ?? new MarkdownString().appendText(pickWorkingLabel(context.element.id, configurationService))
+			content: explicitContent ?? new MarkdownString().appendText(environmentService.isSessionsWindow ? 'Думаю…' : pickWorkingLabel(context.element.id, configurationService))
 		};
-		super(progressMessage, chatContentMarkdownRenderer, context, undefined, undefined, undefined, undefined, true, instantiationService, chatMarkdownAnchorService, configurationService);
+		super(progressMessage, chatContentMarkdownRenderer, context, undefined, undefined, undefined, undefined, true, instantiationService, chatMarkdownAnchorService, configurationService, environmentService);
 		this.explicitContent = explicitContent;
 
 		this._register(languageModelToolsService.onDidPrepareToolCallBecomeUnresponsive(e => {

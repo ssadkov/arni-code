@@ -394,6 +394,56 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			}
 		}
 
+		class SignInWithYandexAccountsAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.chat.signInWithYandex',
+					title: localize2('signInWithYandexAccounts', "Войти через Яндекс"),
+					menu: {
+						id: MenuId.AccountsContext,
+						group: '2_copilot',
+						order: 2,
+						when: ContextKeyExpr.and(
+							ChatContextKeys.Setup.hidden.negate(),
+							ChatContextKeys.Setup.disabledInWorkspace.negate(),
+							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available),
+							ChatContextKeys.Setup.completed.negate(),
+							ChatContextKeys.Entitlement.signedOut
+						)
+					}
+				});
+			}
+
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(ICommandService).executeCommand('yandex.signIn');
+			}
+		}
+
+		class SignInWithVkAccountsAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.chat.signInWithVk',
+					title: localize2('signInWithVkAccounts', "Войти через VK"),
+					menu: {
+						id: MenuId.AccountsContext,
+						group: '2_copilot',
+						order: 3,
+						when: ContextKeyExpr.and(
+							ChatContextKeys.Setup.hidden.negate(),
+							ChatContextKeys.Setup.disabledInWorkspace.negate(),
+							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available),
+							ChatContextKeys.Setup.completed.negate(),
+							ChatContextKeys.Entitlement.signedOut
+						)
+					}
+				});
+			}
+
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(ICommandService).executeCommand('vk.signIn');
+			}
+		}
+
 		class ChatSetupSignInTitleBarAction extends Action2 {
 
 			static readonly ID = SIGN_IN_TITLE_BAR_ACTION_ID;
@@ -563,6 +613,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 		registerAction2(ChatSetupTriggerAction);
 		registerAction2(ChatSetupTriggerForceSignInDialogAction);
 		registerAction2(ChatSetupFromAccountsAction);
+		registerAction2(SignInWithYandexAccountsAction);
+		registerAction2(SignInWithVkAccountsAction);
 		registerAction2(ChatSetupSignInTitleBarAction);
 		registerAction2(ToggleSignInTitleBarAction);
 		registerAction2(ChatSetupTriggerAnonymousWithoutDialogAction);

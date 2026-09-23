@@ -105,6 +105,42 @@ registerAction2(class extends Action2 {
 	}
 });
 
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.agenticSignInYandex',
+			title: localize2('signInYandex', "Войти через Яндекс"),
+			menu: {
+				id: AccountMenu,
+				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
+				group: '1_account',
+				order: 2,
+			}
+		});
+	}
+	async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand('yandex.signIn');
+	}
+});
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.agenticSignInVk',
+			title: localize2('signInVk', "Войти через VK"),
+			menu: {
+				id: AccountMenu,
+				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
+				group: '1_account',
+				order: 3,
+			}
+		});
+	}
+	async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand('vk.signIn');
+	}
+});
+
 // Sign Out (shown when signed in)
 registerAction2(class extends Action2 {
 	constructor() {

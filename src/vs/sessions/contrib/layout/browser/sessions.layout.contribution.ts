@@ -11,6 +11,10 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
+import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
+import { HISTORY_VIEW_PANE_ID, REPOSITORIES_VIEW_PANE_ID, VIEW_PANE_ID } from '../../../../workbench/contrib/scm/common/scm.js';
 import { LayoutController, RESPONSIVE_SIDEBAR_SETTING } from './desktopSessionLayoutController.js';
 import { MobileLayoutController } from './mobileSessionLayoutController.js';
 import { DOCK_DETAIL_PANEL_SETTING } from '../../../common/sessionConfig.js';
@@ -42,6 +46,35 @@ class SessionsLayoutContribution extends Disposable implements IWorkbenchContrib
 }
 
 registerWorkbenchContribution2(SessionsLayoutContribution.ID, SessionsLayoutContribution, WorkbenchPhase.BlockRestore);
+
+const AGENT_CHROME_DEFAULTS_KEY = 'agents.firstScreen.chromeDefaultsApplied';
+
+/**
+ * Hides the activity bar and Source Control until the user opens them.
+ * Applied once per Agents workspace so a later manual reveal stays put.
+ */
+class AgentFirstScreenChromeContribution extends Disposable implements IWorkbenchContribution {
+
+	static readonly ID = 'workbench.contrib.agentFirstScreenChrome';
+
+	constructor(
+		@IStorageService storageService: IStorageService,
+		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@IViewsService viewsService: IViewsService,
+	) {
+		super();
+		if (storageService.getBoolean(AGENT_CHROME_DEFAULTS_KEY, StorageScope.WORKSPACE, false)) {
+			return;
+		}
+		storageService.store(AGENT_CHROME_DEFAULTS_KEY, true, StorageScope.WORKSPACE, StorageTarget.USER);
+		layoutService.setPartHidden(true, Parts.ACTIVITYBAR_PART);
+		for (const viewId of [VIEW_PANE_ID, REPOSITORIES_VIEW_PANE_ID, HISTORY_VIEW_PANE_ID]) {
+			viewsService.closeView(viewId);
+		}
+	}
+}
+
+registerWorkbenchContribution2(AgentFirstScreenChromeContribution.ID, AgentFirstScreenChromeContribution, WorkbenchPhase.AfterRestored);
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	id: 'sessions',

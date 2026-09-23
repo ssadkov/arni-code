@@ -40,7 +40,7 @@ import { ITelemetryService } from '../../../../../platform/telemetry/common/tele
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { AgentsWindowOpenSource, isAgentsWindowOpenSource } from '../../../../../platform/window/common/window.js';
 
-const OPEN_WORKSPACE_IN_AGENTS_WINDOW_TITLE = localize2('openWorkspaceInAgentsWindow', "Open in Agents");
+const OPEN_WORKSPACE_IN_AGENTS_WINDOW_TITLE = localize2('openWorkspaceInAgentsWindow', "Открыть агента");
 const OPEN_WORKSPACE_IN_AGENTS_WINDOW_CHAT_TITLE_COMMAND_ID = 'workbench.action.chat.openWorkspaceInAgentsWindow.chatTitle';
 const OPEN_WORKSPACE_IN_AGENTS_WINDOW_TITLE_BAR_COMMAND_ID = 'workbench.action.chat.openWorkspaceInAgentsWindow.titleBar';
 
@@ -250,7 +250,7 @@ class OpenWorkspaceInAgentsTitleBarWidget extends BaseActionViewItem {
 		container.setAttribute('role', 'button');
 
 		const label = this.action.label;
-		const hoverText = this.keybindingService.appendKeybinding(localize('openInAgentsHover', "Open in Agents Window"), OPEN_AGENTS_WINDOW_COMMAND_ID);
+		const hoverText = this.keybindingService.appendKeybinding(localize('openInAgentsHover', "Открыть агента"), OPEN_AGENTS_WINDOW_COMMAND_ID);
 		container.setAttribute('aria-label', hoverText);
 		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), container, hoverText));
 

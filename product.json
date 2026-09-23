@@ -122,6 +122,10 @@
             "yandex": {
                 "id": "yandex",
                 "name": "\u042f\u043d\u0434\u0435\u043a\u0441 ID"
+            },
+            "vk": {
+                "id": "vk",
+                "name": "VK"
             }
         },
         "providerExtensionId": "arnion.arni-agent",
@@ -133,6 +137,7 @@
     "trustedExtensionAuthAccess": {
         "arnion.arni-agent": [
             "yandex",
+            "vk",
             "github"
         ]
     },
@@ -191,6 +196,8 @@
     "sessionsWindowAllowedExtensions": [
         "arnion.yandex-authentication",
         "yandex-authentication",
+        "arnion.vk-authentication",
+        "vk-authentication",
         "arnion.arni-agent",
         "arni-agent"
     ],

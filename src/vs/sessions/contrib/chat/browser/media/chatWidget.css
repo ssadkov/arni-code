@@ -528,3 +528,28 @@
 .action-widget .monaco-list-row.action.sessions-browse-inline-item.focused:not(.option-disabled) .description {
 	visibility: visible;
 }
+
+.agent-first-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0 0 8px;
+}
+
+.agent-first-copy.hidden {
+	display: none;
+}
+
+.agent-first-hint {
+	margin: 0;
+	color: var(--vscode-descriptionForeground);
+}
+
+.agent-first-model-chip {
+	align-self: flex-start;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	font-size: 12px;
+}

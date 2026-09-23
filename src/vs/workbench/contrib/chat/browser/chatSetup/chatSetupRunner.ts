@@ -48,6 +48,7 @@ const fallbackProviders = {
 	google: { id: '', name: '' },
 	microsoft: { id: '', name: '' },
 	yandex: { id: 'yandex', name: 'Яндекс ID' },
+	vk: { id: 'vk', name: 'VK' },
 };
 
 const configuredProviders = product.defaultChatAgent?.provider;
@@ -61,6 +62,7 @@ const defaultChat = {
 		google: configuredProviders?.google ?? fallbackProviders.google,
 		microsoft: configuredProviders?.microsoft ?? fallbackProviders.microsoft,
 		yandex: (configuredProviders as any)?.yandex ?? fallbackProviders.yandex,
+		vk: (configuredProviders as any)?.vk ?? fallbackProviders.vk,
 	},
 	chatRefreshTokenCommand: product.defaultChatAgent?.chatRefreshTokenCommand ?? '',
 	termsStatementUrl: product.defaultChatAgent?.termsStatementUrl ?? '',
@@ -80,6 +82,7 @@ export interface IChatSetupDialogProviders {
 	readonly google: { readonly name: string };
 	readonly microsoft: { readonly name: string };
 	readonly yandex?: { readonly name: string };
+	readonly vk?: { readonly name: string };
 }
 
 export interface IChatSetupDialogFooterContent {
@@ -112,6 +115,7 @@ function entersProviderAuthentication(strategy: ChatSetupStrategy): boolean {
 		case ChatSetupStrategy.SetupWithAppleProvider:
 		case ChatSetupStrategy.SetupWithMicrosoftProvider:
 		case ChatSetupStrategy.SetupWithYandexProvider:
+		case ChatSetupStrategy.SetupWithVkProvider:
 			return true;
 		default:
 			return false;
@@ -238,9 +242,10 @@ export function getChatSetupDialogButtons(entitlement: ChatEntitlement, options:
 		const googleProviderButton = button(localize('continueWith', "Continue with {0}", providers.google.name), ChatSetupStrategy.SetupWithGoogleProvider, 'continue-button', 'google');
 		const appleProviderButton = button(localize('continueWith', "Continue with {0}", providers.apple.name), ChatSetupStrategy.SetupWithAppleProvider, 'continue-button', 'apple');
 		const microsoftProviderButton = button(localize('continueWith', "Continue with {0}", providers.microsoft.name), ChatSetupStrategy.SetupWithMicrosoftProvider, 'continue-button', 'microsoft');
-		const yandexProviderButton = providers.yandex ? button(localize('continueWith', "Continue with {0}", providers.yandex.name), ChatSetupStrategy.SetupWithYandexProvider, 'continue-button', 'yandex') : undefined;
+		const yandexProviderButton = providers.yandex ? button(localize('signInWithYandex', "Войти через Яндекс"), ChatSetupStrategy.SetupWithYandexProvider, 'continue-button', 'yandex') : undefined;
+		const vkProviderButton = providers.vk ? button(localize('signInWithVk', "Войти через VK"), ChatSetupStrategy.SetupWithVkProvider, 'continue-button', 'vk') : undefined;
 
-		const socialProviderButtons = [...(yandexProviderButton ? [yandexProviderButton] : []), googleProviderButton, appleProviderButton, ...(showMicrosoftProvider ? [microsoftProviderButton] : [])];
+		const socialProviderButtons = [...(yandexProviderButton ? [yandexProviderButton] : []), ...(vkProviderButton ? [vkProviderButton] : []), googleProviderButton, appleProviderButton, ...(showMicrosoftProvider ? [microsoftProviderButton] : [])];
 		const providerButtons = enterpriseAuthentication
 			? [enterpriseProviderButton, ...socialProviderButtons, defaultProviderLink]
 			: [defaultProviderButton, ...socialProviderButtons, enterpriseProviderLink];
@@ -401,20 +406,10 @@ export class ChatSetup {
 					success = await this.controller.value.setupWithProvider({ useEnterpriseProvider: false, useSocialProvider: 'microsoft', additionalScopes: options?.additionalScopes, forceAnonymous: options?.forceAnonymous, cancellationToken: setupCancellation.token });
 					break;
 				case ChatSetupStrategy.SetupWithYandexProvider:
-					try {
-						// Trigger Yandex sign-in via the extension command
-						await this.commandService.executeCommand('yandex.signIn');
-						// Verify session was actually created via the authentication service
-						// (executeCommand return value may not serialize across IPC)
-						const sessions = await this.authenticationService.getSessions('yandex');
-						success = sessions.length > 0;
-						if (!success) {
-							this.logService.warn('[chat setup] Yandex sign-in command completed but no session found');
-						}
-					} catch (e) {
-						this.logService.error(`[chat setup] Yandex sign in failed: ${toErrorMessage(e)}`);
-						success = false;
-					}
+					success = await this.signInWithExtensionProvider('yandex', 'yandex.signIn');
+					break;
+				case ChatSetupStrategy.SetupWithVkProvider:
+					success = await this.signInWithExtensionProvider('vk', 'vk.signIn');
 					break;
 				case ChatSetupStrategy.DefaultSetup:
 					success = await this.controller.value.setup({ ...options, forceAnonymous: options?.forceAnonymous, cancellationToken: setupCancellation.token });
@@ -446,6 +441,21 @@ export class ChatSetup {
 		}
 
 		return { success, dialogSkipped, error: setupError, errorAlreadyHandled };
+	}
+
+	private async signInWithExtensionProvider(providerId: string, commandId: string): Promise<boolean> {
+		try {
+			await this.commandService.executeCommand(commandId);
+			const sessions = await this.authenticationService.getSessions(providerId);
+			if (sessions.length === 0) {
+				this.logService.warn(`[chat setup] ${providerId} sign-in command completed but no session found`);
+				return false;
+			}
+			return true;
+		} catch (e) {
+			this.logService.error(`[chat setup] ${providerId} sign in failed: ${toErrorMessage(e)}`);
+			return false;
+		}
 	}
 
 	/**

@@ -220,12 +220,31 @@ class SessionsSetUpWidget extends Disposable {
 		}));
 	}
 
+	/**
+	 * Yandex and VK sessions are the product sign-in. The GitHub default
+	 * account is optional and must not keep the Agents window on the sign-in modal.
+	 */
+	private async _hasArniSignIn(): Promise<boolean> {
+		for (const providerId of ['yandex', 'vk']) {
+			try {
+				const sessions = await this.authenticationService.getSessions(providerId, undefined, undefined, true);
+				if (sessions.length > 0) {
+					return true;
+				}
+			} catch {
+				// Provider is not registered yet.
+			}
+		}
+		return false;
+	}
+
 	private async _watchSignInState(): Promise<void> {
 		const initialAccount = await this.defaultAccountService.getDefaultAccount();
+		const arniSignIn = await this._hasArniSignIn();
 		if (this.dialogRef.value) {
 			return;
 		}
-		if (!initialAccount) {
+		if (!initialAccount && !arniSignIn) {
 			const welcomeComplete = this.storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION, false);
 			if (welcomeComplete && this._allowSignedOutWhenUsable.get()) {
 				await this._proceedWithoutGitHub();
@@ -381,6 +400,19 @@ class SessionsSetUpWidget extends Disposable {
 	}
 
 	private async _showWelcome(isFirstLaunch: boolean): Promise<void> {
+		if (await this._hasArniSignIn()) {
+			this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
+			this.serviceMarkDone();
+			this.dialogRef.clear();
+			await this._ensureAIFeaturesEnabled();
+			if (this._store.isDisposed) {
+				return;
+			}
+			this.onCompleted();
+			this.watcherRef.value = this._watchActiveState(true);
+			return;
+		}
+
 		if (this.dialogRef.value) {
 			return;
 		}

@@ -55,6 +55,7 @@ export const dirs = [
 	'extensions/vscode-test-resolver',
 	'extensions/arni-agent',
 	'extensions/yandex-authentication',
+	'extensions/vk-authentication',
 	'remote',
 	'remote/web',
 	'test/automation',
