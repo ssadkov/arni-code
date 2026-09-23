@@ -1,3 +1,7 @@
+# Arni Code
+
+This checkout is the Arni Code fork of Code - OSS. To clone it and launch the editor from Cursor, follow [docs/DEV_SETUP.md](docs/DEV_SETUP.md).
+
 # Visual Studio Code - Open Source ("Code - OSS")
 [![Feature Requests](https://img.shields.io/github/issues/microsoft/vscode/feature-request.svg)](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
 [![Bugs](https://img.shields.io/github/issues/microsoft/vscode/bug.svg)](https://github.com/microsoft/vscode/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
