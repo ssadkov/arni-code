@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload installer
         if: env.BUILD_INSTALLER == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ArniCodeSetup-x64
           path: artifacts/windows/*Setup*.exe
@@ -190,14 +190,14 @@ jobs:
 
       - name: Upload portable archive
         if: env.BUILD_ARCHIVE == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ArniCode-win32-x64
           path: artifacts/windows/*.zip
           if-no-files-found: warn
 
       - name: Upload all build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ArniCode-build-output
           path: artifacts/windows/
