@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "license": "MIT",
     "engines": {
-        "vscode": "^1.93.0"
+        "vscode": "*"
     },
     "categories": [
         "Other"
@@ -39,13 +39,13 @@
             "properties": {
                 "vk.clientId": {
                     "type": "string",
-                    "default": "",
-                    "description": "VK ID app id. In the VK ID cabinet set the base domain to 127.0.0.1 and the trusted redirect URL to http://127.0.0.1."
+                    "default": "54785916",
+                    "description": "VK ID app id baked into the build. The VK ID cabinet base domain is localhost and the trusted redirect URL is https://localhost."
                 },
                 "vk.redirectPort": {
                     "type": "number",
-                    "default": 80,
-                    "description": "Loopback port. VK ID local apps only allow http://127.0.0.1 on port 80. Change this only if the cabinet allows another redirect."
+                    "default": 443,
+                    "description": "Loopback port. The VK ID local redirect is https://localhost, which uses port 443."
                 }
             }
         }

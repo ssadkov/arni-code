@@ -1,5 +1,5 @@
-import * as http from 'node:http';
-import * as url from 'node:url';
+import type { ServerResponse } from 'node:http';
+import * as https from 'node:https';
 
 export interface LoopbackResult {
     code: string;
@@ -7,19 +7,19 @@ export interface LoopbackResult {
 }
 
 export class LoopbackServer {
-    private server?: http.Server;
+    private server?: https.Server;
     private port: number = 0;
 
-    async start(preferredPort: number): Promise<number> {
-        this.port = await this.listen(preferredPort);
+    async start(preferredPort: number, tls: https.ServerOptions): Promise<number> {
+        this.port = await this.listen(preferredPort, tls);
         return this.port;
     }
 
-    private listen(port: number): Promise<number> {
+    private listen(port: number, tls: https.ServerOptions): Promise<number> {
         return new Promise((resolve, reject) => {
-            const server = http.createServer();
+            const server = https.createServer(tls);
             server.once('error', reject);
-            server.listen(port, '127.0.0.1', () => {
+            server.listen(port, () => {
                 const addr = server.address();
                 if (addr && typeof addr === 'object') {
                     this.server = server;
@@ -43,7 +43,7 @@ export class LoopbackServer {
             }, timeoutMs);
 
             this.server?.on('request', (req, res) => {
-                const reqUrl = url.parse(req.url || '', true);
+                const reqUrl = new URL(req.url || '/', 'https://localhost');
                 const pathname = reqUrl.pathname || '/';
                 if (pathname !== '/callback' && pathname !== '/') {
                     res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -51,12 +51,11 @@ export class LoopbackServer {
                     return;
                 }
 
-                const query = reqUrl.query;
-                const state = query.state as string;
-                const code = query.code as string;
-                const deviceId = (query.device_id as string) || '';
-                const error = query.error as string;
-                const errorDesc = (query.error_description as string) || error;
+                const state = reqUrl.searchParams.get('state') || '';
+                const code = reqUrl.searchParams.get('code') || '';
+                const deviceId = reqUrl.searchParams.get('device_id') || '';
+                const error = reqUrl.searchParams.get('error') || '';
+                const errorDesc = reqUrl.searchParams.get('error_description') || error;
 
                 if (error) {
                     clearTimeout(timeout);
@@ -84,15 +83,15 @@ export class LoopbackServer {
         });
     }
 
-    private sendSuccessResponse(res: http.ServerResponse) {
+    private sendSuccessResponse(res: ServerResponse) {
         this.sendHtml(res, 200, 'Вход через VK выполнен', 'Авторизация в Arni Code прошла успешно. Можно закрыть эту страницу.');
     }
 
-    private sendErrorResponse(res: http.ServerResponse, message: string) {
+    private sendErrorResponse(res: ServerResponse, message: string) {
         this.sendHtml(res, 400, 'Ошибка авторизации', escapeHtml(message));
     }
 
-    private sendHtml(res: http.ServerResponse, status: number, title: string, message: string) {
+    private sendHtml(res: ServerResponse, status: number, title: string, message: string) {
         const html = `<!DOCTYPE html>
 <html lang="ru"><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title></head>
 <body style="font-family:sans-serif;background:#1e1e1e;color:#f0f0f0;display:flex;align-items:center;justify-content:center;height:100vh">

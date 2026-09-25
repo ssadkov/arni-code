@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as crypto from 'node:crypto';
+import { ensureLocalhostCertificate } from './localhostCertificate';
 import { LoopbackServer } from './loopbackServer';
 
 interface StoredSession {
@@ -15,9 +16,11 @@ interface StoredSession {
 }
 
 const SESSIONS_SECRET_KEY = 'vk.auth.sessions';
-const DEFAULT_PORT = 80;
-// Filled in the build, same as the Yandex client id. End users do not set this.
-const DEFAULT_CLIENT_ID = '';
+const DEFAULT_PORT = 443;
+// Baked into the build, same as the Yandex client id. End users do not set this.
+// No client secret: a secret shipped in a desktop build is public. The code
+// exchange is bound to this client by PKCE (code_verifier) instead.
+const DEFAULT_CLIENT_ID = '54785916';
 
 export class VkAuthenticationProvider implements vscode.AuthenticationProvider, vscode.Disposable {
     private _onDidChangeSessions = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
@@ -53,21 +56,22 @@ export class VkAuthenticationProvider implements vscode.AuthenticationProvider, 
             ? Array.from(new Set(scopes))
             : ['vkid.personal_info', 'email'];
 
+        const tls = await ensureLocalhostCertificate(this.context);
         const loopback = new LoopbackServer();
         let port: number;
         try {
-            port = await loopback.start(preferredPort);
+            port = await loopback.start(preferredPort, tls);
         } catch (err: any) {
             throw new Error(
                 preferredPort === DEFAULT_PORT
-                    ? 'Не удалось занять порт 80. VK ID для локальной проверки принимает только http://127.0.0.1 без другого порта. Закройте программу на порту 80 или запустите Arni Code от имени администратора.'
+                    ? 'Не удалось занять порт 443. VK ID для локальной проверки ждёт https://localhost. Закройте программу на порту 443 или запустите Arni Code от имени администратора.'
                     : `Не удалось запустить локальный сервер авторизации: ${err.message}`
             );
         }
 
         const redirectUri = port === DEFAULT_PORT
-            ? 'http://127.0.0.1'
-            : `http://127.0.0.1:${port}/callback`;
+            ? 'https://localhost'
+            : `https://localhost:${port}/callback`;
         const state = crypto.randomBytes(16).toString('hex');
         const codeVerifier = crypto.randomBytes(32).toString('base64url');
         const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
