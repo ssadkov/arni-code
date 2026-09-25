@@ -454,8 +454,8 @@ function toGitHubInfo(meta: SessionMeta | undefined): IGitHubInfo | undefined {
 /** Copilot CLI session type */
 export const CopilotCLISessionType: ISessionType = {
 	id: 'copilotcli',
-	label: localize('copilotCLI', "Copilot"),
-	icon: Codicon.copilot,
+	label: localize('copilotCLI', "Arni"),
+	icon: Codicon.agent,
 	supportsWorktreeConfiguration: true,
 	authRequirement: SessionTypeAuthRequirement.GitHub,
 };

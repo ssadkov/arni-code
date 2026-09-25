@@ -68,7 +68,7 @@ export class SessionChangesEditorInput extends DockedEditorInput {
 	}
 
 	override getName(): string {
-		return localize('sessionChangesEditor.name', "Changes");
+		return localize('sessionChangesEditor.name', "Изменения");
 	}
 
 	override getAriaLabel(): string {

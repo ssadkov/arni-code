@@ -44,8 +44,8 @@ for %%A in (%*) do (
 	)
 )
 
-:: Launch Code
-%CODE% . %DISABLE_TEST_EXTENSION% %*
+:: Launch Code. The dot is the Electron app path in dev. --agents opens the product home.
+%CODE% . --agents %DISABLE_TEST_EXTENSION% %*
 goto end
 
 :builtin

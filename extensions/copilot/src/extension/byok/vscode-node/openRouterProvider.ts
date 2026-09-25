@@ -113,7 +113,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		);
 		try {
 			vscode.authentication.onDidChangeSessions(e => {
-				if (e.provider.id === 'yandex') {
+				if (e.provider.id === 'yandex' || e.provider.id === 'vk') {
 					this._arniJwt = undefined;
 					this._onDidChangeLanguageModelChatInformation.fire();
 				}
@@ -138,7 +138,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const storedKey = model.configuration?.apiKey || options.modelConfiguration?.apiKey;
 		const apiKey = await this.resolveArniApiKey(false, storedKey);
 		if (!apiKey) {
-			throw new Error('Sign in with Yandex ID to use OpenRouter models.');
+			throw new Error('Sign in with Yandex or VK to use OpenRouter models.');
 		}
 		return super.provideLanguageModelChatResponse({ ...model, configuration: { ...model.configuration, apiKey } }, messages, options, progress, token);
 	}
@@ -147,41 +147,76 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		return vscode.workspace.getConfiguration('arni').get<string>('backendUrl');
 	}
 
-	private async resolveArniApiKey(silent: boolean, storedApiKey?: string): Promise<string | undefined> {
-		try {
-			let session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
-			if (!session && !silent) {
-				session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
-			}
+	private static readonly _arniAuthProviders = ['yandex', 'vk'] as const;
 
-			if (session) {
-				const response = await fetch(`${resolveArniApiBaseUrl(this.getConfiguredBackendUrl())}/auth/exchange`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ provider: 'yandex', token: session.accessToken })
-				});
-				if (response.ok) {
-					const data = await response.json() as { token?: string };
-					if (data.token) {
-						this._arniJwt = data.token;
-						return data.token;
-					}
-				} else {
-					this._logService.error('Failed to exchange Yandex token: ' + await response.text());
-					this._arniJwt = undefined;
-				}
+	private async exchangeArniSession(provider: 'yandex' | 'vk', accessToken: string): Promise<string | undefined> {
+		const response = await fetch(`${resolveArniApiBaseUrl(this.getConfiguredBackendUrl())}/auth/exchange`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ provider, token: accessToken })
+		});
+		if (response.ok) {
+			const data = await response.json() as { token?: string };
+			if (data.token) {
+				this._arniJwt = data.token;
+				return data.token;
 			}
-		} catch (e) {
-			this._logService.error(e as Error, 'Yandex Auth Error');
+			return undefined;
 		}
+		this._logService.error(`Failed to exchange ${provider} token: ` + await response.text());
+		this._arniJwt = undefined;
+		return undefined;
+	}
 
+	private async resolveArniApiKey(silent: boolean, storedApiKey?: string): Promise<string | undefined> {
 		if (this._arniJwt) {
 			return this._arniJwt;
 		}
+
+		try {
+			const signedInProviders: (typeof OpenRouterLMProvider._arniAuthProviders)[number][] = [];
+			for (const provider of OpenRouterLMProvider._arniAuthProviders) {
+				try {
+					if ((await vscode.authentication.getAccounts(provider)).length > 0) {
+						signedInProviders.push(provider);
+					}
+				} catch (error) {
+					this._logService.warn(`Unable to inspect ${provider} accounts: ${String(error)}`);
+				}
+			}
+
+			// A signed-in product account may not yet be available to this extension.
+			// Probe without requesting access, then ask only for the provider the user chose.
+			for (const provider of signedInProviders) {
+				const session = await vscode.authentication.getSession(provider, [], { silent: true });
+				if (session) {
+					const token = await this.exchangeArniSession(provider, session.accessToken);
+					if (token) {
+						return token;
+					}
+				}
+			}
+
+			if (!silent) {
+				const providersToPrompt = signedInProviders.length > 0 ? signedInProviders : OpenRouterLMProvider._arniAuthProviders;
+				for (const provider of providersToPrompt) {
+					const session = await vscode.authentication.getSession(provider, [], { createIfNone: true });
+					if (session) {
+						const token = await this.exchangeArniSession(provider, session.accessToken);
+						if (token) {
+							return token;
+						}
+					}
+				}
+			}
+		} catch (e) {
+			this._logService.error(e as Error, 'Arni product auth error');
+		}
+
 		if (storedApiKey) {
 			return storedApiKey;
 		}
-		return this.configureDefaultGroupWithApiKeyOnly();
+		return silent ? undefined : this.configureDefaultGroupWithApiKeyOnly();
 	}
 
 	protected override async getAllModels(silent: boolean, apiKey: string | undefined, configuration: any | undefined): Promise<OpenAICompatibleLanguageModelChatInformation<any>[]> {

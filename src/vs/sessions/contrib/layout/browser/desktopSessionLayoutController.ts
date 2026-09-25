@@ -55,9 +55,10 @@ export class LayoutController extends BaseLayoutController {
 
 	/**
 	 * Shared layout state for the new-session view, persisted across reloads.
-	 * `undefined` means no explicit choice yet (aux bar defaults to visible).
+	 * ARNION: until the user opens it, the aux bar stays hidden so the first
+	 * screen is only the chat.
 	 */
-	private _newSessionViewState: INewSessionViewState | undefined;
+	private _newSessionViewState: INewSessionViewState | undefined = { auxiliaryBarVisible: false };
 
 	/** [D7] `true` while the sidebar is hidden because the controller auto-hid it; only such hides are auto-reverted. */
 	protected _sidebarAutoHidden = false;

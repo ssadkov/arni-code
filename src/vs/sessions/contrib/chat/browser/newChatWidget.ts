@@ -50,7 +50,7 @@ import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chat
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatConfiguration, ChatModeKind } from '../../../../workbench/contrib/chat/common/constants.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { TOTAL_SESSIONS_KEY } from '../../sessions/browser/sessionsLifecycleTracker.js';
 import { INewSessionComposerService, NewSessionWorkspacePreselectionSource } from './newSessionComposerService.js';
 import { Menus } from '../../../browser/menus.js';
@@ -62,11 +62,14 @@ import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { OPEN_CUSTOMIZATIONS_COMMAND_ID } from '../../../common/customizations.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { StarterProjectGallery } from './starterProjectGallery.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 
 // #region --- New Chat Widget ---
 
 /** Minimum number of started sessions required before showing tips and promotions. */
 const MIN_SESSIONS_FOR_FIRST_RUN_NOTICES = 2;
+const STARTER_GALLERY_DISMISSED_KEY = 'sessions.starterProjects.dismissed';
 
 export class NewChatWidget extends Disposable {
 
@@ -90,6 +93,7 @@ export class NewChatWidget extends Disposable {
 	private _activeEmptyState: NoAgentHostEmptyState | undefined;
 	private _workspacePickerRow: HTMLElement | undefined;
 	private _quickChatHeaderPickerHost: HTMLElement | undefined;
+	private _starterGallery: StarterProjectGallery | undefined;
 
 	private readonly _session: IObservable<IActiveSession | undefined>;
 
@@ -134,10 +138,11 @@ export class NewChatWidget extends Disposable {
 		@IOpenerService private readonly openerService: IOpenerService,
 		@IDefaultAccountService private readonly defaultAccountService: IDefaultAccountService,
 		@IStorageService private readonly storageService: IStorageService,
-		@INewSessionComposerService newSessionComposerService: INewSessionComposerService,
+		@INewSessionComposerService private readonly newSessionComposerService: INewSessionComposerService,
 		@ICustomizationMigrationAvailabilityService private readonly customizationMigrationAvailabilityService: ICustomizationMigrationAvailabilityService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IHoverService private readonly hoverService: IHoverService,
+		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		super();
 		this._workspacePickerVisibleKey = SessionWorkspacePickerVisibleContext.bindTo(contextKeyService);
@@ -454,11 +459,59 @@ export class NewChatWidget extends Disposable {
 		}
 
 		this._renderFeedbackBanner(chatWidgetContent);
+		if (!isWeb) {
+			// Until the user has a couple of sessions, the home is the starter
+			// gallery alone: one place to describe an idea, with no folder picker
+			// or composer pointing at some other folder next to it.
+			let starterStarted = false;
+			const gallery = this._starterGallery = this._register(this.instantiationService.createInstance(StarterProjectGallery, chatWidgetContent, async (folderUri: URI, prompt: string) => {
+				const result = await this._createNewSession(folderUri);
+				if (!result.session) {
+					throw new Error(result.trustDeclined
+						? localize('starterProjects.trustDeclined', "Доступ к новой папке не разрешён.")
+						: localize('starterProjects.sessionUnavailable', "Агент пока недоступен для этой папки."));
+				}
+				this._workspacePicker.setSelectedWorkspace(folderUri, { fireEvent: false });
+				this._newChatInput.prefillInput(prompt);
+				starterStarted = true;
+				this.newSessionComposerService.setStarterProjectsRequested(false);
+				updateGalleryVisibility();
+				if (!await this._newChatInput.submit()) {
+					this.notificationService.warn(localize('starterProjects.sendLater', "Проект создан, задание подготовлено. Проверьте выбранного агента и отправьте задание."));
+				}
+			}, () => {
+				this.storageService.store(STARTER_GALLERY_DISMISSED_KEY, true, StorageScope.APPLICATION, StorageTarget.USER);
+				this.newSessionComposerService.setStarterProjectsRequested(false);
+				updateGalleryVisibility();
+				this.focusInput();
+			}));
+			const updateGalleryVisibility = () => {
+				// The New Project command brings the gallery back at any time.
+				gallery.element.hidden = !this.newSessionComposerService.starterProjectsRequested.get() && (starterStarted
+					|| this._isQuickChatComposer.get()
+					|| this._hasEnoughSessionsForFirstRunNotices()
+					|| this.storageService.getBoolean(STARTER_GALLERY_DISMISSED_KEY, StorageScope.APPLICATION, false));
+				chatWidgetContent.classList.toggle('starter-first-run', !gallery.element.hidden);
+			};
+			updateGalleryVisibility();
+			this._register(this.storageService.onDidChangeValue(StorageScope.APPLICATION, TOTAL_SESSIONS_KEY, this._store)(updateGalleryVisibility));
+			this._register(autorun(reader => {
+				this._isQuickChatComposer.read(reader);
+				const requested = this.newSessionComposerService.starterProjectsRequested.read(reader);
+				if (requested) {
+					starterStarted = false;
+				}
+				updateGalleryVisibility();
+				if (requested) {
+					gallery.focus();
+				}
+			}));
+		}
 		const firstScreenCopy = dom.append(chatWidgetContent, dom.$('.agent-first-copy'));
 		const firstScreenHint = dom.append(firstScreenCopy, dom.$('p.agent-first-hint'));
 		firstScreenHint.textContent = localize('agentFirst.hint', "Напишите, что сделать. Агент создаст и поправит файлы в этой папке.");
 		const firstScreenChip = dom.append(firstScreenCopy, dom.$('span.agent-first-model-chip'));
-		firstScreenChip.textContent = localize('agentFirst.modelChip', "Nemotron · бесплатно · иногда отвечает минуту");
+		firstScreenChip.textContent = localize('agentFirst.modelChip', "Модель Nemotron — бесплатная, иногда отвечает до минуты");
 		const updateFirstScreenCopy = () => {
 			const hasFolder = !!this._workspacePicker.selectedFolderUri;
 			firstScreenCopy.classList.toggle('hidden', !hasFolder);
@@ -822,7 +875,7 @@ export class NewChatWidget extends Disposable {
 		const icon = dom.append(trigger, renderIcon(Codicon.tools));
 		icon.setAttribute('aria-hidden', 'true');
 		const label = dom.append(trigger, dom.$('span.sessions-chat-dropdown-label'));
-		label.textContent = localize('newSessionCustomize', "Customize");
+		label.textContent = localize('newSessionCustomize', "Настроить");
 		const indicator = dom.append(trigger, dom.$('span.sessions-customize-migration-indicator'));
 		indicator.setAttribute('aria-hidden', 'true');
 
@@ -851,7 +904,7 @@ export class NewChatWidget extends Disposable {
 			trigger.classList.toggle('has-migrations', hasMigrations);
 			trigger.setAttribute('aria-label', hasMigrations
 				? localize('newSessionCustomizeMigrationsAriaLabel', "Customize, migrations available")
-				: localize('newSessionCustomizeAriaLabel', "Customize"));
+				: localize('newSessionCustomizeAriaLabel', "Настроить"));
 		}));
 		store.add(toDisposable(() => slot.remove()));
 		return store;
@@ -1089,6 +1142,11 @@ export class NewChatWidget extends Disposable {
 		// heading instead so the user has a visible focus target.
 		if (this._activeEmptyState) {
 			this._activeEmptyState.focus();
+			return;
+		}
+		// The first-run gallery hides the composer; its idea box takes focus.
+		if (this._starterGallery && !this._starterGallery.element.hidden) {
+			this._starterGallery.focus();
 			return;
 		}
 		this._newChatInput.focus();

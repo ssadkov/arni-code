@@ -5,7 +5,7 @@
 
 import { Codicon } from '../../../../../../base/common/codicons.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
-import { Event } from '../../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../../../base/common/observable.js';
 import { mark } from '../../../../../../base/common/performance.js';
@@ -26,6 +26,8 @@ import { Registry } from '../../../../../../platform/registry/common/platform.js
 import { IWorkbenchContribution } from '../../../../../common/contributions.js';
 import { IAgentHostFileSystemService } from '../../../../../services/agentHost/common/agentHostFileSystemService.js';
 import { AuthenticationSession, IAuthenticationService } from '../../../../../services/authentication/common/authentication.js';
+import { ArniAccountSignedInContext, hasArniProductSignIn, isArniProductAuthProvider } from '../../../../../services/authentication/common/arniProductAuth.js';
+import { IContextKey, IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { IWorkbenchEnvironmentService } from '../../../../../services/environment/common/environmentService.js';
 import { ChatSessionsExtensions, IAsyncChatSessionActivationRegistry, IChatSessionsService, isLocalAgentHostTarget } from '../../../common/chatSessionsService.js';
 import { ChatAgentLocation } from '../../../common/constants.js';
@@ -127,6 +129,9 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 	private _authenticationGeneration = 0;
 	private _didStartInitialAuthentication = false;
 	private _promptCacheNotification: AgentHostPromptCacheNotification | undefined;
+	private _arniSignedIn = false;
+	private readonly _arniSignedInContext: IContextKey<boolean>;
+	private readonly _onDidChangeArniSignIn = this._register(new Emitter<void>());
 
 	constructor(
 		@IAgentHostService private readonly _agentHostService: IAgentHostService,
@@ -139,6 +144,7 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 		@IAgentHostFileSystemService private readonly _agentHostFileSystemService: IAgentHostFileSystemService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ICustomizationHarnessService private readonly _customizationHarnessService: ICustomizationHarnessService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 		@IWorkbenchEnvironmentService environmentService: IWorkbenchEnvironmentService,
 		@IAgentHostActiveClientService private readonly _activeClientService: IAgentHostActiveClientService,
 		@IAgentHostProtectedResourcesService private readonly _protectedResourcesService: IAgentHostProtectedResourcesService,
@@ -147,6 +153,13 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 		super();
 		this._isSessionsWindow = environmentService.isSessionsWindow;
 		this._enableSmokeTestDriver = !!environmentService.enableSmokeTestDriver;
+		this._arniSignedInContext = ArniAccountSignedInContext.bindTo(contextKeyService);
+		this._register(this._authenticationService.onDidChangeSessions(event => {
+			if (isArniProductAuthProvider(event.providerId)) {
+				void this._refreshArniSignIn();
+			}
+		}));
+		void this._refreshArniSignIn();
 
 		this._register(autorun(reader => {
 			const enabled = this._agentHostEnablementService.enabled.read(reader);
@@ -238,6 +251,16 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 		this._enablementStore.value = store;
 	}
 
+	private async _refreshArniSignIn(): Promise<void> {
+		const signedIn = await hasArniProductSignIn(this._authenticationService);
+		const changed = this._arniSignedIn !== signedIn;
+		this._arniSignedIn = signedIn;
+		this._arniSignedInContext.set(signedIn);
+		if (changed) {
+			this._onDidChangeArniSignIn.fire();
+		}
+	}
+
 	private _shouldRegisterAgent(provider: AgentProvider): boolean {
 		return shouldSurfaceLocalAgentHostProvider(provider, this._configurationService, this._isSessionsWindow);
 	}
@@ -302,10 +325,16 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 			// agent host resolves. The paired `onDidChangeRequiresCopilotSignIn` lets
 			// the sessions service re-evaluate this when the set changes.
 			requiresCopilotSignIn: () => {
+				if (this._arniSignedIn) {
+					return false;
+				}
 				const resources = this._protectedResourcesService.getProtectedResources(agent.provider);
 				return resources !== undefined ? protectedResourcesRequireGitHubCopilotSignIn(resources) : true;
 			},
-			onDidChangeRequiresCopilotSignIn: Event.signal(Event.filter(this._protectedResourcesService.onDidChange, provider => provider === agent.provider, store)),
+			onDidChangeRequiresCopilotSignIn: Event.any(
+				Event.signal(Event.filter(this._protectedResourcesService.onDidChange, provider => provider === agent.provider, store)),
+				Event.signal(this._onDidChangeArniSignIn.event),
+			),
 			agentHostProviderId: agent.provider,
 			supportsDelegation: false,
 			capabilities: {

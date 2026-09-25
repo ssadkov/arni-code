@@ -32,7 +32,7 @@ const viewContainerRegistry = Registry.as<IViewContainersRegistry>(ViewContainer
 // Files view container
 const filesViewContainer = viewContainerRegistry.registerViewContainer({
 	id: SESSIONS_FILES_CONTAINER_ID,
-	title: localize2('files', "Files"),
+	title: localize2('files', "Файлы"),
 	icon: filesViewIcon,
 	order: 11,
 	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [SESSIONS_FILES_CONTAINER_ID, { mergeViewWithContainerWhenSingleView: true }]),
@@ -58,7 +58,7 @@ class RegisterFilesViewContribution implements IWorkbenchContribution {
 		// Re-register the explorer view inside the new Files container
 		viewsRegistry.registerViews([{
 			id: SESSIONS_FILES_VIEW_ID,
-			name: localize2('files', "Files"),
+			name: localize2('files', "Файлы"),
 			containerIcon: filesViewIcon,
 			ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
 			canToggleVisibility: false,
@@ -70,7 +70,7 @@ class RegisterFilesViewContribution implements IWorkbenchContribution {
 		// Register an empty view to show when there are no workspace folders
 		viewsRegistry.registerViews([{
 			id: SESSIONS_FILES_EMPTY_VIEW_ID,
-			name: localize2('files', "Files"),
+			name: localize2('files', "Файлы"),
 			containerIcon: filesViewIcon,
 			ctorDescriptor: new SyncDescriptor(SessionsExplorerEmptyView),
 			canToggleVisibility: false,

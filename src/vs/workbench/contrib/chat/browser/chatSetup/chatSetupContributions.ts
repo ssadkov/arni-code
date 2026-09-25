@@ -43,6 +43,7 @@ import { EnablementState, IWorkbenchExtensionEnablementService } from '../../../
 import { ExtensionUrlHandlerOverrideRegistry, IExtensionUrlHandlerOverride } from '../../../../services/extensions/browser/extensionUrlHandler.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
 import { CONTEXT_DEFAULT_ACCOUNT_STATE, DefaultAccountStatus } from '../../../../services/accounts/browser/defaultAccount.js';
+import { ArniAccountSignedInContext } from '../../../../services/authentication/common/arniProductAuth.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { IWorkbenchLayoutService, Parts } from '../../../../services/layout/browser/layoutService.js';
 import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
@@ -331,7 +332,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupForceSignIn',
-					title: localize2('forceSignIn', "Sign in to use GitHub Copilot")
+					title: localize2('forceSignIn', "Войдите, чтобы пользоваться агентом")
 				});
 			}
 
@@ -364,36 +365,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			}
 		}
 
-		class ChatSetupFromAccountsAction extends Action2 {
-
-			constructor() {
-				super({
-					id: 'workbench.action.chat.triggerSetupFromAccounts',
-					title: localize2('triggerChatSetupFromAccounts', "Sign in to use GitHub Copilot..."),
-					menu: {
-						id: MenuId.AccountsContext,
-						group: '2_copilot',
-						when: ContextKeyExpr.and(
-							ChatContextKeys.Setup.hidden.negate(),
-							ChatContextKeys.Setup.disabledInWorkspace.negate(),
-							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available), // hide only when signed in (a default GitHub account is present); still shown while signed out or before the account state resolves, incl. untrusted workspaces — no auth prompt
-							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.signedOut
-						)
-					}
-				});
-			}
-
-			override async run(accessor: ServicesAccessor): Promise<void> {
-				const commandService = accessor.get(ICommandService);
-				const telemetryService = accessor.get(ITelemetryService);
-
-				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: CHAT_SETUP_ACTION_ID, from: 'accounts' });
-
-				return commandService.executeCommand(CHAT_SETUP_ACTION_ID);
-			}
-		}
-
 		class SignInWithYandexAccountsAction extends Action2 {
 			constructor() {
 				super({
@@ -402,13 +373,11 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					menu: {
 						id: MenuId.AccountsContext,
 						group: '2_copilot',
-						order: 2,
+						order: 1,
 						when: ContextKeyExpr.and(
 							ChatContextKeys.Setup.hidden.negate(),
 							ChatContextKeys.Setup.disabledInWorkspace.negate(),
-							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available),
-							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.signedOut
+							ArniAccountSignedInContext.negate(),
 						)
 					}
 				});
@@ -427,13 +396,11 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					menu: {
 						id: MenuId.AccountsContext,
 						group: '2_copilot',
-						order: 3,
+						order: 2,
 						when: ContextKeyExpr.and(
 							ChatContextKeys.Setup.hidden.negate(),
 							ChatContextKeys.Setup.disabledInWorkspace.negate(),
-							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available),
-							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.signedOut
+							ArniAccountSignedInContext.negate(),
 						)
 					}
 				});
@@ -612,7 +579,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 		registerAction2(ChatSetupTriggerAction);
 		registerAction2(ChatSetupTriggerForceSignInDialogAction);
-		registerAction2(ChatSetupFromAccountsAction);
 		registerAction2(SignInWithYandexAccountsAction);
 		registerAction2(SignInWithVkAccountsAction);
 		registerAction2(ChatSetupSignInTitleBarAction);

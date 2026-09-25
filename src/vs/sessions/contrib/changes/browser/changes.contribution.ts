@@ -53,7 +53,7 @@ class SinglePaneChangesEditorContribution extends Disposable implements IWorkben
 		}
 
 		this._register(Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane(
-			EditorPaneDescriptor.create(SessionChangesEditor, SessionChangesEditor.ID, localize('sessionChangesEditor.label', "Changes")),
+			EditorPaneDescriptor.create(SessionChangesEditor, SessionChangesEditor.ID, localize('sessionChangesEditor.label', "Изменения")),
 			[new SyncDescriptor(SessionChangesEditorInput)]
 		));
 

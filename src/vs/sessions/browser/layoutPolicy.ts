@@ -140,7 +140,8 @@ export class SessionsLayoutPolicy extends Disposable {
 			case 'desktop':
 				// Tablet and desktop share the standard multi-part workbench defaults.
 				// A dedicated tablet layout has not been designed yet.
-				return { sidebar: true, auxiliaryBar: true, panel: false, sessions: true, editor: false };
+				// ARNION: the right panel starts hidden; the chat is the whole first screen.
+				return { sidebar: true, auxiliaryBar: false, panel: false, sessions: true, editor: false };
 		}
 	}
 

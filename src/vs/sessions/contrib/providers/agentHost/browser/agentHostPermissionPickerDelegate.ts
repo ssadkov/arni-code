@@ -119,14 +119,14 @@ export class AgentHostPermissionPickerDelegate extends Disposable implements IPe
 			case ChatPermissionLevel.Default:
 				return {
 					...meta,
-					label: localize('agentHostPermissionPicker.manual.label', "Manual permissions"),
-					detail: localize('agentHostPermissionPicker.askWhenNeeded.detail', "Asks when approval settings don't apply"),
+					label: localize('agentHostPermissionPicker.manual.label', "Подтверждать вручную"),
+					detail: localize('agentHostPermissionPicker.askWhenNeeded.detail', "Спрашивает, если нет подходящего правила"),
 					icon: Codicon.key,
 				};
 			case ChatPermissionLevel.Assisted:
-				return { ...meta, detail: localize('agentHostPermissionPicker.approveWhenSafe.detail', "Evaluates risk before running tools") };
+				return { ...meta, detail: localize('agentHostPermissionPicker.approveWhenSafe.detail', "Оценивает риск перед запуском инструментов") };
 			case ChatPermissionLevel.AutoApprove:
-				return { ...meta, detail: localize('agentHostPermissionPicker.allowAll.detail', "Runs tool calls without asking") };
+				return { ...meta, detail: localize('agentHostPermissionPicker.allowAll.detail', "Запускает инструменты без вопросов") };
 			case ChatPermissionLevel.Autopilot:
 				return meta;
 		}

@@ -40,6 +40,18 @@ Launch without the debugger, from a terminal in the repo:
 .\scripts\code.bat --user-data-dir="$env:USERPROFILE\.vscode-oss-dev"
 ```
 
+## Desktop shortcut that an agent can still watch
+
+`scripts\arni-dev.cmd` starts the source build with the `.vscode-oss-dev` profile. Point a desktop shortcut at it. It skips `preLaunch`, because a shortcut does not get `node` from fnm or nvm, so compile from a terminal after a pull.
+
+An agent does not need to launch the window itself to see it:
+
+- console output goes to `%USERPROFILE%\.vscode-oss-dev\arni-dev-console.log`;
+- the workbench logs are always under `%USERPROFILE%\.vscode-oss-dev\logs\<timestamp>\`;
+- the renderer listens on CDP port `9222`, so Playwright can attach to the open window.
+
+Only one dev window can hold port 9222 at a time.
+
 ## After git pull
 
 ```powershell

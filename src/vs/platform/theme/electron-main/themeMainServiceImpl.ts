@@ -210,7 +210,8 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 	}
 
 	private getStoredBaseTheme(): ThemeTypeSelector {
-		const baseTheme = this.stateService.getItem<ThemeTypeSelector>(THEME_STORAGE_KEY, ThemeTypeSelector.VS_DARK).split(' ')[0];
+		// ARNION: the first window paints light to match the light default theme.
+		const baseTheme = this.stateService.getItem<ThemeTypeSelector>(THEME_STORAGE_KEY, ThemeTypeSelector.VS).split(' ')[0];
 		switch (baseTheme) {
 			case ThemeTypeSelector.VS: return ThemeTypeSelector.VS;
 			case ThemeTypeSelector.HC_BLACK: return ThemeTypeSelector.HC_BLACK;

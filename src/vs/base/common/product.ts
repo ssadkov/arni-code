@@ -443,6 +443,7 @@ export interface IDefaultChatAgent {
 		apple: { id: string; name: string };
 		microsoft: { id: string; name: string };
 		yandex?: { id: string; name: string };
+		vk?: { id: string; name: string };
 	};
 
 	readonly providerExtensionId: string;

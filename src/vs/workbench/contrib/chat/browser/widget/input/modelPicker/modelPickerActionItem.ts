@@ -180,7 +180,7 @@ export class ModelPickerActionItem extends BaseActionViewItem {
 	private _getHoverContents(): IManagedHoverContent {
 		// Keep the hover prefix in sync with the picker's visible "Models" label
 		// (the same localization key) so the hover doesn't read "Pick Model • …".
-		let label = localize('chat.modelPicker.modelsLabel', "Models");
+		let label = localize('chat.modelPicker.modelsLabel', "Модели");
 		const keybindingLabel = this.keybindingService.lookupKeybinding(this._action.id, this._contextKeyService)?.getLabel();
 		if (keybindingLabel) {
 			label += ` (${keybindingLabel})`;

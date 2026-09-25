@@ -155,8 +155,10 @@ export class ChatSetupDialog extends Disposable {
 				disableCloseButton: options.disableCloseButton,
 				renderFooter: footer => {
 					const element = footer.appendChild($('.chat-setup-dialog-footer'));
-					const renderedFooter = this._register(markdownRendererService.render(new MarkdownString(options.footer, { isTrusted: true })));
-					element.appendChild($('p', undefined, renderedFooter.element));
+					if (options.footer) {
+						const renderedFooter = this._register(markdownRendererService.render(new MarkdownString(options.footer, { isTrusted: true })));
+						element.appendChild($('p', undefined, renderedFooter.element));
+					}
 					const customFooter = options.renderFooter?.(element);
 					if (customFooter) {
 						this._register(customFooter);
@@ -235,20 +237,13 @@ export function getChatSetupDialogButtons(entitlement: ChatEntitlement, options:
 	const button = (label: string, strategy: ChatSetupStrategy, ...classes: string[]): IChatSetupDialogButton => ({ label, strategy, classes });
 
 	if (!options?.forceAnonymous && (entitlement === ChatEntitlement.Unknown || options?.forceSignInDialog)) {
-		const defaultProviderButton = button(localize('continueWith', "Continue with {0}", providers.default.name), ChatSetupStrategy.SetupWithoutEnterpriseProvider, 'continue-button', 'default');
-		const defaultProviderLink = button(defaultProviderButton.label, defaultProviderButton.strategy, 'link-button');
-		const enterpriseProviderButton = button(localize('continueWith', "Continue with {0}", providers.enterprise.name), ChatSetupStrategy.SetupWithEnterpriseProvider, 'continue-button', 'default');
-		const enterpriseProviderLink = button(enterpriseProviderButton.label, enterpriseProviderButton.strategy, 'link-button');
-		const googleProviderButton = button(localize('continueWith', "Continue with {0}", providers.google.name), ChatSetupStrategy.SetupWithGoogleProvider, 'continue-button', 'google');
-		const appleProviderButton = button(localize('continueWith', "Continue with {0}", providers.apple.name), ChatSetupStrategy.SetupWithAppleProvider, 'continue-button', 'apple');
-		const microsoftProviderButton = button(localize('continueWith', "Continue with {0}", providers.microsoft.name), ChatSetupStrategy.SetupWithMicrosoftProvider, 'continue-button', 'microsoft');
+		// Arni Code product sign-in: Yandex and VK only. GitHub / Google / Apple are not offered.
 		const yandexProviderButton = providers.yandex ? button(localize('signInWithYandex', "Войти через Яндекс"), ChatSetupStrategy.SetupWithYandexProvider, 'continue-button', 'yandex') : undefined;
 		const vkProviderButton = providers.vk ? button(localize('signInWithVk', "Войти через VK"), ChatSetupStrategy.SetupWithVkProvider, 'continue-button', 'vk') : undefined;
-
-		const socialProviderButtons = [...(yandexProviderButton ? [yandexProviderButton] : []), ...(vkProviderButton ? [vkProviderButton] : []), googleProviderButton, appleProviderButton, ...(showMicrosoftProvider ? [microsoftProviderButton] : [])];
-		const providerButtons = enterpriseAuthentication
-			? [enterpriseProviderButton, ...socialProviderButtons, defaultProviderLink]
-			: [defaultProviderButton, ...socialProviderButtons, enterpriseProviderLink];
+		const providerButtons = [...(yandexProviderButton ? [yandexProviderButton] : []), ...(vkProviderButton ? [vkProviderButton] : [])];
+		if (providerButtons.length === 0) {
+			return [button(localize('setupAIButton', "Use AI Features"), ChatSetupStrategy.DefaultSetup)];
+		}
 		return options?.allowContinueWithoutSignIn
 			? [...providerButtons, button(localize('continueWithoutSigningIn', "Continue Without Signing In"), ChatSetupStrategy.Canceled, 'link-button')]
 			: providerButtons;
@@ -268,6 +263,11 @@ export function getChatSetupDialogFooter(
 		publicCodeMatchesUrl: defaultChat.publicCodeMatchesUrl,
 	}
 ): string {
+	// ARNION: without our own terms in product.json there is nothing true to
+	// agree to here; the upstream text names GitHub and Copilot.
+	if (!content.termsStatementUrl || !content.privacyStatementUrl) {
+		return '';
+	}
 	if (forceAnonymous || telemetryLevel === TelemetryLevel.NONE) {
 		return localize({ key: 'settingsAnonymous', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}).", content.providerName, content.termsStatementUrl, content.privacyStatementUrl);
 	}
@@ -531,7 +531,7 @@ export class ChatSetup {
 		}
 
 		if (this.context.state.entitlement === ChatEntitlement.Unknown || options?.forceSignInDialog) {
-			return localize('signIn', "Sign in to use GitHub Copilot");
+			return localize('signInArni', "Войдите, чтобы пользоваться агентом");
 		}
 
 		return localize('startUsing', "Start using AI Features");

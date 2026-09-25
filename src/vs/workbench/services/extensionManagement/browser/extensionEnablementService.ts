@@ -676,7 +676,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 
 		// Built-in extensions are enabled in sessions window except the chat extension and extensions that contribute not supported features.
 		if (extension.isBuiltin) {
-			if (extension.identifier.id.toLowerCase() === this._chatExtensionId) {
+			if (extension.identifier.id.toLowerCase() === this._chatExtensionId || extension.identifier.id.toLowerCase() === 'github.copilot-chat') {
 				return false;
 			}
 

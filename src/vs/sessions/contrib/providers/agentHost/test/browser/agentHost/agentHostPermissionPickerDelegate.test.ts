@@ -264,9 +264,9 @@ suite('AgentHostPermissionPickerDelegate', () => {
 		}, {
 			current: ChatPermissionLevel.Assisted,
 			metadata: [
-				{ label: 'Manual permissions', detail: 'Asks when approval settings don\'t apply', hover: undefined, icon: 'key' },
-				{ label: 'Assisted permissions', detail: 'Evaluates risk before running tools', hover: 'An LLM judge evaluates each tool call. Tools it doesn\'t approve require your approval.', icon: 'sparkle' },
-				{ label: 'Allow all', detail: 'Runs tool calls without asking', hover: undefined, icon: 'warning' },
+				{ label: 'Подтверждать вручную', detail: 'Спрашивает, если нет подходящего правила', hover: undefined, icon: 'key' },
+				{ label: 'С оценкой риска', detail: 'Оценивает риск перед запуском инструментов', hover: 'An LLM judge evaluates each tool call. Tools it doesn\'t approve require your approval.', icon: 'sparkle' },
+				{ label: 'Разрешить всё', detail: 'Запускает инструменты без вопросов', hover: undefined, icon: 'warning' },
 			],
 			available: [
 				ChatPermissionLevel.Default,

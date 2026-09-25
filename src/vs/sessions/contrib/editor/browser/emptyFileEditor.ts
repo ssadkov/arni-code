@@ -64,7 +64,7 @@ export class EmptyFileEditor extends EditorPane {
 
 		renderSessionsEmptyState(
 			content,
-			localize('emptyFileEditor.title', "Files"),
+			localize('emptyFileEditor.title', "Файлы"),
 			localize('emptyFileEditor.description', "Select a file from the Files view"),
 		);
 

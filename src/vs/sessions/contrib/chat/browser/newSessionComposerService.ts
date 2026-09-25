@@ -70,6 +70,13 @@ export const INewSessionComposerService = createDecorator<INewSessionComposerSer
 export interface INewSessionComposerService {
 	readonly _serviceBrand: undefined;
 	readonly activeComposer: IObservable<INewSessionComposer | undefined>;
+	/**
+	 * Whether the new-session view shows the starter project gallery even after
+	 * first run. Set by the New Project command; cleared once a project starts
+	 * or the user picks an existing folder.
+	 */
+	readonly starterProjectsRequested: IObservable<boolean>;
+	setStarterProjectsRequested(requested: boolean): void;
 	registerComposer(composer: INewSessionComposer): IDisposable;
 }
 
@@ -79,6 +86,13 @@ export class NewSessionComposerService extends Disposable implements INewSession
 	private readonly _composers = new Set<INewSessionComposer>();
 	private readonly _activeComposer = observableValue<INewSessionComposer | undefined>(this, undefined);
 	readonly activeComposer: IObservable<INewSessionComposer | undefined> = this._activeComposer;
+
+	private readonly _starterProjectsRequested = observableValue<boolean>(this, false);
+	readonly starterProjectsRequested: IObservable<boolean> = this._starterProjectsRequested;
+
+	setStarterProjectsRequested(requested: boolean): void {
+		this._starterProjectsRequested.set(requested, undefined);
+	}
 
 	registerComposer(composer: INewSessionComposer): IDisposable {
 		this._composers.add(composer);

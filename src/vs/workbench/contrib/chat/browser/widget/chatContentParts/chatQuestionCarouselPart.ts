@@ -251,7 +251,7 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 		// Close/skip button (X) - placed in header row, only shown when allowSkip is true
 		if (carousel.allowSkip) {
 			this._closeButtonContainer = dom.$('.chat-question-close-container');
-			const skipAllTitle = localize('chat.questionCarousel.skipAllTitle', 'Skip all questions');
+			const skipAllTitle = localize('chat.questionCarousel.skipAllTitle', "Пропустить вопросы");
 			const skipAllButton = createChatCardIconButton(interactiveStore, this._closeButtonContainer, this._hoverService, {
 				icon: Codicon.closeSmall,
 				ariaLabel: skipAllTitle,
@@ -940,7 +940,7 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 
 			const arrowsContainer = dom.$('.chat-question-nav-arrows');
 
-			const previousLabel = this.getLabelWithKeybinding(localize('previous', 'Previous'), PREVIOUS_QUESTION_ACTION_ID);
+			const previousLabel = this.getLabelWithKeybinding(localize('previous', "Назад"), PREVIOUS_QUESTION_ACTION_ID);
 			const prevButton = createChatCardIconButton(interactiveStore, arrowsContainer, this._hoverService, {
 				icon: Codicon.chevronLeft,
 				ariaLabel: previousLabel,
@@ -951,7 +951,7 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 			interactiveStore.add(prevButton.onDidClick(() => this.navigate(-1)));
 			this._prevButton = prevButton;
 
-			const nextLabel = this.getLabelWithKeybinding(localize('next', 'Next'), NEXT_QUESTION_ACTION_ID);
+			const nextLabel = this.getLabelWithKeybinding(localize('next', "Далее"), NEXT_QUESTION_ACTION_ID);
 			const nextButton = createChatCardIconButton(interactiveStore, arrowsContainer, this._hoverService, {
 				icon: Codicon.chevronRight,
 				ariaLabel: nextLabel,
@@ -975,13 +975,13 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 			const hint = dom.$('span.chat-question-submit-hint');
 			hint.textContent = isMacintosh
 				? localize('chat.questionCarousel.submitHintMac', '\u2318\u23CE to submit')
-				: localize('chat.questionCarousel.submitHintOther', 'Ctrl+Enter to submit');
+				: localize('chat.questionCarousel.submitHintOther', "Ctrl+Enter — отправить");
 			rightControls.appendChild(hint);
 			this._submitHint = hint;
 
 			const submitButton = interactiveStore.add(new Button(rightControls, { ...defaultButtonStyles }));
 			submitButton.element.classList.add('chat-question-submit-button');
-			submitButton.label = localize('submit', 'Submit');
+			submitButton.label = localize('submit', "Отправить");
 			interactiveStore.add(submitButton.onDidClick(() => this.submit()));
 			this._submitButton = submitButton;
 
@@ -1047,13 +1047,13 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 			const hint = dom.$('span.chat-question-submit-hint');
 			hint.textContent = isMacintosh
 				? localize('chat.questionCarousel.submitHintMac', '\u2318\u23CE to submit')
-				: localize('chat.questionCarousel.submitHintOther', 'Ctrl+Enter to submit');
+				: localize('chat.questionCarousel.submitHintOther', "Ctrl+Enter — отправить");
 			rightControls.appendChild(hint);
 			this._submitHint = hint;
 
 			const submitButton = interactiveStore.add(new Button(rightControls, { ...defaultButtonStyles }));
 			submitButton.element.classList.add('chat-question-submit-button');
-			submitButton.label = localize('submit', 'Submit');
+			submitButton.label = localize('submit', "Отправить");
 			interactiveStore.add(submitButton.onDidClick(() => this.submit()));
 			this._submitButton = submitButton;
 
@@ -1102,7 +1102,7 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 
 	private renderTextInput(container: HTMLElement, question: IChatQuestion): void {
 		const inputBox = this._inputBoxes.add(new InputBox(container, undefined, {
-			placeholder: localize('chat.questionCarousel.enterText', 'Enter your answer'),
+			placeholder: localize('chat.questionCarousel.enterText', "Ваш ответ"),
 			inputBoxStyles: defaultInputBoxStyles,
 			validationOptions: question.validation ? {
 				validation: (value: string) => {
@@ -1252,7 +1252,7 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 			freeformContainer.appendChild(freeformNumber);
 
 			freeformTextarea = dom.$<HTMLTextAreaElement>('textarea.chat-question-freeform-textarea');
-			freeformTextarea.placeholder = localize('chat.questionCarousel.enterCustomAnswer', 'Enter custom answer');
+			freeformTextarea.placeholder = localize('chat.questionCarousel.enterCustomAnswer', "Свой ответ");
 			freeformTextarea.rows = 1;
 
 			if (previousFreeform !== undefined) {
@@ -1460,7 +1460,7 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 			freeformContainer.appendChild(freeformNumber);
 
 			freeformTextarea = dom.$<HTMLTextAreaElement>('textarea.chat-question-freeform-textarea');
-			freeformTextarea.placeholder = localize('chat.questionCarousel.enterCustomAnswer', 'Enter custom answer');
+			freeformTextarea.placeholder = localize('chat.questionCarousel.enterCustomAnswer', "Свой ответ");
 			freeformTextarea.rows = 1;
 
 			if (previousFreeform !== undefined) {
@@ -1617,13 +1617,13 @@ export class ChatQuestionCarouselPart extends Disposable implements IChatContent
 		const isDismissedByTerminal = this.carousel instanceof ChatQuestionCarouselData && this.carousel.dismissedByTerminalInput;
 		if (this.carousel.answeredExternally) {
 			const answeredMessage = dom.$('.chat-question-summary-answered');
-			answeredMessage.textContent = localize('chat.questionCarousel.answered', 'Answered');
+			answeredMessage.textContent = localize('chat.questionCarousel.answered', "Ответ дан");
 			summaryContainer.appendChild(answeredMessage);
 		} else {
 			const skippedMessage = dom.$('.chat-question-summary-skipped');
 			skippedMessage.textContent = isDismissedByTerminal
 				? localize('chat.questionCarousel.deferredToTerminal', "Deferring to user's input in the terminal")
-				: localize('chat.questionCarousel.skipped', 'Skipped question');
+				: localize('chat.questionCarousel.skipped', "Вопрос пропущен");
 			summaryContainer.appendChild(skippedMessage);
 		}
 		this.domNode.appendChild(summaryContainer);

@@ -1245,7 +1245,7 @@ function formatHourMinute(hour: number, minute: number): string {
 }
 
 function getAutomationTargetLabel(target: AutomationTarget): string {
-	return target.kind === 'workspace' ? basename(target.folderUri) : localize('quickChat', "No workspace");
+	return target.kind === 'workspace' ? basename(target.folderUri) : localize('quickChat', "Без папки");
 }
 
 function groupRunsByDate(runs: readonly IAutomationRun[]): { key: string; label: string; runs: IAutomationRun[] }[] {
@@ -1357,7 +1357,7 @@ async function confirmAndDeleteAutomation(
  */
 export class AutomationsCustomView extends AbstractCustomView {
 
-	readonly title: IObservable<string> = constObservable(localize('automationsTitle', "Automations"));
+	readonly title: IObservable<string> = constObservable(localize('automationsTitle', "Автоматизации"));
 	override readonly description: IObservable<string | undefined> = constObservable(
 		localize('automationsDescription', "Schedule agent sessions to run automatically on a cadence you choose."));
 

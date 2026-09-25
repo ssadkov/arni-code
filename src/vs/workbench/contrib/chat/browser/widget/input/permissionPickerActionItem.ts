@@ -96,9 +96,9 @@ function getPermissionLevelMeta(level: ChatPermissionLevel): IPermissionLevelMet
 		case ChatPermissionLevel.Assisted:
 			return {
 				id: 'chat.permissions.assisted',
-				label: localize('permissions.assisted', "Assisted permissions"),
-				shortLabel: localize('permissions.assisted.label', "Assisted permissions"),
-				detail: localize('permissions.assisted.subtext', "Evaluates risk before running tools"),
+				label: localize('permissions.assisted', "С оценкой риска"),
+				shortLabel: localize('permissions.assisted.label', "С оценкой риска"),
+				detail: localize('permissions.assisted.subtext', "Оценивает риск перед запуском инструментов"),
 				icon: ThemeIcon.fromId(Codicon.sparkle.id),
 				description: localize('permissions.assisted.description', "An LLM judge evaluates each tool call. Tools it doesn't approve require your approval."),
 				elevated: true,
@@ -106,9 +106,9 @@ function getPermissionLevelMeta(level: ChatPermissionLevel): IPermissionLevelMet
 		case ChatPermissionLevel.AutoApprove:
 			return {
 				id: 'chat.permissions.autoApprove',
-				label: localize('permissions.autoApprove', "Allow all"),
-				shortLabel: localize('permissions.autoApprove.label', "Allow all"),
-				detail: localize('permissions.autoApprove.subtext', "Runs tool calls without asking"),
+				label: localize('permissions.autoApprove', "Разрешить всё"),
+				shortLabel: localize('permissions.autoApprove.label', "Разрешить всё"),
+				detail: localize('permissions.autoApprove.subtext', "Запускает инструменты без вопросов"),
 				icon: ThemeIcon.fromId(Codicon.warning.id),
 				description: localize('permissions.autoApprove.description', "Auto-approve all tool calls and retry on errors"),
 				elevated: true,
@@ -116,9 +116,9 @@ function getPermissionLevelMeta(level: ChatPermissionLevel): IPermissionLevelMet
 		case ChatPermissionLevel.Autopilot:
 			return {
 				id: 'chat.permissions.autopilot',
-				label: localize('permissions.autopilot', "Autopilot (Preview)"),
-				shortLabel: localize('permissions.autopilot.label', "Autopilot (Preview)"),
-				detail: localize('permissions.autopilot.subtext', "Works autonomously within permissions"),
+				label: localize('permissions.autopilot', "Автопилот (предварительная версия)"),
+				shortLabel: localize('permissions.autopilot.label', "Автопилот (предварительная версия)"),
+				detail: localize('permissions.autopilot.subtext', "Работает сам в пределах разрешений"),
 				icon: ThemeIcon.fromId(Codicon.rocket.id),
 				description: localize('permissions.autopilot.description', "Auto-approve all tool calls and continue until the task is done. Autopilot may increase costs."),
 				elevated: true,
@@ -127,9 +127,9 @@ function getPermissionLevelMeta(level: ChatPermissionLevel): IPermissionLevelMet
 		default:
 			return {
 				id: 'chat.permissions.default',
-				label: localize('permissions.default', "Default permissions"),
-				shortLabel: localize('permissions.default.label', "Default permissions"),
-				detail: localize('permissions.default.subtext', "Asks when approval settings don't apply"),
+				label: localize('permissions.default', "Подтверждать вручную"),
+				shortLabel: localize('permissions.default.label', "Подтверждать вручную"),
+				detail: localize('permissions.default.subtext', "Спрашивает, если нет подходящего правила"),
 				icon: ThemeIcon.fromId(Codicon.shield.id),
 				description: localize('permissions.default.description', "Use configured approval settings"),
 				elevated: false,

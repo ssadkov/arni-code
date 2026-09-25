@@ -10,7 +10,10 @@ import { URI } from '../../base/common/uri.js';
 import { localize } from '../../nls.js';
 import { ChatEntitlement, IChatSentiment, IQuotaSnapshot } from '../../workbench/services/chat/common/chatEntitlementService.js';
 import { IDefaultAccountService } from '../../platform/defaultAccount/common/defaultAccount.js';
+import { ARNI_PRODUCT_AUTH_PROVIDERS } from '../../workbench/services/authentication/common/arniProductAuth.js';
 import { IAuthenticationService } from '../../workbench/services/authentication/common/authentication.js';
+
+export { ARNI_PRODUCT_AUTH_PROVIDERS } from '../../workbench/services/authentication/common/arniProductAuth.js';
 
 export interface IResolvedAccountInfo {
 	readonly accountName: string;
@@ -25,9 +28,7 @@ export interface IResolvedAccountInfo {
 
 /**
  * Resolves the current account info by trying the default account service
- * first, then falling back to raw GitHub sessions from the authentication
- * service. The fallback covers the window between session creation and
- * {@link IDefaultAccountService} initialization.
+ * first, then falling back to product sign-in (Yandex / VK) and GitHub.
  */
 export async function resolveAccountInfo(
 	defaultAccountService: IDefaultAccountService,
@@ -41,6 +42,22 @@ export async function resolveAccountInfo(
 			accountProviderLabel: account.authenticationProvider.name,
 			accountIcon: await getSessionAccountIcon(authenticationService, account.authenticationProvider.id, account.sessionId),
 		};
+	}
+
+	for (const provider of ARNI_PRODUCT_AUTH_PROVIDERS) {
+		try {
+			const sessions = await authenticationService.getSessions(provider.id, undefined, undefined, true);
+			if (sessions.length > 0) {
+				return {
+					accountName: sessions[0].account.label,
+					accountProviderId: provider.id,
+					accountProviderLabel: provider.label,
+					accountIcon: sessions[0].account.icon,
+				};
+			}
+		} catch {
+			// Provider is not registered yet.
+		}
 	}
 
 	try {

@@ -126,7 +126,7 @@ export class ReturnToVSCodeEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: RETURN_TO_VSCODE_EDITOR_COMMAND_ID,
-			title: localize2('returnToVSCodeEditor', 'Return to VS Code Editor'),
+			title: localize2('returnToVSCodeEditor', "Вернуться в редактор"),
 		});
 	}
 

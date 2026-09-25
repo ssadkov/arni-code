@@ -1,4 +1,5 @@
 {
+    "version": "1.138.0",
     "nameShort": "Arni Code",
     "nameLong": "Arni Code",
     "applicationName": "arni-code",
@@ -199,12 +200,16 @@
         "arnion.vk-authentication",
         "vk-authentication",
         "arnion.arni-agent",
-        "arni-agent"
+        "arni-agent",
+        "github.copilot-chat",
+        "copilot-chat"
     ],
     "configurationDefaults": {
         "workbench.startupEditor": "none",
         "workbench.secondarySideBar.defaultVisibility": "maximized",
         "chat.byokUtilityModelDefault": "mainAgent",
-        "chat.defaultModel": "nvidia/nemotron-3-ultra-550b-a55b:free"
+        "chat.defaultModel": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "chat.agentHost.allowSignedOutWhenUsable": true,
+        "chat.agentHost.byokModels.enabled": true
     }
 }

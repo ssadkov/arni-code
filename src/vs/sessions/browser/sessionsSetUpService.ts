@@ -6,7 +6,7 @@
 import { Disposable, DisposableStore, IDisposable, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { CancellationTokenSource } from '../../base/common/cancellation.js';
 import { IObservable, runOnChange } from '../../base/common/observable.js';
-import { DeferredPromise, disposableTimeout } from '../../base/common/async.js';
+import { DeferredPromise } from '../../base/common/async.js';
 import { createDecorator, IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
@@ -15,26 +15,24 @@ import { IUserDataProfilesService } from '../../platform/userDataProfile/common/
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { ChatEntitlementContext, IChatEntitlementService } from '../../workbench/services/chat/common/chatEntitlementService.js';
 import { isWeb } from '../../base/common/platform.js';
-import { GitHubPaths, IDefaultAccountService } from '../../platform/defaultAccount/common/defaultAccount.js';
+import { IDefaultAccountService } from '../../platform/defaultAccount/common/defaultAccount.js';
 import { IProductService } from '../../platform/product/common/productService.js';
 import { IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import { IAuthenticationService } from '../../workbench/services/authentication/common/authentication.js';
+import { hasArniProductSignIn } from '../../workbench/services/authentication/common/arniProductAuth.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
 import { IWorkbenchLayoutService } from '../../workbench/services/layout/browser/layoutService.js';
 import { IKeybindingService } from '../../platform/keybinding/common/keybinding.js';
 import { IHostService } from '../../workbench/services/host/browser/host.js';
-import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
 import { WELCOME_COMPLETE_KEY } from '../common/welcome.js';
 import { SessionsWelcomeVisibleContext } from '../common/contextkeys.js';
 import { ConditionalAuthState, conditionalAuthState, observeAllowSignedOutWhenUsable, resolveSignedOutWindowGate, SignedOutWindowGate } from './sessionsAuthGate.js';
 
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { Codicon } from '../../base/common/codicons.js';
-import { $, append } from '../../base/browser/dom.js';
 import { Dialog, DialogContentsAlignment } from '../../base/browser/ui/dialog/dialog.js';
 import { createWorkbenchDialogOptions } from '../../workbench/browser/parts/dialogs/dialog.js';
-import { MarkdownString } from '../../base/common/htmlContent.js';
 import { localize } from '../../nls.js';
 import { createSessionsSignInDialogOptions, SessionsSigningInDialog } from './sessionsSignInDialog.js';
 import { SHOULD_SHOW_RETURN_TO_VSCODE_EDITOR_COMMAND_ID } from '../common/sessionCommands.js';
@@ -95,7 +93,7 @@ class SessionsSetUpWidget extends Disposable {
 	// Non-service params must come before @-decorated service params
 	constructor(
 		private readonly onCompleted: () => void,
-		private readonly serviceWhenSetupDone: () => Promise<boolean>,
+		_serviceWhenSetupDone: () => Promise<boolean>,
 		private readonly serviceMarkDone: () => void,
 		private readonly onInitialSignInDialogShown: () => void,
 		@IDefaultAccountService private readonly defaultAccountService: IDefaultAccountService,
@@ -110,7 +108,6 @@ class SessionsSetUpWidget extends Disposable {
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IHostService private readonly hostService: IHostService,
-		@IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
 	) {
@@ -225,32 +222,17 @@ class SessionsSetUpWidget extends Disposable {
 	 * account is optional and must not keep the Agents window on the sign-in modal.
 	 */
 	private async _hasArniSignIn(): Promise<boolean> {
-		for (const providerId of ['yandex', 'vk']) {
-			try {
-				const sessions = await this.authenticationService.getSessions(providerId, undefined, undefined, true);
-				if (sessions.length > 0) {
-					return true;
-				}
-			} catch {
-				// Provider is not registered yet.
-			}
-		}
-		return false;
+		return hasArniProductSignIn(this.authenticationService);
 	}
 
 	private async _watchSignInState(): Promise<void> {
-		const initialAccount = await this.defaultAccountService.getDefaultAccount();
 		const arniSignIn = await this._hasArniSignIn();
 		if (this.dialogRef.value) {
 			return;
 		}
-		if (!initialAccount && !arniSignIn) {
-			const welcomeComplete = this.storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION, false);
-			if (welcomeComplete && this._allowSignedOutWhenUsable.get()) {
-				await this._proceedWithoutGitHub();
-			} else {
-				this._showWelcome(false);
-			}
+		if (!arniSignIn) {
+			// Arni requires Yandex/VK before Agents chat. Never continue signed-out.
+			this._showWelcome(false);
 			return;
 		}
 		await this._ensureAIFeaturesEnabled();
@@ -260,6 +242,17 @@ class SessionsSetUpWidget extends Disposable {
 
 	private _watchActiveState(signedIn: boolean): IDisposable {
 		const disposables = new DisposableStore();
+
+		disposables.add(this.authenticationService.onDidChangeSessions(async e => {
+			if (e.providerId === 'yandex' || e.providerId === 'vk') {
+				const hasSignIn = await this._hasArniSignIn();
+				if (!hasSignIn) {
+					this.storageService.remove(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION);
+					this.dialogRef.clear();
+					void this._showWelcome(false);
+				}
+			}
+		}));
 
 		disposables.add(this.defaultAccountService.onDidChangeDefaultAccount(account => {
 			const nowSignedIn = account !== null;
@@ -417,21 +410,6 @@ class SessionsSetUpWidget extends Disposable {
 			return;
 		}
 
-		// A non-first-launch _showWelcome means the user is signed out. Consult the
-		// last-resort GitHub gate before forcing sign-in: with the opt-in on, open
-		// the window instead.
-		if (!isFirstLaunch) {
-			const gate = this._signedOutWindowGate();
-			if (gate === SignedOutWindowGate.Unresolved) {
-				this._waitingForSessionTypes = true;
-				return;
-			}
-			if (gate === SignedOutWindowGate.Proceed) {
-				await this._proceedWithoutGitHub();
-				return;
-			}
-		}
-
 		this.watcherRef.clear();
 		this.dialogRef.value = new DisposableStore();
 
@@ -439,58 +417,11 @@ class SessionsSetUpWidget extends Disposable {
 		welcomeVisibleKey.set(true);
 		this.dialogRef.value.add(toDisposable(() => welcomeVisibleKey.reset()));
 
-		if (isFirstLaunch) {
-			const overlay = this._showLoadingOverlay();
-			this.dialogRef.value.add(overlay);
-
-			const account = await this.defaultAccountService.getDefaultAccount();
-			if (this._store.isDisposed) {
-				return;
-			}
-			overlay.element.classList.add('sessions-loading-dismissed');
-			this.dialogRef.value.add(disposableTimeout(() => overlay.element.remove(), 200));
-
-			if (account) {
-				const setupDone = await this.serviceWhenSetupDone();
-				if (this._store.isDisposed) {
-					return;
-				}
-
-				if (setupDone) {
-					this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
-					this.dialogRef.clear();
-					this._watchSignInState();
-					return;
-				}
-
-				await this._showWelcomeDialog();
-			} else {
-				const allowContinueWithoutSignIn = this._allowSignedOutWhenUsable.get();
-				const continueWithoutSignIn = await this._showSignInDialog(allowContinueWithoutSignIn);
-				if (continueWithoutSignIn) {
-					this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
-					this.serviceMarkDone();
-					this.dialogRef.clear();
-					await this._proceedWithoutGitHub();
-					return;
-				}
-			}
-		} else {
-			await this._showSignInDialog();
-		}
+		await this._showSignInDialog(false);
 
 		this.dialogRef.clear();
 		await this._ensureAIFeaturesEnabled();
 		this._watchSignInState();
-	}
-
-	private _showLoadingOverlay(): { element: HTMLElement } & IDisposable {
-		const overlay = append(this.layoutService.mainContainer, $('div.sessions-loading-overlay'));
-		overlay.setAttribute('role', 'status');
-		overlay.setAttribute('aria-busy', 'true');
-		overlay.setAttribute('aria-label', localize('loading', "Loading"));
-		append(overlay, $('div.sessions-loading-icon.codicon.codicon-agent'));
-		return { element: overlay, dispose: () => overlay.remove() };
 	}
 
 	private async _showSignInDialog(allowContinueWithoutSignIn = false): Promise<boolean> {
@@ -556,54 +487,6 @@ class SessionsSetUpWidget extends Disposable {
 			this.signInSetupCancellation.clear();
 			return false;
 		}
-	}
-
-	private async _showWelcomeDialog(): Promise<void> {
-		this.logService.info('[sessions welcome] Showing welcome dialog');
-
-		const disposables = new DisposableStore();
-		const productName = localize('walkthrough.productName', "{0} - Agents", this.productService.nameLong);
-
-		const dialog = disposables.add(new Dialog(
-			this.layoutService.activeContainer,
-			localize('sessions.welcome.title', "Welcome to {0}", productName),
-			[localize('sessions.welcome.getStarted', "Get Started")],
-			createWorkbenchDialogOptions({
-				type: 'none',
-				extraClasses: ['chat-setup-dialog', 'sessions-welcome-dialog', 'sessions-main-welcome-dialog'],
-				detail: localize('sessions.welcome.detail', "Your AI-powered coding experience where agents explore, build, and iterate with you."),
-				icon: Codicon.agent,
-				alignment: DialogContentsAlignment.Vertical,
-				cancelId: 1,
-				disableCloseButton: true,
-				renderFooter: footer => footer.appendChild(this._createWelcomeFooter(disposables)),
-			}, this.keybindingService, this.layoutService, this.hostService)
-		));
-
-		await dialog.show();
-		disposables.dispose();
-
-		this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
-		this.serviceMarkDone();
-	}
-
-	private _createWelcomeFooter(disposables: DisposableStore): HTMLElement {
-		const element = $('.chat-setup-dialog-footer');
-		const defaultChatAgent = this.productService.defaultChatAgent;
-		const providerName = defaultChatAgent?.provider?.default?.name ?? 'GitHub';
-		const termsUrl = defaultChatAgent?.termsStatementUrl ?? '';
-		const privacyUrl = defaultChatAgent?.privacyStatementUrl ?? '';
-		const publicCodeUrl = defaultChatAgent?.publicCodeMatchesUrl ?? '';
-		const settingsUrl = this.defaultAccountService.resolveGitHubUrl(GitHubPaths.copilotSettings);
-
-		const footer = localize(
-			{ key: 'welcomeFooter', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}', '{Locked="]({5})"}'] },
-			"By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} Copilot may show [public code]({4}) suggestions and use your data to improve the product. You can change these [settings]({5}) anytime.",
-			providerName, termsUrl, privacyUrl, providerName, publicCodeUrl, settingsUrl
-		);
-		element.appendChild($('p', undefined, disposables.add(this.markdownRendererService.render(new MarkdownString(footer, { isTrusted: true }))).element));
-
-		return element;
 	}
 }
 

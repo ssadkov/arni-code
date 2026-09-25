@@ -58,7 +58,7 @@ export class NewFileTabAction extends Action2 {
 	constructor() {
 		super({
 			id: NEW_FILE_TAB_COMMAND_ID,
-			title: localize2('newFileTab', "Files"),
+			title: localize2('newFileTab', "Файлы"),
 			category: SessionsCategories.Sessions,
 			icon: Codicon.newFile,
 			f1: true,
@@ -161,7 +161,7 @@ export class NewChangesTabAction extends Action2 {
 	constructor() {
 		super({
 			id: NEW_CHANGES_TAB_COMMAND_ID,
-			title: localize2('newChangesTab', "Changes"),
+			title: localize2('newChangesTab', "Изменения"),
 			category: SessionsCategories.Sessions,
 			icon: Codicon.gitCompare,
 			f1: false,

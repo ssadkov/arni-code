@@ -2402,7 +2402,7 @@ export function toolCallStateToInvocation(tc: ToolCallState, subAgentInvocationI
 	const invocation = new ChatToolInvocation(undefined, toolData, tc.toolCallId, subAgentInvocationId, undefined);
 	invocation.invocationMessage = stringOrMarkdownToString(tc.invocationMessage, connectionAuthority) ?? tc.displayName;
 	if (isAgentHostAskUserTool(tc.toolName)) {
-		invocation.invocationMessage = localize('agentHost.askUser.waiting', "Waiting for answer...");
+		invocation.invocationMessage = localize('agentHost.askUser.waiting', "Ждём вашего ответа…");
 		invocation.presentation = ToolInvocationPresentation.HiddenAfterComplete;
 	} else if (shouldHideAutomaticTitleRename(tc)) {
 		invocation.presentation = ToolInvocationPresentation.Hidden;
@@ -2585,7 +2585,7 @@ export function updateRunningToolSpecificData(existing: ChatToolInvocation, tc: 
 	}
 	existing.invocationMessage = stringOrMarkdownToString(tc.invocationMessage, connectionAuthority) ?? existing.invocationMessage;
 	if (isAgentHostAskUserTool(tc.toolName)) {
-		existing.invocationMessage = localize('agentHost.askUser.waiting', "Waiting for answer...");
+		existing.invocationMessage = localize('agentHost.askUser.waiting', "Ждём вашего ответа…");
 		existing.presentation = ToolInvocationPresentation.HiddenAfterComplete;
 	}
 	if (isAddCommentTool(tc.toolName)) {

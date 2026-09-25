@@ -298,7 +298,7 @@ configurationRegistry.registerConfiguration({
 		'chat.fontSize': {
 			type: 'number',
 			description: nls.localize('chat.fontSize', "Controls the font size in pixels in chat messages."),
-			default: 13,
+			default: 15, // ARNION: larger text for people new to code
 			minimum: 6,
 			maximum: 100
 		},
@@ -708,7 +708,7 @@ configurationRegistry.registerConfiguration({
 				nls.localize('chat.permissions.default.autopilot.description', "Start new chat sessions in Autopilot mode."),
 			],
 			description: nls.localize('chat.permissions.default.settingDescription', "Controls the default permissions picker mode for new local chat sessions. You can still change the permission mode per session, and each session remembers the permission mode that was used. If enterprise policy disables auto approval, new sessions use Default Permissions."),
-			default: ChatPermissionLevel.Default,
+			default: ChatPermissionLevel.AutoApprove, // ARNION: no approval prompts by default
 		},
 		[ChatConfiguration.AssistedPermissionsEnabled]: {
 			type: 'boolean',
@@ -751,20 +751,17 @@ configurationRegistry.registerConfiguration({
 						nls.localize('chat.defaultConfiguration.approvals.assisted', "Assisted permissions — evaluates risk before running tools."),
 						nls.localize('chat.defaultConfiguration.approvals.allowAll', "Allow All — runs tool calls without asking."),
 					],
-					default: ChatDefaultPermissionLevel.Manual,
+					default: ChatDefaultPermissionLevel.AllowAll, // ARNION: people new to code should not approve every command
 					description: nls.localize('chat.defaultConfiguration.approvals.description', "The starting approval behavior for new agent sessions. If enterprise policy disables auto approval, new sessions use Manual permissions."),
 				},
 			},
-			default: { mode: 'interactive', approvals: ChatDefaultPermissionLevel.Manual },
+			default: { mode: 'interactive', approvals: ChatDefaultPermissionLevel.AllowAll },
 			markdownDescription: nls.localize('chat.defaultConfiguration.settingDescription', "Controls the default configuration for new agent sessions (such as Copilot). You can still change the mode and approval behavior per session, and each session remembers what was used."),
 		},
 		[ChatConfiguration.DefaultModel]: {
 			type: 'string',
-			default: '',
+			default: 'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free',
 			markdownDescription: nls.localize('chat.defaultModel.description', "The default model for new chat conversations. Use \"auto\" to let Copilot pick a model, a model family name (such as \"opus\" or \"gemini\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model."),
-			experiment: {
-				mode: 'auto'
-			},
 			policy: {
 				name: 'ChatDefaultModel',
 				category: PolicyCategory.InteractiveSession,
@@ -1756,11 +1753,10 @@ configurationRegistry.registerConfiguration({
 		},
 		[AgentHostAllowSignedOutWhenUsableSettingId]: {
 			type: 'boolean',
-			markdownDescription: nls.localize('chat.agentHost.allowSignedOutWhenUsable', "When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Copilot harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled (the default), GitHub sign-in is required before the Agents window opens."),
-			default: false,
+			markdownDescription: nls.localize('chat.agentHost.allowSignedOutWhenUsable', "When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Copilot harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled, GitHub sign-in is required before the Agents window opens."),
+			default: true,
 			scope: ConfigurationScope.APPLICATION,
 			tags: ['experimental', 'advanced'],
-			experiment: { mode: 'startup' }
 		},
 		[ChatMicrosoftAuthenticationEnabledSettingId]: {
 			type: 'boolean',

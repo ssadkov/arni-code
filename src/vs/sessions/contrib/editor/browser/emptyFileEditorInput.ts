@@ -65,7 +65,7 @@ export class EmptyFileEditorInput extends DockedEditorInput {
 	}
 
 	override getName(): string {
-		return localize('emptyFileEditor.name', "Files");
+		return localize('emptyFileEditor.name', "Файлы");
 	}
 
 	override getIcon(): ThemeIcon {

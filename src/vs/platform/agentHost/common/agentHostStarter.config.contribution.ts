@@ -253,7 +253,7 @@ configurationRegistry.registerConfiguration({
 		[AgentHostClaudeAgentEnabledSettingId]: {
 			type: 'boolean',
 			description: nls.localize('chat.agentHost.claudeAgent.enabled', "When enabled, the agent host registers the Claude provider, subject to the Claude SDK being reachable. The agent host process must be restarted for changes to take effect."),
-			default: true,
+			default: false, // ARNION: Arni is the only agent; Claude would also list the user's ~/.claude sessions
 			tags: ['experimental', 'advanced'],
 			// Owns the policy so the account-side preview-features flag can disable Claude across all surfaces.
 			policy: {
@@ -272,9 +272,8 @@ configurationRegistry.registerConfiguration({
 		[AgentHostByokModelsEnabledSettingId]: {
 			type: 'boolean',
 			description: nls.localize('chat.agentHost.byokModels.enabled', "When enabled, extension-provided BYOK ('bring your own key') models can run in agent-host sessions. Changes are synchronized to the running agent host and do not require a restart."),
-			default: false,
+			default: true,
 			tags: ['experimental', 'advanced'],
-			experiment: { mode: 'startup' },
 			agentHost: { key: AgentHostByokModelsEnabledConfigKey, scope: AgentHostConfigurationSyncScope.Local },
 		},
 		[AgentHostCodexAgentEnabledSettingId]: {

@@ -306,7 +306,7 @@ class CustomizationsToolbarActionViewItem extends ActionViewItem {
 	protected override updateLabel(): void {
 		if (this.label) {
 			const text = $('span.sessions-customize-toolbar-label');
-			text.textContent = localize('customizeActionLabel', "Customize");
+			text.textContent = localize('customizeActionLabel', "Настроить");
 			reset(this.label, text);
 		}
 	}

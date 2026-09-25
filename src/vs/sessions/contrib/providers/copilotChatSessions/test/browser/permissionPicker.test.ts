@@ -209,18 +209,18 @@ suite('Copilot PermissionPicker', () => {
 		})), [
 			{
 				level: ChatPermissionLevel.Default,
-				label: 'Default permissions',
-				detail: 'Asks when approval settings don\'t apply',
+				label: 'Подтверждать вручную',
+				detail: 'Спрашивает, если нет подходящего правила',
 			},
 			{
 				level: ChatPermissionLevel.AutoApprove,
-				label: 'Allow all',
-				detail: 'Runs tool calls without asking',
+				label: 'Разрешить всё',
+				detail: 'Запускает инструменты без вопросов',
 			},
 			{
 				level: ChatPermissionLevel.Autopilot,
-				label: 'Autopilot (Preview)',
-				detail: 'Works autonomously within permissions',
+				label: 'Автопилот (предварительная версия)',
+				detail: 'Работает сам в пределах разрешений',
 			},
 		]);
 	});

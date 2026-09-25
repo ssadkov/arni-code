@@ -266,7 +266,7 @@ suite('Sessions - SessionsList', () => {
 				recycledShortcutClass: template.container.classList.contains('session-section-shortcut'),
 			}, {
 				automationSnapshot: {
-					text: 'New',
+					text: 'Новое',
 					display: 'inline-flex',
 					ariaHidden: 'true',
 				},
@@ -304,8 +304,8 @@ suite('Sessions - SessionsList', () => {
 				before,
 				after: row?.getAttribute('aria-label'),
 			}, {
-				before: 'Automations, new feature',
-				after: 'Automations',
+				before: 'Автоматизации, new feature',
+				after: 'Автоматизации',
 			});
 		});
 
@@ -2573,7 +2573,7 @@ suite('Sessions - SessionsList', () => {
 					isShorterThanStandardRow: false,
 					hasCompactClass: false,
 					hasChatIcon: true,
-					badge: 'No workspace',
+					badge: 'Без папки',
 					time: 'now',
 					hasDiff: false,
 					ariaLabel: 'Investigate failure, chat, updated now',

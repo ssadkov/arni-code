@@ -1108,7 +1108,7 @@ suite('modelRequiresAgentAuthentication', () => {
 			optionalResourceByok: false,
 			optionalResourceCopilot: true,
 			optionalResourceUnknown: true,
-			optionalResourceSignedOutDisabled: false,
+			optionalResourceSignedOutDisabled: true,
 			optionalResourceWithoutByok: false,
 			noProtectedResource: false,
 		});

@@ -43,7 +43,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.agentHost.agentPicker',
-			title: nls.localize2('agentHostAgentPicker', "Agent"),
+			title: nls.localize2('agentHostAgentPicker', "Агент"),
 			f1: false,
 			menu: [{
 				id: Menus.NewSessionConfig,

@@ -26,7 +26,7 @@ import './sessionDetailsAction.js';
 import { SessionsWindowNotifier } from './sessionsWindowNotifier.js';
 
 const agentSessionsViewIcon = registerIcon('chat-sessions-icon', Codicon.commentDiscussionSparkle, localize('agentSessionsViewIcon', 'Icon for Agent Sessions View'));
-const AGENT_SESSIONS_VIEW_TITLE = localize2('agentSessions.view.label', "Sessions");
+const AGENT_SESSIONS_VIEW_TITLE = localize2('agentSessions.view.label', "Сеансы");
 const SessionsContainerId = 'agentic.workbench.view.sessionsContainer';
 
 const agentSessionsViewContainer: ViewContainer = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({

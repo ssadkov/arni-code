@@ -23,6 +23,7 @@ import { IActionViewItemService } from '../../../../platform/actions/browser/act
 import { fillInActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { $, addDisposableListener, append, clearNode, disposableWindowInterval, EventType, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { ActionBar, ActionsOrientation } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Action, IAction, Separator } from '../../../../base/common/actions.js';
@@ -34,6 +35,7 @@ import { ChatEntitlement, ChatEntitlementService, getChatPlanName, getQuotaReset
 import { ChatStatusDashboard, IChatStatusDashboardOptions } from '../../../../workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
+import { ARNI_PRODUCT_AUTH_PROVIDERS, ArniAccountSignedInContext, hasArniProductSignIn } from '../../../../workbench/services/authentication/common/arniProductAuth.js';
 import { getAccountProfileImageUrl, getAccountTitleBarBadgeKey, getAccountTitleBarState, IAccountTitleBarState, resolveAccountInfo } from '../../../browser/accountTitleBarState.js';
 import { observeAllowSignedOutWhenUsable } from '../../../browser/sessionsAuthGate.js';
 import { IsPhoneLayoutContext, SessionsWelcomeVisibleContext } from '../../../common/contextkeys.js';
@@ -54,13 +56,12 @@ import { fromNow, safeIntl } from '../../../../base/common/date.js';
 import { language } from '../../../../base/common/platform.js';
 import { AgentHostCodexAgentEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
-import { CHAT_SETUP_ACTION_ID } from '../../../../workbench/contrib/chat/browser/actions/chatActions.js';
-import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { SessionsChatPetAchievementBadges } from './chatPetAchievementBadges.js';
 import { CHAT_PET_OPEN_ACHIEVEMENTS_COMMAND_ID } from '../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
 
 // --- Account Menu Items --- //
 const AccountMenu = Menus.AccountMenu;
+const signedOutAccountMenuWhen = ArniAccountSignedInContext.negate();
 const SessionsTitleBarAccountWidgetAction = 'sessions.action.titleBarAccountWidget';
 const SESSIONS_ACCOUNT_TITLEBAR_PANEL_WIDTH = 400;
 
@@ -85,26 +86,7 @@ registerUpdateTitleBarMenuPlacement(Menus.TitleBarLeftLayout, {
 	),
 });
 
-// Sign In (shown when signed out)
-registerAction2(class extends Action2 {
-	constructor() {
-		super({
-			id: AGENTIC_SIGN_IN_COMMAND_ID,
-			title: localize2('signIn', "Sign in to use GitHub Copilot"),
-			icon: Codicon.signIn,
-			menu: {
-				id: AccountMenu,
-				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
-				group: '1_account',
-				order: 1,
-			}
-		});
-	}
-	async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand(CHAT_SETUP_ACTION_ID);
-	}
-});
-
+// Sign In — Yandex / VK only
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
@@ -112,9 +94,9 @@ registerAction2(class extends Action2 {
 			title: localize2('signInYandex', "Войти через Яндекс"),
 			menu: {
 				id: AccountMenu,
-				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
+				when: signedOutAccountMenuWhen,
 				group: '1_account',
-				order: 2,
+				order: 1,
 			}
 		});
 	}
@@ -130,9 +112,9 @@ registerAction2(class extends Action2 {
 			title: localize2('signInVk', "Войти через VK"),
 			menu: {
 				id: AccountMenu,
-				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
+				when: signedOutAccountMenuWhen,
 				group: '1_account',
-				order: 3,
+				order: 2,
 			}
 		});
 	}
@@ -150,7 +132,7 @@ registerAction2(class extends Action2 {
 			icon: Codicon.signOut,
 			menu: {
 				id: AccountMenu,
-				when: ContextKeyExpr.equals('defaultAccountStatus', 'available'),
+				when: ArniAccountSignedInContext,
 				group: '1_account',
 				order: 1,
 			}
@@ -162,13 +144,25 @@ registerAction2(class extends Action2 {
 		const authenticationService = accessor.get(IAuthenticationService);
 		const authenticationUsageService = accessor.get(IAuthenticationUsageService);
 		const authenticationAccessService = accessor.get(IAuthenticationAccessService);
+		const productSessions: { providerId: string; sessionId: string; label: string }[] = [];
+		for (const provider of ARNI_PRODUCT_AUTH_PROVIDERS) {
+			try {
+				const sessions = await authenticationService.getSessions(provider.id);
+				for (const session of sessions) {
+					productSessions.push({ providerId: provider.id, sessionId: session.id, label: session.account.label });
+				}
+			} catch {
+				// Provider is not registered.
+			}
+		}
+
 		const defaultAccount = await defaultAccountService.getDefaultAccount();
-		if (!defaultAccount) {
+		if (!defaultAccount && productSessions.length === 0) {
 			return;
 		}
 
-		const providerId = defaultAccount.authenticationProvider.id;
-		const accountLabel = defaultAccount.accountName;
+		const providerId = defaultAccount?.authenticationProvider.id;
+		const accountLabel = defaultAccount?.accountName ?? productSessions[0].label;
 		const { confirmed } = await dialogService.confirm({
 			type: Severity.Info,
 			message: localize('agenticSignOutMessage', "Sign out of the Agents window?"),
@@ -180,11 +174,14 @@ registerAction2(class extends Action2 {
 			return;
 		}
 
-		const allSessions = await authenticationService.getSessions(providerId);
-		const sessions = allSessions.filter(session => session.account.label === accountLabel);
-		await Promise.all(sessions.map(session => authenticationService.removeSession(providerId, session.id)));
-		authenticationUsageService.removeAccountUsage(providerId, accountLabel);
-		authenticationAccessService.removeAllowedExtensions(providerId, accountLabel);
+		await Promise.all(productSessions.map(session => authenticationService.removeSession(session.providerId, session.sessionId)));
+		if (providerId && defaultAccount) {
+			const allSessions = await authenticationService.getSessions(providerId);
+			const sessions = allSessions.filter(session => session.account.label === accountLabel);
+			await Promise.all(sessions.map(session => authenticationService.removeSession(providerId, session.id)));
+			authenticationUsageService.removeAccountUsage(providerId, accountLabel);
+			authenticationAccessService.removeAllowedExtensions(providerId, accountLabel);
+		}
 	}
 });
 
@@ -1070,9 +1067,22 @@ class AccountWidgetContribution extends Disposable implements IWorkbenchContribu
 
 	constructor(
 		@IActionViewItemService actionViewItemService: IActionViewItemService,
+		@IAuthenticationService authenticationService: IAuthenticationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
+
+		const signedIn = ArniAccountSignedInContext.bindTo(contextKeyService);
+		const refreshSignedIn = async () => {
+			signedIn.set(await hasArniProductSignIn(authenticationService));
+		};
+		this._register(authenticationService.onDidChangeSessions(event => {
+			if (ARNI_PRODUCT_AUTH_PROVIDERS.some(provider => provider.id === event.providerId)) {
+				void refreshSignedIn();
+			}
+		}));
+		void refreshSignedIn();
 
 		this._register(actionViewItemService.register(Menus.TitleBarRightLayout, SessionsTitleBarAccountWidgetAction, (action, options) => {
 			return instantiationService.createInstance(TitleBarAccountWidget, action, options);

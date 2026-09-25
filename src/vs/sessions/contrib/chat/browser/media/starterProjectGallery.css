@@ -1,0 +1,207 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* The first-run home is read by people new to code, so it sits a step above
+ * the workbench's dense 13px body size. */
+.starter-project-gallery {
+	margin: 0 0 20px;
+	font-size: 15px;
+	line-height: 1.45;
+}
+
+.starter-project-gallery[hidden],
+.starter-project-card[hidden],
+.starter-project-more[hidden] {
+	display: none;
+}
+
+.starter-project-gallery.busy .starter-project-card,
+.starter-project-gallery.busy .starter-project-link {
+	pointer-events: none;
+	opacity: 0.6;
+}
+
+.starter-project-gallery-title {
+	font-size: 26px;
+	font-weight: 600;
+	line-height: 1.25;
+	margin: 0 0 6px;
+}
+
+.starter-project-gallery-description {
+	color: var(--vscode-descriptionForeground);
+	margin: 0 0 14px;
+}
+
+.starter-project-idea {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid var(--vscode-input-border, var(--vscode-widget-border));
+	border-radius: 8px;
+	background: var(--vscode-input-background);
+}
+
+.starter-project-idea:focus-within {
+	border-color: var(--vscode-focusBorder);
+}
+
+.starter-project-idea-input {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 64px;
+	padding: 0;
+	border: 0;
+	outline: none;
+	resize: vertical;
+	background: transparent;
+	color: var(--vscode-input-foreground);
+	font: inherit;
+}
+
+/* The frame is drawn by .starter-project-idea; the workbench's own textarea
+ * border and focus outline would draw a second one inside it. */
+.monaco-workbench .starter-project-idea .starter-project-idea-input,
+.monaco-workbench .starter-project-idea .starter-project-idea-input:focus {
+	border: 0;
+	outline: none;
+	box-shadow: none;
+}
+
+.starter-project-idea-input::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.starter-project-create {
+	align-self: flex-end;
+	padding: 7px 16px;
+	border: 0;
+	border-radius: 4px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.starter-project-create:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.starter-project-create:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.starter-project-cards-heading {
+	margin: 20px 0 10px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.starter-project-cards {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.starter-project-card {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	min-height: 96px;
+	padding: 14px;
+	border: 1px solid var(--vscode-widget-border);
+	border-radius: 8px;
+	background: var(--vscode-editorWidget-background);
+	color: var(--vscode-foreground);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.starter-project-card:hover {
+	background: var(--vscode-list-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+.starter-project-card:focus-visible,
+.starter-project-link:focus-visible,
+.starter-project-create:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.starter-project-card > .codicon {
+	font-size: 20px;
+	color: var(--vscode-textLink-foreground);
+}
+
+.starter-project-card-title {
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.starter-project-card-description,
+.starter-project-location-label {
+	color: var(--vscode-descriptionForeground);
+}
+
+.starter-project-link {
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: var(--vscode-textLink-foreground);
+	font: inherit;
+	cursor: pointer;
+}
+
+.starter-project-link:hover {
+	text-decoration: underline;
+}
+
+.starter-project-more {
+	margin: 8px 0 0;
+}
+
+.starter-project-status {
+	min-height: 1em;
+	margin: 10px 0 0;
+	color: var(--vscode-descriptionForeground);
+}
+
+.starter-project-footer {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid var(--vscode-widget-border);
+	font-size: 13px;
+}
+
+.starter-project-location {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.starter-project-path {
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+	.starter-project-cards {
+		grid-template-columns: 1fr;
+	}
+
+	.starter-project-card {
+		min-height: auto;
+	}
+}

@@ -583,13 +583,13 @@ export function getToolDisplayName(toolName: string): string {
 		case CopilotToolName.StrReplaceEditor:
 		case CopilotToolName.Edit:
 		case CopilotToolName.StrReplace:
-		case CopilotToolName.Insert: return localize('toolName.edit', "Edit File");
-		case CopilotToolName.Create: return localize('toolName.create', "Create File");
-		case CopilotToolName.View: return localize('toolName.read', "Read");
+		case CopilotToolName.Insert: return localize('toolName.edit', "Правка файла");
+		case CopilotToolName.Create: return localize('toolName.create', "Создание файла");
+		case CopilotToolName.View: return localize('toolName.read', "Чтение");
 		case CopilotToolName.Bash:
-		case CopilotToolName.PowerShell: return localize('toolName.shell', "Run Shell Command");
+		case CopilotToolName.PowerShell: return localize('toolName.shell', "Команда в терминале");
 		case CopilotToolName.ReadBash:
-		case CopilotToolName.ReadPowerShell: return localize('toolName.readTerminal', "Read Terminal");
+		case CopilotToolName.ReadPowerShell: return localize('toolName.readTerminal', "Чтение терминала");
 		case CopilotToolName.WriteBash: return localize('toolName.writeBash', "Write to Bash");
 		case CopilotToolName.WritePowerShell: return localize('toolName.writePowerShell', "Write to PowerShell");
 		case CopilotToolName.StopBash:
@@ -600,14 +600,14 @@ export function getToolDisplayName(toolName: string): string {
 		case CopilotToolName.ListPowerShell: return localize('toolName.listShellSessions', "List Shell Sessions");
 		case CopilotToolName.Grep:
 		case CopilotToolName.Rg:
-		case CopilotToolName.Glob: return localize('toolName.search', "Search");
+		case CopilotToolName.Glob: return localize('toolName.search', "Поиск");
 		case CopilotToolName.SearchCodeSubagent: return localize('toolName.searchCode', "Search Code");
 		case CopilotToolName.ApplyPatch: return localize('toolName.applyPatch', "Apply Patch");
 		case CopilotToolName.GitApplyPatch: return localize('toolName.patch', "Patch");
 		case CopilotToolName.CodeqlChecker: return localize('toolName.codeqlChecker', "CodeQL Security Scan");
 		case CopilotToolName.CodeReview: return localize('toolName.codeReview', "Code Review");
 		case CopilotToolName.ReplyToComment: return localize('toolName.replyToComment', "Reply to Comment");
-		case CopilotToolName.Think: return localize('toolName.think', "Thinking");
+		case CopilotToolName.Think: return localize('toolName.think', "Размышление");
 		case CopilotToolName.ReportIntent: return localize('toolName.reportIntent', "Report Intent");
 		case CopilotToolName.ReportProgress: return localize('toolName.reportProgress', "Progress update");
 		case CopilotToolName.WebSearch: return localize('toolName.webSearch', "Web Search");

@@ -33,7 +33,7 @@ function Exit-Usage([string]$message) {
 }
 
 function Get-UsableNode([string]$repoPath) {
-	$command = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
+	$command = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 	$nvmrcPath = Join-Path $repoPath '.nvmrc'
 	$requiredVersion = if (Test-Path -LiteralPath $nvmrcPath -PathType Leaf) {
 		(Get-Content -LiteralPath $nvmrcPath -Raw).Trim().TrimStart('v')
@@ -142,6 +142,7 @@ function Test-ExcludedPath([string]$relativePath) {
 		'Partitions/vscode-browser/GPUCache', 'Partitions/vscode-browser/Dawn*Cache',
 		'/Backups', '/blob_storage', '/BrowserMetrics', '/Crashpad',
 		'/Session Storage',
+		'agent-host/local-endpoint',
 		'/Singleton*',
 		'*.lock', '*.sock'
 	)
@@ -532,7 +533,7 @@ try {
 		Write-LaunchError '[launch.ps1] running pre-launch (ensures electron + compiled output + built-ins)...'
 		Push-Location -LiteralPath $repo
 		try {
-			& $node 'build/lib/preLaunch.ts' *>> $logFile
+			& $node --no-deprecation --experimental-strip-types 'build/lib/preLaunch.ts' *>> $logFile
 			$preLaunchExitCode = $LASTEXITCODE
 		} finally {
 			Pop-Location

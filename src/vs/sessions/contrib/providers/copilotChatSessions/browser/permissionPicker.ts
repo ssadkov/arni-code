@@ -109,29 +109,29 @@ export function getPermissionLevelMeta(level: ChatPermissionLevel): IPermissionL
 	switch (level) {
 		case ChatPermissionLevel.Assisted:
 			return {
-				label: localize('permissions.assisted', "Assisted permissions"),
-				detail: localize('permissions.assisted.subtext', "Evaluates risk before running tools"),
+				label: localize('permissions.assisted', "С оценкой риска"),
+				detail: localize('permissions.assisted.subtext', "Оценивает риск перед запуском инструментов"),
 				icon: Codicon.sparkle,
 				hover: localize('permissions.assisted.description', "An LLM judge evaluates each tool call. Tools it doesn't approve require your approval."),
 			};
 		case ChatPermissionLevel.AutoApprove:
 			return {
-				label: localize('permissions.autoApprove', "Allow all"),
-				detail: localize('permissions.autoApprove.subtext', "Runs tool calls without asking"),
+				label: localize('permissions.autoApprove', "Разрешить всё"),
+				detail: localize('permissions.autoApprove.subtext', "Запускает инструменты без вопросов"),
 				icon: Codicon.warning,
 			};
 		case ChatPermissionLevel.Autopilot:
 			return {
-				label: localize('permissions.autopilot', "Autopilot (Preview)"),
-				detail: localize('permissions.autopilot.subtext', "Works autonomously within permissions"),
+				label: localize('permissions.autopilot', "Автопилот (предварительная версия)"),
+				detail: localize('permissions.autopilot.subtext', "Работает сам в пределах разрешений"),
 				icon: Codicon.rocket,
 				hover: localize('permissions.autopilot.description', "Auto-approve all tool calls and continue until the task is done. Autopilot may increase costs."),
 			};
 		case ChatPermissionLevel.Default:
 		default:
 			return {
-				label: localize('permissions.default', "Default permissions"),
-				detail: localize('permissions.default.subtext', "Asks when approval settings don't apply"),
+				label: localize('permissions.default', "Подтверждать вручную"),
+				detail: localize('permissions.default.subtext', "Спрашивает, если нет подходящего правила"),
 				icon: Codicon.shield,
 			};
 	}

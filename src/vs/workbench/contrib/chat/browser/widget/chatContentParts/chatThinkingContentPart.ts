@@ -1885,8 +1885,8 @@ ${this.hookCount > 0 ? `EXAMPLES WITH BLOCKED CONTENT (from hooks):
 	private setFallbackTitle(): void {
 		const finalLabel = this.appendedItemCount > 0
 			? this.appendedItemCount === 1
-				? localize('chat.thinking.finished.withStepsSingular', 'Finished with 1 step')
-				: localize('chat.thinking.finished.withStepsPlural', 'Finished with {0} steps', this.appendedItemCount)
+				? localize('chat.thinking.finished.withStepsSingular', "Готово: 1 шаг")
+				: localize('chat.thinking.finished.withStepsPlural', "Готово, шагов: {0}", this.appendedItemCount)
 			: localize('chat.thinking.finished', 'Finished Working');
 
 		this.currentTitle = finalLabel;

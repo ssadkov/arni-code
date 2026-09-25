@@ -38,7 +38,7 @@ import { SessionChangesEditor } from './sessionChangesEditor.js';
 
 const openChangesViewActionOptions: IAction2Options = {
 	id: 'workbench.action.agentSessions.openChangesView',
-	title: localize2('openChangesView', "Changes"),
+	title: localize2('openChangesView', "Изменения"),
 	icon: Codicon.diffMultiple,
 	f1: false,
 };

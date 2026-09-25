@@ -543,13 +543,23 @@
 .agent-first-hint {
 	margin: 0;
 	color: var(--vscode-descriptionForeground);
+	font-size: 14px;
 }
 
+/* A note about the model, not a control: quiet text, so it does not outrank
+ * the composer. */
 .agent-first-model-chip {
-	align-self: flex-start;
-	padding: 2px 8px;
-	border-radius: 999px;
-	background: var(--vscode-badge-background);
-	color: var(--vscode-badge-foreground);
+	color: var(--vscode-descriptionForeground);
 	font-size: 12px;
+}
+
+/* First run: the starter gallery is the only way in. The folder picker and
+ * composer come back once the user starts a project or opts to use an
+ * existing folder. */
+.new-chat-widget-content.starter-first-run > .new-session-workspace-picker-container,
+.new-chat-widget-content.starter-first-run > .new-session-quick-chat-header,
+.new-chat-widget-content.starter-first-run > .agent-first-copy,
+.new-chat-widget-content.starter-first-run > .new-chat-input-container,
+.new-chat-widget-content.starter-first-run > .new-chat-bottom-container {
+	display: none;
 }

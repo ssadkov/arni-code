@@ -1636,7 +1636,7 @@ export class WorkspacePicker extends Disposable {
 	private _getNoWorkspaceLabel(): string {
 		return this._useConsolidatedRemoteWorkspaces()
 			? localize('workspacePicker.startFromScratch', "Start from Scratch")
-			: localize('workspacePicker.noWorkspace', "No workspace");
+			: localize('workspacePicker.noWorkspace', "Без папки");
 	}
 
 	private _showRemoteHostOptionsDelayed(provider: IAgentHostSessionsProvider): void {
@@ -1741,7 +1741,7 @@ export class WorkspacePicker extends Disposable {
 		const noWorkspaceSelected = this._getNoWorkspaceOption()?.isSelected === true;
 		const workspace = noWorkspaceSelected ? undefined : this._selectedResolved?.workspace;
 		const label = noWorkspaceSelected
-			? localize('workspacePicker.noWorkspace', "No workspace")
+			? localize('workspacePicker.noWorkspace', "Без папки")
 			: workspace?.label ?? localize('pickWorkspace', "Откройте папку, куда сохранять файлы");
 		const icon = noWorkspaceSelected ? Codicon.commentDiscussion : workspace?.icon ?? Codicon.project;
 

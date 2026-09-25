@@ -61,7 +61,7 @@ import { IAgentHostOTelService } from '../../common/otel/agentHostOTelService.js
 import { AgentHostCompletions, IAgentHostCompletions } from '../../node/agentHostCompletions.js';
 import { COPILOT_AGENT_HOST_SYSTEM_MESSAGE, CopilotAgent, getCopilotManagedSettingsDiagnostics, rebaseUnder, REFRESH_DEBOUNCE_MS, resolveCopilotOtlpMetricsEndpoint } from '../../node/copilot/copilotAgent.js';
 import { GITHUB_MCP_SERVER_NAME } from '../../node/shared/githubMcpServer.js';
-import { COPILOT_AGENT_HOST_FILE_LINK_INSTRUCTIONS } from '../../node/copilot/prompts/systemMessage.js';
+import { COPILOT_AGENT_HOST_FILE_LINK_INSTRUCTIONS, COPILOT_AGENT_HOST_IDENTITY } from '../../node/copilot/prompts/systemMessage.js';
 import { COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION } from '../../node/copilot/prompts/toolInstructions.js';
 import { NULL_CHECKPOINT_SERVICE } from '../../common/agentHostCheckpointService.js';
 import { IAgentHostReviewService, NULL_REVIEW_SERVICE } from '../../common/agentHostReviewService.js';
@@ -1559,7 +1559,7 @@ suite('CopilotAgent', () => {
 		}
 	});
 
-	test('advertises Copilot as its display name', async () => {
+	test('advertises Arni as its display name', async () => {
 		const agent = createTestAgent(disposables);
 		try {
 			assert.deepStrictEqual({
@@ -1568,7 +1568,7 @@ suite('CopilotAgent', () => {
 			}, {
 				descriptor: {
 					provider: 'copilotcli',
-					displayName: 'Copilot',
+					displayName: 'Arni',
 					description: 'Copilot SDK agent running in the local agent host process',
 					capabilities: { multipleChats: { fork: true, sideChat: true } },
 				},
@@ -9557,7 +9557,7 @@ suite('CopilotAgent', () => {
 				assert.strictEqual(systemMessage.sections?.identity?.action, 'replace');
 				assert.strictEqual(
 					systemMessage.sections?.identity?.content,
-					'You are an AI assistant using Copilot SDK in VS Code. You help users with software engineering tasks. When asked about your identity, you must state that you are an AI assistant using Copilot SDK in VS Code.'
+					COPILOT_AGENT_HOST_IDENTITY
 				);
 			} finally {
 				await disposeAgent(agent);

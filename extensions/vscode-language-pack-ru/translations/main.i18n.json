@@ -2236,25 +2236,27 @@
 			"agentHost.config.terminalAutoApproveEnabled.title": "Терминал автоматически подтверждает",
 			"agentHost.config.terminalAutoApproveRules.description": "Правила автоматического подтверждения терминала, пересылаемые подключенным клиентом для проверки разрешений оболочки агента на хосте.",
 			"agentHost.config.terminalAutoApproveRules.title": "Правила автоматического подтверждения терминала",
-			"agentHost.sessionConfig.autoApprove": "Утверждения",
-			"agentHost.sessionConfig.autoApprove.bypass": "Обход утверждений",
-			"agentHost.sessionConfig.autoApprove.bypassDescription": "Все запросы на использование инструментов утверждаются автоматически",
-			"agentHost.sessionConfig.autoApprove.default": "Утверждения по умолчанию",
-			"agentHost.sessionConfig.autoApprove.defaultDescription": "Copilot использует настроенные параметры",
+			"agentHost.sessionConfig.autoApprove": "Подтверждения",
+			"agentHost.sessionConfig.autoApprove.bypass": "Разрешить всё",
+			"agentHost.sessionConfig.autoApprove.bypassDescription": "Запускает инструменты без вопросов",
+			"agentHost.sessionConfig.autoApprove.default": "Подтверждать вручную",
+			"agentHost.sessionConfig.autoApprove.defaultDescription": "Спрашивает, если нет подходящего правила",
 			"agentHost.sessionConfig.autoApproveDescription": "Поведение при утверждении инструментов для текущего сеанса",
 			"agentHost.sessionConfig.mode": "Режим агента",
-			"agentHost.sessionConfig.mode.autopilot": "Autopilot",
-			"agentHost.sessionConfig.mode.autopilotDescription": "Автономно выполняет итерации от начала до конца",
-			"agentHost.sessionConfig.mode.interactive": "Интерактивный",
-			"agentHost.sessionConfig.mode.interactiveDescription": "Пошаговая совместная работа",
+			"agentHost.sessionConfig.mode.autopilot": "Автопилот",
+			"agentHost.sessionConfig.mode.autopilotDescription": "Работает сам в пределах разрешений",
+			"agentHost.sessionConfig.mode.interactive": "Диалог",
+			"agentHost.sessionConfig.mode.interactiveDescription": "Работаем по шагам вместе",
 			"agentHost.sessionConfig.mode.plan": "План",
-			"agentHost.sessionConfig.mode.planDescription": "Планируйте в начале — выполняйте, когда будете готовы",
-			"agentHost.sessionConfig.modeDescription": "Как агент должен выполнять этот этап",
+			"agentHost.sessionConfig.mode.planDescription": "Сначала план, потом выполнение",
+			"agentHost.sessionConfig.modeDescription": "Как агенту выполнять этот запрос",
 			"agentHost.sessionConfig.permissions": "Разрешения",
 			"agentHost.sessionConfig.permissions.allow": "Разрешенные инструменты",
 			"agentHost.sessionConfig.permissions.deny": "Отклоненные инструменты",
 			"agentHost.sessionConfig.permissions.toolName": "Имя инструмента",
-			"agentHost.sessionConfig.permissionsDescription": "Разрешения сеанса для каждого инструмента. Обновляется автоматически при утверждении инструмента \"в текущем сеансе\"."
+			"agentHost.sessionConfig.permissionsDescription": "Разрешения сеанса для каждого инструмента. Обновляется автоматически при утверждении инструмента \"в текущем сеансе\".",
+			"agentHost.sessionConfig.autoApprove.assisted": "С оценкой риска",
+			"agentHost.sessionConfig.autoApprove.assistedDescription": "Оценивает риск перед запуском инструментов"
 		},
 		"vs/platform/agentHost/common/agentHostStarter.config.contribution": {
 			"chat.agentHost.byokModels.enabled": "When enabled, the agent host wires up the BYOK ('bring your own key') language-model bridge so extension-provided BYOK models can run in agent-host sessions. Requires `#chat.agentHost.enabled#`. The agent host process must be restarted for changes to take effect.",
@@ -2721,9 +2723,9 @@
 			"toolName.askUser": "Спросить пользователя",
 			"toolName.codeReview": "Проверить код",
 			"toolName.codeqlChecker": "Проверить безопасность CodeQL",
-			"toolName.create": "Создать файл",
+			"toolName.create": "Создание файла",
 			"toolName.createPullRequest": "Создать запрос на вытягивание",
-			"toolName.edit": "Изменить файл",
+			"toolName.edit": "Правка файла",
 			"toolName.exitPlanModeFull": "Выйти из режима плана",
 			"toolName.fetchCopilotCliDocumentation": "Получить документацию",
 			"toolName.fetchWebContent": "Получить веб-контент",
@@ -2737,15 +2739,15 @@
 			"toolName.parallelValidation": "Проверить изменения",
 			"toolName.patch": "Исправление",
 			"toolName.proposeWork": "Предложить работу",
-			"toolName.read": "Читать",
+			"toolName.read": "Чтение",
 			"toolName.readAgent": "Читать агент",
-			"toolName.readTerminal": "Читать терминал",
+			"toolName.readTerminal": "Чтение терминала",
 			"toolName.replyToComment": "Ответить на комментарий",
 			"toolName.reportIntent": "Сообщить о намерении",
 			"toolName.reportProgress": "Обновить ход выполнения",
 			"toolName.search": "Поиск",
 			"toolName.searchCode": "Поиск кода",
-			"toolName.shell": "Выполнить команду оболочки",
+			"toolName.shell": "Команда в терминале",
 			"toolName.showFile": "Показать файл",
 			"toolName.skill": "Навык чтения",
 			"toolName.sql": "Выполнить SQL",
@@ -4308,7 +4310,8 @@
 		},
 		"vs/sessions/electron-browser/actions/vscodeActions": {
 			"openInVSCode": "Открыть в редакторе",
-			"openVSCodeWindow": "Открыть окно VS Code"
+			"openVSCodeWindow": "Открыть окно VS Code",
+			"returnToVSCodeEditor": "Вернуться в редактор"
 		},
 		"vs/sessions/electron-browser/parts/titlebarPart": {
 			"agentsWindowTitle": "Агенты"
@@ -4577,7 +4580,7 @@
 			"changes": "Изменения",
 			"changesViewIcon": "Значок представления изменений.",
 			"miChanges": "Измен&&ения",
-			"sessionChangesEditor.label": "Changes",
+			"sessionChangesEditor.label": "Изменения",
 			"sessions.changes.openSingleFileDiff": "Определяет, будет ли при щелчке файла в представлении \"Изменения\" открываться редактор сравнений для одного файла вместо редактора сравнений для нескольких файлов."
 		},
 		"vs/sessions/contrib/changes/browser/changesActions": {
@@ -4607,7 +4610,8 @@
 			"chatEditing.versionsPicker": "Версии",
 			"revealChecks": "Показать проверки",
 			"setListViewMode": "Просмотр в виде списка",
-			"setTreeViewMode": "Просмотр в виде дерева"
+			"setTreeViewMode": "Просмотр в виде дерева",
+			"changesView.emptyTitle": "Изменения"
 		},
 		"vs/sessions/contrib/changes/browser/changesViewActions": {
 			"agentSessions.collapseAllDiffs": "Collapse All Diffs",
@@ -4641,7 +4645,7 @@
 			"ci.toggleChecks": "Переключить проверки"
 		},
 		"vs/sessions/contrib/changes/browser/sessionChangesEditorInput": {
-			"sessionChangesEditor.name": "Changes"
+			"sessionChangesEditor.name": "Изменения"
 		},
 		"vs/sessions/contrib/changes/browser/sessionChangesService": {
 			"sessions.changes.title": "Session Changes"
@@ -4759,7 +4763,9 @@
 			"newSessionChooseWorkspace": "Начните с выбора",
 			"newSessionIn": "Новый сеанс в",
 			"newSessionWith": "с",
-			"trustFolderMessage": "В ходе сеанса агент сможет читать файлы, выполнять команды и вносить изменения в эту папку."
+			"trustFolderMessage": "В ходе сеанса агент сможет читать файлы, выполнять команды и вносить изменения в эту папку.",
+			"newSessionCustomize": "Настроить",
+			"newSessionCustomizeAriaLabel": "Настроить"
 		},
 		"vs/sessions/contrib/chat/browser/noAgentHostEmptyState": {
 			"noAgentHost.aria": "Нет доступных узлов агентов",
@@ -4890,7 +4896,8 @@
 			"workspacePicker.experimental": "Экспериментальная функция",
 			"workspacePicker.filter": "Поиск рабочих областей...",
 			"workspacePicker.pickAriaLabel": "Начните с выбора рабочей области",
-			"workspacePicker.selectedAriaLabel": "Новый сеанс в {0}"
+			"workspacePicker.selectedAriaLabel": "Новый сеанс в {0}",
+			"workspacePicker.noWorkspace": "Без папки"
 		},
 		"vs/sessions/contrib/chat/browser/slashCommands": {
 			"slashCommand.agents": "Просмотр настраиваемых агентов и управление ими",
@@ -5009,8 +5016,8 @@
 		},
 		"vs/sessions/contrib/editor/browser/addTabActions": {
 			"newBrowserTab": "Browser",
-			"newChangesTab": "Changes",
-			"newFileTab": "Files",
+			"newChangesTab": "Изменения",
+			"newFileTab": "Файлы",
 			"newSearchTab": "Search"
 		},
 		"vs/sessions/contrib/editor/browser/editor.contribution": {
@@ -5028,13 +5035,14 @@
 			"emptyFileEditor.searchAria": "Search Files ({0})",
 			"emptyFileEditor.searchAriaNoKeybinding": "Search Files",
 			"emptyFileEditor.searchTooltip": "Search Files ({0})",
-			"emptyFileEditor.searchTooltipNoKeybinding": "Search Files"
+			"emptyFileEditor.searchTooltipNoKeybinding": "Search Files",
+			"emptyFileEditor.title": "Файлы"
 		},
 		"vs/sessions/contrib/editor/browser/emptyFileEditor.contribution": {
 			"emptyFileEditor.label": "File"
 		},
 		"vs/sessions/contrib/editor/browser/emptyFileEditorInput": {
-			"emptyFileEditor.name": "Files"
+			"emptyFileEditor.name": "Файлы"
 		},
 		"vs/sessions/contrib/files/browser/files.contribution": {
 			"collapseExplorerFolders": "Свернуть папки в проводнике",
@@ -5176,7 +5184,11 @@
 		"vs/sessions/contrib/providers/agentHost/browser/agentHostPermissionPickerDelegate": {
 			"agentHostPermissionPicker.autoApproveHover": "Copilot запускает все инструменты без запроса подтверждения.",
 			"agentHostPermissionPicker.autopilotApprovalsHover": "Copilot запускает инструменты без запроса подтверждения и продолжает работу до завершения задачи.",
-			"agentHostPermissionPicker.defaultApprovalsHover": "Copilot запрашивает подтверждение перед запуском инструментов, если только ваши настройки не разрешают это."
+			"agentHostPermissionPicker.defaultApprovalsHover": "Copilot запрашивает подтверждение перед запуском инструментов, если только ваши настройки не разрешают это.",
+			"agentHostPermissionPicker.manual.label": "Подтверждать вручную",
+			"agentHostPermissionPicker.askWhenNeeded.detail": "Спрашивает, если нет подходящего правила",
+			"agentHostPermissionPicker.approveWhenSafe.detail": "Оценивает риск перед запуском инструментов",
+			"agentHostPermissionPicker.allowAll.detail": "Запускает инструменты без вопросов"
 		},
 		"vs/sessions/contrib/providers/agentHost/browser/agentHostSessionBranchActions": {
 			"copySessionBranchName": "Копировать имя ветви сеанса"
@@ -5337,15 +5349,17 @@
 			"permissionPicker.ariaLabel": "Средство выбора разрешений",
 			"permissionPicker.triggerAriaLabel": "Выбрать уровень разрешений, {0}",
 			"permissionPicker.triggerAriaLabelWithDescription": "Выбрать уровень разрешений, {0}, {1}",
-			"permissions.autoApprove": "Обход утверждений",
-			"permissions.autoApprove.subtext": "Все запросы на использование инструментов утверждаются автоматически",
+			"permissions.autoApprove": "Разрешить всё",
+			"permissions.autoApprove.subtext": "Запускает инструменты без вопросов",
 			"permissions.autopilot": "Автопилот (предварительная версия)",
 			"permissions.autopilot.description": "Автоматическое утверждение всех вызовов инструментов и продолжение работы до завершения задачи. Использование Autopilot может привести к увеличению расходов.",
-			"permissions.autopilot.subtext": "Автономно выполняет итерации от начала до конца",
-			"permissions.default": "Утверждения по умолчанию",
-			"permissions.default.subtext": "Copilot использует настроенные параметры",
+			"permissions.autopilot.subtext": "Работает сам в пределах разрешений",
+			"permissions.default": "Подтверждать вручную",
+			"permissions.default.subtext": "Спрашивает, если нет подходящего правила",
 			"permissions.learnMore": "Дополнительные сведения о разрешениях",
-			"permissions.policyDescription": "Отключено корпоративной политикой"
+			"permissions.policyDescription": "Отключено корпоративной политикой",
+			"permissions.assisted": "С оценкой риска",
+			"permissions.assisted.subtext": "Оценивает риск перед запуском инструментов"
 		},
 		"vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution": {
 			"sessions.chat.localAgent.enabled": "Включите локальные сеансы чата VS Code в окне \"Агенты\". Перезагрузите окно, чтобы изменения вступили в силу."
@@ -5697,7 +5711,8 @@
 			"overview": "Обзор",
 			"plugins": "Подключаемые модули",
 			"skills": "Навыки",
-			"tools": "Инструменты"
+			"tools": "Инструменты",
+			"customizeActionLabel": "Настроить"
 		},
 		"vs/sessions/contrib/sessions/browser/mobile/mobileOverlayContribution": {
 			"mobileChangesNotAvailable": "Изменения на уровне файлов пока недоступны для этого сеанса.",
@@ -5743,7 +5758,7 @@
 			"newChatButtonAriaLabelWithoutKeybinding": "New Chat",
 			"newChatButtonTitle": "New Chat ({0})",
 			"newChatButtonTitleWithoutKeybinding": "New Chat",
-			"newCompact": "New",
+			"newCompact": "Новый",
 			"newSession": "Новый сеанс",
 			"newSessionButtonAriaLabel": "New Session ({0})",
 			"newSessionButtonAriaLabelWithoutKeybinding": "New Session",
@@ -5771,14 +5786,15 @@
 			"nSessionsApproved": "Approved {0} sessions",
 			"oneSessionApproved": "Approved 1 session",
 			"showAllSessions": "Show All Sessions",
-			"showSessions": "Показать сеансы"
+			"showSessions": "Показать сеансы",
+			"noWorkspace": "Без папки"
 		},
 		"vs/sessions/contrib/sessions/browser/views/sessionsList": {
 			"addToGroupAction": "Добавить в группу",
 			"allowAction": "Разрешить",
 			"allowActionOnce": "Разрешить один раз",
 			"archived": "Готово",
-			"chatsSection": "Chats",
+			"chatsSection": "Чаты",
 			"createGroupAction": "Создать группу",
 			"deleteGroupAction": "Удалить группу",
 			"failed": "Сбой",
@@ -5808,7 +5824,10 @@
 			"showMoreWorkspacesAria": "Показать еще {0} рабочих областей",
 			"showMoreWorkspacesCompact": "Еще {0} рабочих областей",
 			"unknown": "Неизвестно",
-			"working": "Идет обработка..."
+			"working": "Идет обработка...",
+			"automations": "Автоматизации",
+			"automationsNewBadge": "Новое",
+			"quickChatBadge": "Без папки"
 		},
 		"vs/sessions/contrib/sessions/browser/views/sessionsView": {
 			"filterArchived": "Готово",
@@ -9778,7 +9797,8 @@
 			"contextAttribution.label.skills": "Skills",
 			"contextAttribution.label.subAgents": "Sub-agents",
 			"contextAttribution.label.toolDefinitions": "Tool Definitions",
-			"contextAttribution.label.toolResults": "Tool Results"
+			"contextAttribution.label.toolResults": "Tool Results",
+			"agentHost.askUser.waiting": "Ждём вашего ответа…"
 		},
 		"vs/workbench/contrib/chat/browser/agentSessions/agentSessionHoverWidget": {
 			"agentSessionCompleted": "Завершено",
@@ -12701,8 +12721,8 @@
 			"chat.questionCarousel.combinedFocusTerminalHint": "{0} Используется {1} для фокусировки на терминале.",
 			"chat.questionCarousel.combinedFocusTerminalHintNoKb": "{0} Используйте команду \"Focus Terminal from Question Carousel\", чтобы перевести фокус на терминал.",
 			"chat.questionCarousel.deferredToTerminal": "Откладывание до ввода пользователя в терминале",
-			"chat.questionCarousel.enterCustomAnswer": "Введите настраиваемый ответ",
-			"chat.questionCarousel.enterText": "Введите свой ответ",
+			"chat.questionCarousel.enterCustomAnswer": "Свой ответ",
+			"chat.questionCarousel.enterText": "Ваш ответ",
 			"chat.questionCarousel.expandTitle": "Развернуть вопросы",
 			"chat.questionCarousel.focusTerminalAriaLabel": "Фокус на терминале ({0})",
 			"chat.questionCarousel.focusTerminalTitle": "Фокус на терминале",
@@ -12717,11 +12737,11 @@
 			"chat.questionCarousel.required": "Это поле является обязательным",
 			"chat.questionCarousel.roleDescription": "в чате с агентом.",
 			"chat.questionCarousel.singleQuestionLabel": "Вопрос в чате: {0}",
-			"chat.questionCarousel.skipAllTitle": "Пропустить все вопросы",
-			"chat.questionCarousel.skipped": "Пропущено",
+			"chat.questionCarousel.skipAllTitle": "Пропустить вопросы",
+			"chat.questionCarousel.skipped": "Вопрос пропущен",
 			"chat.questionCarousel.stepIndicator": "{0}/{1}",
 			"chat.questionCarousel.submitHintMac": "⌘⏎ для отправки",
-			"chat.questionCarousel.submitHintOther": "CTRL+ВВОД для отправки",
+			"chat.questionCarousel.submitHintOther": "Ctrl+Enter — отправить",
 			"chat.questionCarousel.summaryAnswer": "О: {0}",
 			"chat.questionCarousel.summaryQuestion": "В: {0}",
 			"chat.questionCarousel.validation.date": "Введите допустимую дату (ГГГГ-ММ-ДД)",
@@ -12736,7 +12756,8 @@
 			"chat.questionCarousel.validation.uri": "Введите допустимый URI",
 			"next": "Далее",
 			"previous": "Назад",
-			"submit": "Отправить"
+			"submit": "Отправить",
+			"chat.questionCarousel.answered": "Ответ дан"
 		},
 		"vs/workbench/contrib/chat/browser/widget/chatContentParts/chatQuotaExceededPart": {
 			"manageBudget": "Управление бюджетом",
@@ -12800,8 +12821,8 @@
 			"chat.thinking.editingFile": "Изменен файл",
 			"chat.thinking.editingFiles": "Редактирование файлов",
 			"chat.thinking.finished": "Работа завершена.",
-			"chat.thinking.finished.withStepsPlural": "Завершено на {0} шаге",
-			"chat.thinking.finished.withStepsSingular": "Завершено на 1 шаге",
+			"chat.thinking.finished.withStepsPlural": "Готово, шагов: {0}",
+			"chat.thinking.finished.withStepsSingular": "Готово: 1 шаг",
 			"chat.thinking.header": "Мышление",
 			"chat.thinking.header.initial": "Мышление",
 			"chat.thinking.header.working": "Выполняется",
@@ -13104,7 +13125,7 @@
 		},
 		"vs/workbench/contrib/chat/browser/widget/chatWidget": {
 			"agentTitle": "Сборка с агентом",
-			"chat.input.placeholder.lockedToAgent": "Чат с {0}",
+			"chat.input.placeholder.lockedToAgent": "Напишите {0}, что сделать",
 			"chat.pendingRequests.prompt.detail": "Сохранить их в очереди или удалить перед отправкой этого сообщения?",
 			"chat.pendingRequests.prompt.keep": "Сохранить ожидающие запросы",
 			"chat.pendingRequests.prompt.message": "У вас уже есть ожидающие запросы.",
@@ -13279,25 +13300,28 @@
 		"vs/workbench/contrib/chat/browser/widget/input/permissionPickerActionItem": {
 			"permissions.ariaLabel": "Средство выбора разрешений, {0}",
 			"permissions.ariaLabelWithDescription": "Выборщик разрешений, {0} , {1}",
-			"permissions.autoApprove": "Обход утверждений",
+			"permissions.autoApprove": "Разрешить всё",
 			"permissions.autoApprove.description": "Автоматическое утверждение всех вызовов инструментов и повторная попытка при возникновении ошибок",
-			"permissions.autoApprove.label": "Обход утверждений",
-			"permissions.autoApprove.subtext": "Все запросы на использование инструментов утверждаются автоматически",
+			"permissions.autoApprove.label": "Разрешить всё",
+			"permissions.autoApprove.subtext": "Запускает инструменты без вопросов",
 			"permissions.autopilot": "Автопилот (предварительная версия)",
 			"permissions.autopilot.description": "Автоматическое утверждение всех вызовов инструментов и продолжение работы до завершения задачи. Использование Autopilot может привести к увеличению расходов.",
 			"permissions.autopilot.label": "Автопилот (предварительная версия)",
-			"permissions.autopilot.subtext": "Автономно выполняет итерации от начала до конца",
-			"permissions.default": "Утверждения по умолчанию",
+			"permissions.autopilot.subtext": "Работает сам в пределах разрешений",
+			"permissions.default": "Подтверждать вручную",
 			"permissions.default.description": "Использовать настроенные параметры утверждения",
-			"permissions.default.label": "Утверждения по умолчанию",
+			"permissions.default.label": "Подтверждать вручную",
 			"permissions.default.sandbox.toggle": "Песочница для терминала",
 			"permissions.default.sandbox.toggle.title": "Выполняйте команды терминала в изолированной среде, которая ограничивает доступ к файловой системе и сети",
-			"permissions.default.subtext": "Copilot использует настроенные параметры",
+			"permissions.default.subtext": "Спрашивает, если нет подходящего правила",
 			"permissions.defaultSandboxed.label": "Стандартные подтверждения (в изолированной среде)",
 			"permissions.ext.locked": "Этот параметр заблокирован",
 			"permissions.learnMore": "Дополнительные сведения о разрешениях",
 			"permissions.policyDescription": "Отключено корпоративной политикой",
-			"permissions.policyDisabled": "Отключено корпоративной политикой"
+			"permissions.policyDisabled": "Отключено корпоративной политикой",
+			"permissions.assisted": "С оценкой риска",
+			"permissions.assisted.label": "С оценкой риска",
+			"permissions.assisted.subtext": "Оценивает риск перед запуском инструментов"
 		},
 		"vs/workbench/contrib/chat/browser/widget/input/sessionTargetPickerActionItem": {
 			"chat.learnMoreAgentTypes": "Узнайте о типах агентов...",
@@ -26072,6 +26096,19 @@
 			"saveWorkspaceMessage": "Вы хотите сохранить конфигурацию рабочей области в файле?",
 			"workspaceOpenedDetail": "Эта рабочая область уже открыта в другом окне. Закройте это окно и повторите попытку.",
 			"workspaceOpenedMessage": "Не удается сохранить рабочую область '{0}'"
+		},
+		"vs/sessions/contrib/sessions/browser/views/automationsView": {
+			"automationsTitle": "Автоматизации",
+			"quickChat": "Без папки"
+		},
+		"vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem": {
+			"chat.modelPicker.modelsLabel": "Модели"
+		},
+		"vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget": {
+			"chat.modelPicker.modelsLabel": "Модели"
+		},
+		"vs/sessions/browser/sessionsSignInDialog": {
+			"sessions.returnToVSCodeEditor": "Вернуться в редактор"
 		}
 	}
 }

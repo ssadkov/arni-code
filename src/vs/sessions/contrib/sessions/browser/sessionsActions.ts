@@ -1381,7 +1381,7 @@ class NewSessionActionViewItem extends CompactButtonActionViewItem {
 	}
 
 	protected override get label(): string {
-		return localize('newCompact', "New");
+		return localize('newCompact', "Новый");
 	}
 
 	protected override get onboardingTargetId(): string {

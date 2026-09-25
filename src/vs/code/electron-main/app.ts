@@ -1589,6 +1589,14 @@ export class CodeApplication extends Disposable {
 					// remoteAuthority: will be determined based on macOpenFiles
 				});
 			}
+
+			// Product home is the Agents window. A folder or file on the command
+			// line still opens the editor.
+			return windowsMainService.openAgentsWindow({
+				context,
+				cli: args,
+				initialStartup: true
+			});
 		}
 
 		// default: read paths from cli

@@ -40,6 +40,10 @@ export function agentHostMcpServerId(authority: string, serverName: string, reso
 
 /**
  * Whether creating a session with the selected model requires the agent's protected-resource authentication.
+ *
+ * When `allowSignedOutWhenUsable` is on and the agent publishes BYOK models, GitHub
+ * auth is optional for a selected BYOK model. A non-BYOK Copilot model still
+ * requires a GitHub token; product sign-in cannot satisfy that requirement.
  */
 export function modelRequiresAgentAuthentication(agent: AgentInfo | undefined, model: ModelSelection | undefined, allowSignedOutWhenUsable = false): boolean {
 	if (!agent?.protectedResources?.length) {
@@ -611,27 +615,18 @@ export async function resolveAuthenticationInteractively(
 	options: IAgentHostAuthenticationOptions,
 ): Promise<boolean> {
 	const authenticationService = accessor.get(IAuthenticationService);
-	const commandService = accessor.get(ICommandService);
 	const logService = accessor.get(ILogService);
+	const commandService = accessor.get(ICommandService);
+	if (protectedResources.length === 0) {
+		return (await forceAuthenticationInteractively(authenticationService, commandService, logService, {
+			resource: 'https://api.github.com',
+			scopes_supported: [],
+		}, options)) !== undefined;
+	}
 	for (const resource of protectedResources) {
 		throwIfAuthenticationStale(options);
-		const resourceUri = URI.parse(resource.resource);
-		const scopes = resource.scopes_supported ?? [];
-		const existingToken = await resolveTokenForResource(
-			resourceUri,
-			resource.authorization_servers ?? [],
-			scopes,
-			authenticationService,
-			logService,
-			options.logPrefix,
-		);
-		throwIfAuthenticationStale(options);
-		if (existingToken) {
-			await forwardAuthenticationToken(options, resource.resource, scopes, existingToken);
-			logService.info(`${options.logPrefix} Interactive authentication succeeded for ${resource.resource}`);
-			return true;
-		}
-
+		// Prefer the product sign-in dialog over silently probing GitHub sessions
+		// that we do not want users to complete for Arni.
 		return (await forceAuthenticationInteractively(authenticationService, commandService, logService, resource, options)) !== undefined;
 	}
 
@@ -650,7 +645,7 @@ async function forceAuthenticationInteractively(
 	const setupResult = await commandService.executeCommand<IChatSetupResult>(CHAT_SETUP_ACTION_ID, undefined, {
 		forceSignInDialog: true,
 		additionalScopes: scopes,
-		dialogTitle: localize('agentHost.signInDialogTitle', "Sign in to use GitHub Copilot"),
+		dialogTitle: localize('agentHost.signInDialogTitle', "Войдите, чтобы пользоваться агентом"),
 		disableChatViewReveal: true,
 		returnResult: true,
 	});
@@ -659,7 +654,7 @@ async function forceAuthenticationInteractively(
 		return undefined;
 	}
 	if (!setupResult.success) {
-		throw setupResult.error ?? new Error(localize('agentHost.signInFailed', "Failed to sign in to use GitHub Copilot."));
+		throw setupResult.error ?? new Error(localize('agentHost.signInFailed', "Failed to sign in."));
 	}
 	const token = await resolveTokenForResource(
 		URI.parse(resource.resource),

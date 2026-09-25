@@ -27,6 +27,9 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { ChatSessionArchiveActionWordingSettingId, getChatSessionArchivedSectionLabel, getChatSessionArchiveActionWording } from '../../../../../platform/chat/common/sessionArchiveActions.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { localize } from '../../../../../nls.js';
+import { Codicon } from '../../../../../base/common/codicons.js';
+import { renderIcon } from '../../../../../base/browser/ui/iconLabel/iconLabels.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { SessionsList, SessionsGrouping, SessionsSorting } from './sessionsList.js';
 import { SessionStatus } from '../../../../services/sessions/common/session.js';
 import { AICustomizationShortcutsWidget } from '../aiCustomizationShortcutsWidget.js';
@@ -45,7 +48,8 @@ import { MobileSessionFilterChips } from '../../../../browser/parts/mobile/mobil
 import { IMobileSortGroupSheetItem, showMobileSortGroupSheet } from '../../../../browser/parts/mobile/mobileSortGroupSheet.js';
 import { isPhoneLayout } from '../../../../browser/parts/mobile/mobileLayout.js';
 import { IsPhoneLayoutContext } from '../../../../common/contextkeys.js';
-import { ChatConfiguration } from '../../../../../workbench/contrib/chat/common/constants.js';
+import { ChatConfiguration } from '../../../../../workbench/contrib/chat/common/constants.js';
+import { NEW_PROJECT_ACTION_ID } from '../../../chat/common/constants.js';
 
 const $ = DOM.$;
 export const SessionsViewId = 'sessions.workbench.view.sessionsView';
@@ -81,7 +85,7 @@ export function renderSessionsHeader(
 	let toolbar: MenuWorkbenchToolBar | undefined;
 
 	if (!phoneLayout) {
-		label.textContent = localize('sessionsHeader', "Sessions");
+		label.textContent = localize('sessionsHeader', "Сеансы");
 		const scopedInstantiationService = disposables.add(instantiationService.createChild(new ServiceCollection([IContextKeyService, contextKeyService])));
 		toolbar = disposables.add(scopedInstantiationService.createInstance(MenuWorkbenchToolBar, actions, Menus.SidebarSessionsHeader, {
 			hiddenItemStrategy: HiddenItemStrategy.NoHide,
@@ -135,6 +139,7 @@ export class SessionsView extends ViewPane {
 		@IHostService private readonly hostService: IHostService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IStorageService private readonly storageService: IStorageService,
+		@ICommandService private readonly commandService: ICommandService,
 	) {
 		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
@@ -210,6 +215,18 @@ export class SessionsView extends ViewPane {
 		// Container for the tree's find widget (toggled by the toolbar's Find action)
 		const findWidgetContainer = this.findWidgetContainer = DOM.append(headerRow, $('.agent-sessions-find-widget-container'));
 		findWidgetContainer.style.display = 'none';
+
+		// ARNION: a labeled entry to the starter gallery, so starting a new
+		// project never depends on the first-run screen still being shown.
+		if (!phoneLayout) {
+			const newProjectButton = DOM.append(sessionsContent, $('button.agent-sessions-new-project')) as HTMLButtonElement;
+			newProjectButton.type = 'button';
+			DOM.append(newProjectButton, renderIcon(Codicon.rocket)).setAttribute('aria-hidden', 'true');
+			DOM.append(newProjectButton, $('span')).textContent = localize('sessionsNewProject', "Новый проект");
+			this._register(DOM.addDisposableListener(newProjectButton, DOM.EventType.CLICK, () => {
+				void this.commandService.executeCommand(NEW_PROJECT_ACTION_ID);
+			}));
+		}
 
 		// Reserve DOM slot for mobile filter chips (phone layout only).
 		// The actual widget is created after sessionsControl is available.

@@ -334,7 +334,7 @@ suite('NewChatWidget', () => {
 			},
 		}, {
 			initial: {
-				ariaLabel: 'Customize',
+				ariaLabel: 'Настроить',
 				hasMigrations: false,
 				hasChevron: false,
 				icon: true,

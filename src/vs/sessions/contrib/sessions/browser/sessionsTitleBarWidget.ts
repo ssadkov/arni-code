@@ -379,7 +379,7 @@ export class SessionsTitleBarWidget extends BaseActionViewItem {
 			centerGroup.appendChild(workspaceIconEl);
 
 			const workspaceEl = $('div.agent-sessions-titlebar-workspace');
-			workspaceEl.textContent = this._sessionTitle ?? localize('noWorkspace', "No workspace");
+			workspaceEl.textContent = this._sessionTitle ?? localize('noWorkspace', "Без папки");
 			centerGroup.appendChild(workspaceEl);
 			this._dynamicDisposables.add(this.hoverService.setupDelayedHover(workspaceEl, { content: workspaceEl.textContent }));
 		} else if (this._sessionTitle) {

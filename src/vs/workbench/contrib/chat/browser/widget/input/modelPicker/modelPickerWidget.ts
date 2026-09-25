@@ -728,7 +728,7 @@ export class ModelPickerWidget extends Disposable {
 		// "Activating..." is transient while models load after a Trust grant; "No models available"
 		// is the genuinely empty state (e.g. an agent-host session with no Auto fallback).
 		const modelLabel = unavailable
-			? localize('chat.modelPicker.modelsLabel', "Models")
+			? localize('chat.modelPicker.modelsLabel', "Модели")
 			: activating
 				? localize('chat.modelPicker.activating', "Activating...")
 				: genericNoModels

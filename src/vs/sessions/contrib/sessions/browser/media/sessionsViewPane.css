@@ -240,3 +240,34 @@
 		color: var(--vscode-foreground);
 	}
 }
+
+/* ARNION: the always-available way into the starter gallery. */
+.agent-sessions-viewpane .agent-sessions-new-project {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 4px var(--vscode-spacing-size100) 6px;
+	padding: 7px 10px;
+	border: 1px solid var(--vscode-button-background);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--vscode-foreground);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+}
+
+.agent-sessions-viewpane .agent-sessions-new-project:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.agent-sessions-viewpane .agent-sessions-new-project:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.agent-sessions-viewpane .agent-sessions-new-project > .codicon {
+	color: var(--vscode-button-background);
+}

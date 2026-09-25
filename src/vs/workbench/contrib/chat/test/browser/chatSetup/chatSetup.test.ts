@@ -12,7 +12,7 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { TelemetryLevel } from '../../../../../../platform/telemetry/common/telemetry.js';
 import { ChatEntitlement } from '../../../../../services/chat/common/chatEntitlementService.js';
-import { buildUpgradeUrlWithRedirect, ChatSetupStrategy, IChatSetupRunOptions } from '../../../browser/chatSetup/chatSetup.js';
+import { buildUpgradeUrlWithRedirect, ChatSetupStrategy } from '../../../browser/chatSetup/chatSetup.js';
 import { ChatSetup, getChatSetupDialogButtons, getChatSetupDialogFooter, IChatSetupDialogProviders, shouldShowMicrosoftProvider, showChatSetupDialogWithCancellation } from '../../../browser/chatSetup/chatSetupRunner.js';
 
 /**
@@ -98,23 +98,39 @@ suite('Chat setup dialog presentation', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	const providers: IChatSetupDialogProviders = {
-		default: { name: 'GitHub' },
-		enterprise: { name: 'GHE' },
-		google: { name: 'Google' },
-		apple: { name: 'Apple' },
-		microsoft: { name: 'Microsoft' },
-	};
-
-	function buttonLabels(options: IChatSetupRunOptions, enterpriseAuthentication: boolean, showMicrosoftProvider: boolean): string[] {
-		return getChatSetupDialogButtons(ChatEntitlement.Unknown, options, enterpriseAuthentication, showMicrosoftProvider, providers).map(button => button.label);
-	}
-
 	function microsoftSetting(enabled: boolean): IConfigurationService {
 		return new TestConfigurationService({ [ChatMicrosoftAuthenticationEnabledSettingId]: enabled });
 	}
 
+	test('offers only Yandex and VK product sign-in', () => {
+		const providers: IChatSetupDialogProviders = {
+			default: { name: 'GitHub' },
+			enterprise: { name: 'GHE' },
+			google: { name: 'Google' },
+			apple: { name: 'Apple' },
+			microsoft: { name: 'Microsoft' },
+			yandex: { name: 'Yandex' },
+			vk: { name: 'VK' },
+		};
+		const buttons = getChatSetupDialogButtons(ChatEntitlement.Unknown, { allowContinueWithoutSignIn: true }, false, false, providers);
+
+		assert.deepStrictEqual(buttons.map(button => button.label), [
+			'Войти через Яндекс',
+			'Войти через VK',
+			'Continue Without Signing In',
+		]);
+	});
+
 	test('places signed-out continuation after providers', () => {
+		const providers: IChatSetupDialogProviders = {
+			default: { name: 'GitHub' },
+			enterprise: { name: 'GHE' },
+			google: { name: 'Google' },
+			apple: { name: 'Apple' },
+			microsoft: { name: 'Microsoft' },
+			yandex: { name: 'Yandex' },
+			vk: { name: 'VK' },
+		};
 		const buttons = getChatSetupDialogButtons(ChatEntitlement.Unknown, { allowContinueWithoutSignIn: true }, false, false, providers);
 		const footer = getChatSetupDialogFooter(undefined, TelemetryLevel.USAGE, 'https://example.com/settings', {
 			providerName: 'GitHub',
@@ -128,7 +144,7 @@ suite('Chat setup dialog presentation', () => {
 			lastButton: buttons.at(-1),
 			footer,
 		}, {
-			buttonLabels: ['Continue with GitHub', 'Continue with Google', 'Continue with Apple', 'Continue with GHE', 'Continue Without Signing In'],
+			buttonLabels: ['Войти через Яндекс', 'Войти через VK', 'Continue Without Signing In'],
 			lastButton: {
 				label: 'Continue Without Signing In',
 				strategy: ChatSetupStrategy.Canceled,
@@ -138,17 +154,22 @@ suite('Chat setup dialog presentation', () => {
 		});
 	});
 
-	test('places Microsoft after the other providers and before the signed-out continuation', () => {
+	test('GitHub Google Apple Microsoft are not offered', () => {
+		const providers: IChatSetupDialogProviders = {
+			default: { name: 'GitHub' },
+			enterprise: { name: 'GHE' },
+			google: { name: 'Google' },
+			apple: { name: 'Apple' },
+			microsoft: { name: 'Microsoft' },
+			yandex: { name: 'Yandex' },
+			vk: { name: 'VK' },
+		};
 		assert.deepStrictEqual({
-			withMicrosoft: buttonLabels({ allowContinueWithoutSignIn: true }, false, true),
-			withoutMicrosoft: buttonLabels({ allowContinueWithoutSignIn: true }, false, false),
-			// The enterprise dialog offers the same social providers, in the same order, because
-			// every one of them signs in against whichever host the default account points at.
-			enterprise: buttonLabels({}, true, true),
+			withMicrosoft: getChatSetupDialogButtons(ChatEntitlement.Unknown, {}, false, true, providers).map(b => b.label),
+			enterprise: getChatSetupDialogButtons(ChatEntitlement.Unknown, {}, true, true, providers).map(b => b.label),
 		}, {
-			withMicrosoft: ['Continue with GitHub', 'Continue with Google', 'Continue with Apple', 'Continue with Microsoft', 'Continue with GHE', 'Continue Without Signing In'],
-			withoutMicrosoft: ['Continue with GitHub', 'Continue with Google', 'Continue with Apple', 'Continue with GHE', 'Continue Without Signing In'],
-			enterprise: ['Continue with GHE', 'Continue with Google', 'Continue with Apple', 'Continue with Microsoft', 'Continue with GitHub'],
+			withMicrosoft: ['Войти через Яндекс', 'Войти через VK'],
+			enterprise: ['Войти через Яндекс', 'Войти через VK'],
 		});
 	});
 
@@ -190,6 +211,8 @@ suite('Chat setup strategy', () => {
 			{ isWorkspaceTrusted: () => true } as never,
 			undefined as never,
 			new TestConfigurationService(),
+			undefined as never,
+			undefined as never,
 		);
 
 		const result = await setup.run({ setupStrategy: ChatSetupStrategy.SetupWithMicrosoftProvider, additionalScopes: ['repo'] });
@@ -288,6 +311,8 @@ suite('Chat setup dialog cancellation', () => {
 			{ isWorkspaceTrusted: () => true } as never,
 			undefined as never,
 			new TestConfigurationService(),
+			undefined as never,
+			undefined as never,
 		);
 
 		const result = setup.run({ setupStrategy: ChatSetupStrategy.DefaultSetup, cancellationToken: cancellation.token });

@@ -831,7 +831,7 @@ export class ChangesViewPane extends ViewPane {
 
 		renderSessionsEmptyState(
 			this.welcomeContainer,
-			localize('changesView.emptyTitle', "Changes"),
+			localize('changesView.emptyTitle', "Изменения"),
 			localize('changesView.noChanges', "No changed files"),
 		);
 
@@ -1439,7 +1439,7 @@ export class ChangesViewPane extends ViewPane {
 		// "Changes" header
 		const headerNode = dom.append(container, $('.changes-sidebar-header'));
 		const headerLabel = dom.append(headerNode, $('span'));
-		headerLabel.textContent = localize('changes', "Changes");
+		headerLabel.textContent = localize('changes', "Изменения");
 		const countBadge = disposables.add(new CountBadge(headerNode, { count: items.length }, defaultCountBadgeStyles));
 		countBadge.setCount(items.length);
 

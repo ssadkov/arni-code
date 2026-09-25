@@ -1053,7 +1053,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 			if (!hideDetails) {
 				const badgeLabel = isQuickChat
-					? localize('quickChatBadge', "No workspace")
+					? localize('quickChatBadge', "Без папки")
 					: workspace && (
 						this.options.grouping() !== SessionsGrouping.Workspace ||
 						this.options.isPinned(element) ||
@@ -1345,7 +1345,7 @@ export class SessionSectionRenderer implements ITreeRenderer<SessionListItem, Fu
 		const count = DOM.append(container, $('span.session-section-count'));
 		const newBadge = DOM.append(container, $('span.session-section-new-badge'));
 		newBadge.setAttribute('aria-hidden', 'true');
-		newBadge.textContent = localize('automationsNewBadge', "New");
+		newBadge.textContent = localize('automationsNewBadge', "Новое");
 		const toolbarContainer = DOM.append(container, $('.session-section-toolbar'));
 
 		const contextKeyService = disposables.add(this.contextKeyService.createScoped(container));
@@ -1777,7 +1777,7 @@ class SessionsAccessibilityProvider {
 	) { }
 
 	getWidgetAriaLabel(): string {
-		return localize('sessionsList', "Sessions");
+		return localize('sessionsList', "Сеансы");
 	}
 
 	getAriaLabel(element: SessionListItem): string | IObservable<string> | null {
@@ -3157,7 +3157,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 		// header — leading chat icon, label, and the "+" create action — is always
 		// reachable. Only when a provider can actually serve quick chats.
 		if (showEmptyDefaultGroups && this._someProviderSupportsQuickChats() && !sections.some(s => s.id === QUICK_CHATS_SECTION_ID)) {
-			sections.push({ id: QUICK_CHATS_SECTION_ID, label: localize('chatsSection', "Chats"), sessions: [] });
+			sections.push({ id: QUICK_CHATS_SECTION_ID, label: localize('chatsSection', "Чаты"), sessions: [] });
 		}
 
 		// Partition workspace sections into "primary" (meets criteria) and "more"
@@ -3309,7 +3309,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 
 		if (this.contextKeyService.getContextKeyValue<boolean>(ChatAutomationsEnabledContext.key)) {
 			void this.automationsNewBadgeState.initialize().catch(onUnexpectedError);
-			children.push(renderSection({ id: AUTOMATIONS_SECTION_ID, label: localize('automations', "Automations"), sessions: [] }));
+			children.push(renderSection({ id: AUTOMATIONS_SECTION_ID, label: localize('automations', "Автоматизации"), sessions: [] }));
 		}
 
 		const pinnedSection = sections.find(s => s.id === 'pinned');
@@ -4493,7 +4493,7 @@ export function groupSessionsForList(
 	// Quick chats render as a single "Chats" entry directly below Pinned (above
 	// the workspace/date groups), regardless of grouping mode.
 	if (quickChats.length > 0) {
-		sections.push({ id: QUICK_CHATS_SECTION_ID, label: localize('chatsSection', "Chats"), sessions: quickChats });
+		sections.push({ id: QUICK_CHATS_SECTION_ID, label: localize('chatsSection', "Чаты"), sessions: quickChats });
 	}
 
 	sections.push(...(grouping === SessionsGrouping.Workspace
