@@ -1121,7 +1121,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	properties: {
 		'workbench.browser.enableChatTools': {
 			type: 'boolean',
-			default: true,
+			default: false, // ARNION: free models loop on page automation; the agent still opens pages for the user
 			markdownDescription: localize(
 				{ comment: ['This is the description for a setting.'], key: 'browser.enableChatTools' },
 				'When enabled, chat agents can use browser tools to open and interact with pages in the Integrated Browser.'
@@ -1137,7 +1137,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 					}
 				},
 			},
-			agentsWindow: { default: true },
+			agentsWindow: { default: false },
 		},
 		'workbench.browser.experimentalUserTools.enabled': {
 			type: 'boolean',
