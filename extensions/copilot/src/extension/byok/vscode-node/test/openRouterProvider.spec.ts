@@ -160,6 +160,34 @@ describe('Model discovery records capabilities', () => {
 	});
 });
 
+describe('Model catalog source', () => {
+	async function listWithFetch(fetchMock: ReturnType<typeof vi.fn>) {
+		vi.stubGlobal('fetch', fetchMock);
+		try {
+			const models = await createProvider().listModels(true);
+			return { urls: fetchMock.mock.calls.map(call => String(call[0])), ids: models.map(model => model.id) };
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	}
+
+	it('asks the Arni backend first, since openrouter.ai refuses requests from Russia', async () => {
+		const result = await listWithFetch(vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({ data: [{ id: DEFAULT_OPENROUTER_MODEL_ID, name: 'Nemotron', supported_parameters: ['tools'], context_length: 262144, top_provider: { context_length: 262144 } }] }),
+		}));
+		expect(result).toEqual({ urls: ['https://arni-backend.vercel.app/api/models'], ids: [DEFAULT_OPENROUTER_MODEL_ID] });
+	});
+
+	it('falls back to the built-in free models when no catalog is reachable', async () => {
+		const result = await listWithFetch(vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({}) }));
+		expect(result).toEqual({
+			urls: ['https://arni-backend.vercel.app/api/models', 'https://openrouter.ai/api/v1/models?supported_parameters=tools'],
+			ids: [DEFAULT_OPENROUTER_MODEL_ID, 'poolside/laguna-s-2.1:free', 'cohere/north-mini-code:free', 'nex-agi/nex-n2.5-mini:free'],
+		});
+	});
+});
+
 describe('Anthropic Messages API availability', () => {
 	it('is limited to direct OpenRouter hosts', () => {
 		expect(isOpenRouterBaseUrl('https://openrouter.ai/api/v1')).toBe(true);

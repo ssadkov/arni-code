@@ -75,6 +75,22 @@ export const PREFERRED_FREE_OPENROUTER_MODELS = [
 
 export const DEFAULT_OPENROUTER_MODEL_ID = PREFERRED_FREE_OPENROUTER_MODELS[0];
 
+/** Direct OpenRouter catalog. It refuses requests from Russia, so it is only a fallback. */
+const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models?supported_parameters=tools';
+
+/**
+ * Last resort when neither the Arni backend nor OpenRouter returns a catalog:
+ * without any model the agent host falls back to demanding GitHub sign-in.
+ * Context lengths are conservative, not exact.
+ */
+const FALLBACK_OPENROUTER_MODELS: readonly OpenRouterModelData[] = PREFERRED_FREE_OPENROUTER_MODELS.map(id => ({
+	id,
+	name: id,
+	supported_parameters: ['tools'],
+	context_length: 131_072,
+	top_provider: { context_length: 131_072 },
+}));
+
 export function rankOpenRouterModelId(id: string): number {
 	const preferred = (PREFERRED_FREE_OPENROUTER_MODELS as readonly string[]).indexOf(id);
 	if (preferred !== -1) {
@@ -221,25 +237,15 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 
 	protected override async getAllModels(silent: boolean, apiKey: string | undefined, configuration: any | undefined): Promise<OpenAICompatibleLanguageModelChatInformation<any>[]> {
 		const modelsUrl = this.getModelsBaseUrl();
-		let models: any = {};
-		
-		try {
-			// Fetch models from OpenRouter DIRECTLY without any API key to bypass 401 error.
-			const res = await fetch(this.getModelsDiscoveryUrl(''));
-			if (res.ok) {
-				const json = await res.json() as { data?: OpenRouterModelData[] };
-				for (const m of json.data || []) {
-					models[m.id] = this.resolveModelCapabilities(m) || {
-						name: m.name || m.id,
-						toolCalling: false,
-						vision: false,
-						maxInputTokens: 8000,
-						maxOutputTokens: 4000
-					};
-				}
-			}
-		} catch (e) {
-			this._logService.error(e as Error, 'Error fetching OpenRouter models');
+		const models: any = {};
+		for (const m of await this.fetchModelCatalog()) {
+			models[m.id] = this.resolveModelCapabilities(m) || {
+				name: m.name || m.id,
+				toolCalling: false,
+				vision: false,
+				maxInputTokens: 8000,
+				maxOutputTokens: 4000
+			};
 		}
 
 		// This override bypasses the base discovery path, which is what normally
@@ -261,12 +267,36 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			}) as OpenAICompatibleLanguageModelChatInformation<any>[];
 	}
 
+	/**
+	 * The catalog is public, so it needs no key. The Arni backend proxies it
+	 * because openrouter.ai refuses requests from Russia; the direct URL and a
+	 * built-in list keep the picker usable if the backend is unreachable.
+	 */
+	private async fetchModelCatalog(): Promise<readonly OpenRouterModelData[]> {
+		for (const url of [this.getModelsDiscoveryUrl(''), OPENROUTER_MODELS_URL]) {
+			try {
+				const res = await fetch(url);
+				if (res.ok) {
+					const json = await res.json() as { data?: OpenRouterModelData[] };
+					if (json.data?.length) {
+						return json.data;
+					}
+				}
+				this._logService.warn(`OpenRouter model catalog unavailable from ${url}: ${res.status}`);
+			} catch (e) {
+				this._logService.warn(`OpenRouter model catalog unavailable from ${url}: ${String(e)}`);
+			}
+		}
+		this._logService.warn('Using the built-in list of free OpenRouter models');
+		return FALLBACK_OPENROUTER_MODELS;
+	}
+
 	protected override getModelsBaseUrl(): string | undefined {
 		return resolveArniApiBaseUrl(this.getConfiguredBackendUrl());
 	}
 
-	protected override getModelsDiscoveryUrl(modelsBaseUrl: string): string {
-		return `https://openrouter.ai/api/v1/models?supported_parameters=tools`;
+	protected override getModelsDiscoveryUrl(_modelsBaseUrl: string): string {
+		return `${this.getModelsBaseUrl()}/models`;
 	}
 
 	protected override resolveModelCapabilities(modelData: unknown): BYOKModelCapabilities | undefined {
