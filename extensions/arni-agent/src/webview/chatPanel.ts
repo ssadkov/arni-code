@@ -64,7 +64,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
 
         // 3. Обмениваем токен Яндекса на универсальный JWT нашего бэкенда
         const config = vscode.workspace.getConfiguration('arni');
-        const backendUrl = config.get<string>('backendUrl') || 'https://arni-backend.vercel.app';
+        const backendUrl = config.get<string>('backendUrl') || 'https://api.arnion.ru';
         
         try {
             const response = await fetch(`${backendUrl}/api/auth/exchange`, {
@@ -109,7 +109,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
 
         try {
             const config = vscode.workspace.getConfiguration('arni');
-            const backendUrl = config.get<string>('backendUrl') || 'https://arni-backend.vercel.app';
+            const backendUrl = config.get<string>('backendUrl') || 'https://api.arnion.ru';
             
             // Используем наш прокси-провайдер с JWT токеном
             const provider = new ArniProvider(arniToken, backendUrl, 'openrouter/auto', true);

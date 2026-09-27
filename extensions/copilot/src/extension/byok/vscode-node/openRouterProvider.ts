@@ -49,7 +49,9 @@ interface OpenRouterModelData {
  * tool-capable models do report an explicit budget, in which case this is unused.
  */
 const DEFAULT_MAX_OUTPUT_TOKENS = 16_000;
-const DEFAULT_ARNI_BACKEND_ORIGIN = 'https://arni-backend.vercel.app';
+// vercel.app is blocked in Russia; api.arnion.ru is a proxy in Russia that
+// forwards to the Vercel backend (arni-backend/deploy/ru-proxy).
+const DEFAULT_ARNI_BACKEND_ORIGIN = 'https://api.arnion.ru';
 
 /**
  * Normalize `arni.backendUrl` to the origin. The setting default is the

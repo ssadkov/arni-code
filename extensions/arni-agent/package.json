@@ -97,7 +97,7 @@
                                                                                        },
                                                                  "arni.backendUrl":  {
                                                                                          "description":  "URL of the Arni Backend Proxy",
-                                                                                         "default":  "https://arni-backend.vercel.app",
+                                                                                         "default":  "https://api.arnion.ru",
                                                                                          "type":  "string"
                                                                                      }
                                                              }

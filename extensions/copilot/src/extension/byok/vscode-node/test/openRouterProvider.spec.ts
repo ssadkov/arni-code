@@ -122,8 +122,8 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 
 describe('Arni backend URL', () => {
 	it('uses the default origin and /api chat base', () => {
-		expect(resolveArniBackendOrigin(undefined)).toBe('https://arni-backend.vercel.app');
-		expect(resolveArniApiBaseUrl(undefined)).toBe('https://arni-backend.vercel.app/api');
+		expect(resolveArniBackendOrigin(undefined)).toBe('https://api.arnion.ru');
+		expect(resolveArniApiBaseUrl(undefined)).toBe('https://api.arnion.ru/api');
 	});
 
 	it('strips a trailing /api so chat completions hit /api/chat/completions', () => {
