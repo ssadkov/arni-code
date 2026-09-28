@@ -154,8 +154,12 @@ jobs:
           New-Item -ItemType Directory -Path artifacts\windows -Force | Out-Null
           $srcDir = "..\ArniCode-win32-x64"
           if (Test-Path $srcDir) {
-            Write-Host "Compressing $srcDir to artifacts\windows\ArniCode-win32-x64.zip..."
-            Compress-Archive -Path "$srcDir\*" -DestinationPath "artifacts\windows\ArniCode-win32-x64.zip" -CompressionLevel Optimal
+            # One top-level ArniCode folder, so unpacking anywhere gives a ready-to-run folder.
+            $stageDir = "..\zip-stage"
+            New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+            Copy-Item -Path $srcDir -Destination "$stageDir\ArniCode" -Recurse
+            Write-Host "Compressing $stageDir\ArniCode to artifacts\windows\ArniCode-win32-x64.zip..."
+            Compress-Archive -Path "$stageDir\ArniCode" -DestinationPath "artifacts\windows\ArniCode-win32-x64.zip" -CompressionLevel Optimal
             Write-Host "Archive created successfully."
           } else {
             Write-Warning "Source directory $srcDir not found for archive!"

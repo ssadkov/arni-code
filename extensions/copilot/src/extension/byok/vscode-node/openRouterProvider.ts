@@ -54,6 +54,12 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 16_000;
 const DEFAULT_ARNI_BACKEND_ORIGIN = 'https://api.arnion.ru';
 
 /**
+ * Backends tried in order when the user has not set their own `arni.backendUrl`:
+ * the Russian proxy first, then Vercel directly, which works abroad and over VPN.
+ */
+const ARNI_BACKEND_ORIGINS = [DEFAULT_ARNI_BACKEND_ORIGIN, 'https://arni-backend.vercel.app'] as const;
+
+/**
  * Normalize `arni.backendUrl` to the origin. The setting default is the
  * origin; some callers historically stored a trailing `/api`.
  */
@@ -107,6 +113,8 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	public static readonly providerId = this.providerName.toLowerCase();
 
 	private _arniJwt: string | undefined;
+	/** The backend `/api` base that last answered; tried first next time. */
+	private _reachableApiBase: string | undefined;
 	private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
 	public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
@@ -165,14 +173,39 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		return vscode.workspace.getConfiguration('arni').get<string>('backendUrl');
 	}
 
+	/**
+	 * `/api` bases to try, the last reachable one first. A custom
+	 * `arni.backendUrl` is used alone.
+	 */
+	protected getBackendApiCandidates(): string[] {
+		const configured = resolveArniBackendOrigin(this.getConfiguredBackendUrl());
+		const origins: readonly string[] = configured === DEFAULT_ARNI_BACKEND_ORIGIN ? ARNI_BACKEND_ORIGINS : [configured];
+		const bases = origins.map(origin => `${origin}/api`);
+		const reachable = this._reachableApiBase;
+		return reachable && bases.includes(reachable) ? [reachable, ...bases.filter(base => base !== reachable)] : bases;
+	}
+
 	private static readonly _arniAuthProviders = ['yandex', 'vk'] as const;
 
 	private async exchangeArniSession(provider: 'yandex' | 'vk', accessToken: string): Promise<string | undefined> {
-		const response = await fetch(`${resolveArniApiBaseUrl(this.getConfiguredBackendUrl())}/auth/exchange`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ provider, token: accessToken })
-		});
+		let response: Response | undefined;
+		for (const apiBase of this.getBackendApiCandidates()) {
+			try {
+				response = await fetch(`${apiBase}/auth/exchange`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ provider, token: accessToken })
+				});
+				this._reachableApiBase = apiBase;
+				break;
+			} catch (e) {
+				this._logService.warn(`Arni backend unreachable at ${apiBase}: ${String(e)}`);
+			}
+		}
+		if (!response) {
+			this._logService.error(`Failed to exchange ${provider} token: no Arni backend is reachable`);
+			return undefined;
+		}
 		if (response.ok) {
 			const data = await response.json() as { token?: string };
 			if (data.token) {
@@ -238,9 +271,11 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	}
 
 	protected override async getAllModels(silent: boolean, apiKey: string | undefined, configuration: any | undefined): Promise<OpenAICompatibleLanguageModelChatInformation<any>[]> {
+		const catalog = await this.fetchModelCatalog();
+		// Chat requests go to whichever backend answered the catalog request.
 		const modelsUrl = this.getModelsBaseUrl();
 		const models: any = {};
-		for (const m of await this.fetchModelCatalog()) {
+		for (const m of catalog) {
 			models[m.id] = this.resolveModelCapabilities(m) || {
 				name: m.name || m.id,
 				toolCalling: false,
@@ -275,12 +310,16 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	 * built-in list keep the picker usable if the backend is unreachable.
 	 */
 	private async fetchModelCatalog(): Promise<readonly OpenRouterModelData[]> {
-		for (const url of [this.getModelsDiscoveryUrl(''), OPENROUTER_MODELS_URL]) {
+		const backendUrls = this.getBackendApiCandidates().map(apiBase => ({ url: `${apiBase}/models`, apiBase }));
+		for (const { url, apiBase } of [...backendUrls, { url: OPENROUTER_MODELS_URL, apiBase: undefined }]) {
 			try {
 				const res = await fetch(url);
 				if (res.ok) {
 					const json = await res.json() as { data?: OpenRouterModelData[] };
 					if (json.data?.length) {
+						if (apiBase) {
+							this._reachableApiBase = apiBase;
+						}
 						return json.data;
 					}
 				}
@@ -294,7 +333,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	}
 
 	protected override getModelsBaseUrl(): string | undefined {
-		return resolveArniApiBaseUrl(this.getConfiguredBackendUrl());
+		return this._reachableApiBase ?? this.getBackendApiCandidates()[0];
 	}
 
 	protected override getModelsDiscoveryUrl(_modelsBaseUrl: string): string {

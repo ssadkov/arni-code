@@ -22,8 +22,10 @@ class TestableOpenRouterLMProvider extends OpenRouterLMProvider {
 		return this.resolveModelCapabilities(modelData);
 	}
 
-	protected override getModelsBaseUrl(): string {
-		return 'https://arni-backend.vercel.app/api';
+	public backendCandidates = ['https://arni-backend.vercel.app/api'];
+
+	protected override getBackendApiCandidates(): string[] {
+		return this.backendCandidates;
 	}
 
 	public listModels(silent: boolean) {
@@ -161,11 +163,15 @@ describe('Model discovery records capabilities', () => {
 });
 
 describe('Model catalog source', () => {
-	async function listWithFetch(fetchMock: ReturnType<typeof vi.fn>) {
+	async function listWithFetch(fetchMock: ReturnType<typeof vi.fn>, backendCandidates?: string[]) {
 		vi.stubGlobal('fetch', fetchMock);
 		try {
-			const models = await createProvider().listModels(true);
-			return { urls: fetchMock.mock.calls.map(call => String(call[0])), ids: models.map(model => model.id) };
+			const provider = createProvider();
+			if (backendCandidates) {
+				provider.backendCandidates = backendCandidates;
+			}
+			const models = await provider.listModels(true);
+			return { urls: fetchMock.mock.calls.map(call => String(call[0])), ids: models.map(model => model.id), chatBase: models[0]?.url };
 		} finally {
 			vi.unstubAllGlobals();
 		}
@@ -176,7 +182,7 @@ describe('Model catalog source', () => {
 			ok: true,
 			json: async () => ({ data: [{ id: DEFAULT_OPENROUTER_MODEL_ID, name: 'Nemotron', supported_parameters: ['tools'], context_length: 262144, top_provider: { context_length: 262144 } }] }),
 		}));
-		expect(result).toEqual({ urls: ['https://arni-backend.vercel.app/api/models'], ids: [DEFAULT_OPENROUTER_MODEL_ID] });
+		expect(result).toEqual({ urls: ['https://arni-backend.vercel.app/api/models'], ids: [DEFAULT_OPENROUTER_MODEL_ID], chatBase: 'https://arni-backend.vercel.app/api' });
 	});
 
 	it('falls back to the built-in free models when no catalog is reachable', async () => {
@@ -184,6 +190,21 @@ describe('Model catalog source', () => {
 		expect(result).toEqual({
 			urls: ['https://arni-backend.vercel.app/api/models', 'https://openrouter.ai/api/v1/models?supported_parameters=tools'],
 			ids: [DEFAULT_OPENROUTER_MODEL_ID, 'poolside/laguna-s-2.1:free', 'cohere/north-mini-code:free', 'nex-agi/nex-n2.5-mini:free'],
+			chatBase: 'https://arni-backend.vercel.app/api',
+		});
+	});
+
+	it('moves to the next backend when the Russian proxy is unreachable, and sends chat there', async () => {
+		const result = await listWithFetch(vi.fn().mockImplementation(async (url: string) => {
+			if (url.startsWith('https://api.arnion.ru')) {
+				throw new TypeError('fetch failed');
+			}
+			return { ok: true, json: async () => ({ data: [{ id: DEFAULT_OPENROUTER_MODEL_ID, name: 'Nemotron', supported_parameters: ['tools'], context_length: 262144, top_provider: { context_length: 262144 } }] }) };
+		}), ['https://api.arnion.ru/api', 'https://arni-backend.vercel.app/api']);
+		expect(result).toEqual({
+			urls: ['https://api.arnion.ru/api/models', 'https://arni-backend.vercel.app/api/models'],
+			ids: [DEFAULT_OPENROUTER_MODEL_ID],
+			chatBase: 'https://arni-backend.vercel.app/api',
 		});
 	});
 });
