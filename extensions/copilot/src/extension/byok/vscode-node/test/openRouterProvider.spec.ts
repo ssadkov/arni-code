@@ -142,6 +142,12 @@ describe('Model discovery records capabilities', () => {
 			ok: true,
 			json: async () => ({
 				data: [{
+					id: 'poolside/laguna-s-2.1:free',
+					name: 'Laguna S 2.1',
+					supported_parameters: ['tools'],
+					context_length: 200000,
+					top_provider: { context_length: 200000, max_completion_tokens: 8192 },
+				}, {
 					id: 'anthropic/claude-haiku-4.5',
 					name: 'Claude Haiku 4.5',
 					supported_parameters: ['tools'],
@@ -152,13 +158,18 @@ describe('Model discovery records capabilities', () => {
 		});
 		vi.stubGlobal('fetch', fetchMock);
 
+		let models;
 		try {
-			await provider.listModels(true);
+			models = await provider.listModels(true);
 		} finally {
 			vi.unstubAllGlobals();
 		}
 
-		expect(provider.modelInfoFor('anthropic/claude-haiku-4.5').capabilities.supports.tool_calls).toBe(true);
+		// Paid models wait for the Pro plan, so only the free one is offered.
+		expect({
+			ids: models.map(model => model.id),
+			toolCalls: provider.modelInfoFor('poolside/laguna-s-2.1:free').capabilities.supports.tool_calls,
+		}).toEqual({ ids: ['poolside/laguna-s-2.1:free'], toolCalls: true });
 	});
 });
 

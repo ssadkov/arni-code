@@ -9,6 +9,7 @@ import { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { mock, upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IFileService, IFileStatWithMetadata } from '../../../../../platform/files/common/files.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
@@ -64,6 +65,7 @@ suite('StarterProjectGallery', () => {
 			hoverService,
 			storageService,
 			pathService,
+			upcastPartial<ICommandService>({}),
 		));
 		const visibleCards = [...gallery.element.querySelectorAll<HTMLButtonElement>('.starter-project-card:not([hidden])')];
 		visibleCards[0].click();

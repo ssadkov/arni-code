@@ -99,6 +99,24 @@ const FALLBACK_OPENROUTER_MODELS: readonly OpenRouterModelData[] = PREFERRED_FRE
 	top_provider: { context_length: 131_072 },
 }));
 
+/**
+ * Marks an error the user should read as is. The agent host's BYOK proxy
+ * (`byokLmProxyService.ts`) strips it and answers 400 instead of 502, so the
+ * agent shows the text once instead of retrying the request.
+ */
+const ARNI_USER_ERROR_PREFIX = '[arni-user-error] ';
+
+/** Command that adds the signed-in user to the Pro plan waitlist. */
+export const JOIN_PRO_WAITLIST_COMMAND = 'arni.joinProWaitlist';
+
+/**
+ * Only OpenRouter's free models are offered until the Pro plan exists; the
+ * backend also refuses paid models for FREE users.
+ */
+function isFreeOpenRouterModel(model: OpenRouterModelData): boolean {
+	return model.id.endsWith(':free');
+}
+
 export function rankOpenRouterModelId(id: string): number {
 	const preferred = (PREFERRED_FREE_OPENROUTER_MODELS as readonly string[]).indexOf(id);
 	if (preferred !== -1) {
@@ -138,6 +156,11 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			expService
 		);
 		try {
+			vscode.commands.registerCommand(JOIN_PRO_WAITLIST_COMMAND, () => this.joinProWaitlist());
+		} catch {
+			// vscode.commands is unavailable in unit tests
+		}
+		try {
 			vscode.authentication.onDidChangeSessions(e => {
 				if (e.provider.id === 'yandex' || e.provider.id === 'vk') {
 					this._arniJwt = undefined;
@@ -166,7 +189,82 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		if (!apiKey) {
 			throw new Error('Sign in with Yandex or VK to use OpenRouter models.');
 		}
-		return super.provideLanguageModelChatResponse({ ...model, configuration: { ...model.configuration, apiKey } }, messages, options, progress, token);
+		try {
+			return await super.provideLanguageModelChatResponse({ ...model, configuration: { ...model.configuration, apiKey } }, messages, options, progress, token);
+		} catch (error) {
+			throw this.toUserFacingError(error);
+		}
+	}
+
+	/**
+	 * The backend answers 402 for paid models without the Pro plan and 429 for
+	 * the free daily limit, with a Russian message. Pass those on as is and
+	 * offer the Pro waitlist when a paid model was refused.
+	 */
+	private toUserFacingError(error: unknown): unknown {
+		if (!(error instanceof Error)) {
+			return error;
+		}
+		if (error.name === 'ChatQuotaExceeded') {
+			// The 402 message is replaced by Copilot's quota text on the way here.
+			void this.offerProWaitlist();
+			return new Error(ARNI_USER_ERROR_PREFIX + vscode.l10n.t('Эта модель будет доступна в тарифе Pro. Выберите бесплатную модель.'));
+		}
+		if (error.name === 'ChatRateLimited' && error.message) {
+			return new Error(ARNI_USER_ERROR_PREFIX + error.message);
+		}
+		return error;
+	}
+
+	private async offerProWaitlist(): Promise<void> {
+		const notify = vscode.l10n.t('Сообщить о запуске');
+		const choice = await vscode.window.showInformationMessage(vscode.l10n.t('Платные модели (Claude, GPT и другие) появятся в тарифе Pro.'), notify);
+		if (choice === notify) {
+			await this.joinProWaitlist();
+		}
+	}
+
+	/** Adds the user to the Pro waitlist, asking for a contact when the account has no email. */
+	private async joinProWaitlist(): Promise<void> {
+		const apiKey = await this.resolveArniApiKey(false);
+		if (!apiKey) {
+			return;
+		}
+		let status = await this.postProWaitlist(apiKey, undefined);
+		if (status?.needsContact) {
+			const contact = await vscode.window.showInputBox({
+				title: vscode.l10n.t('Сообщить о запуске Pro'),
+				prompt: vscode.l10n.t('Куда написать, когда Pro откроется? Почта или Telegram.'),
+				placeHolder: vscode.l10n.t('name@example.ru или @username'),
+				ignoreFocusOut: true,
+			});
+			if (contact?.trim()) {
+				status = await this.postProWaitlist(apiKey, contact.trim());
+			}
+		}
+		if (status?.joined) {
+			void vscode.window.showInformationMessage(vscode.l10n.t('Готово! Напишем, когда тариф Pro откроется.'));
+		} else {
+			void vscode.window.showWarningMessage(vscode.l10n.t('Не получилось записаться. Попробуйте позже.'));
+		}
+	}
+
+	private async postProWaitlist(apiKey: string, contact: string | undefined): Promise<{ joined: boolean; needsContact: boolean } | undefined> {
+		try {
+			const response = await fetch(`${this.getModelsBaseUrl()}/waitlist`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+				body: JSON.stringify(contact ? { contact } : {}),
+			});
+			if (!response.ok) {
+				this._logService.warn(`Pro waitlist request failed: ${response.status}`);
+				return undefined;
+			}
+			return await response.json() as { joined: boolean; needsContact: boolean };
+		} catch (e) {
+			this._logService.warn(`Pro waitlist request failed: ${String(e)}`);
+			return undefined;
+		}
 	}
 
 	private getConfiguredBackendUrl(): string | undefined {
@@ -316,11 +414,13 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 				const res = await fetch(url);
 				if (res.ok) {
 					const json = await res.json() as { data?: OpenRouterModelData[] };
-					if (json.data?.length) {
+					// The backend already sends only free models; the direct OpenRouter catalog does not.
+					const models = json.data?.filter(isFreeOpenRouterModel);
+					if (models?.length) {
 						if (apiBase) {
 							this._reachableApiBase = apiBase;
 						}
-						return json.data;
+						return models;
 					}
 				}
 				this._logService.warn(`OpenRouter model catalog unavailable from ${url}: ${res.status}`);

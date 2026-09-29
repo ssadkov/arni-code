@@ -12,6 +12,7 @@ import { dirname, joinPath } from '../../../../base/common/resources.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
@@ -94,6 +95,9 @@ const MAX_FOLDER_NAME_ATTEMPTS = 50;
  * The first-run home: describe an idea or pick a ready one, and Arni creates a
  * fresh folder for it and starts the agent there in one step.
  */
+/** Registered by the Copilot extension's OpenRouter provider. */
+const JOIN_PRO_WAITLIST_COMMAND = 'arni.joinProWaitlist';
+
 export class StarterProjectGallery extends Disposable {
 	readonly element: HTMLElement;
 	private readonly _ideaInput: HTMLTextAreaElement;
@@ -116,6 +120,7 @@ export class StarterProjectGallery extends Disposable {
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IStorageService private readonly _storageService: IStorageService,
 		@IPathService pathService: IPathService,
+		@ICommandService private readonly _commandService: ICommandService,
 	) {
 		super();
 		const storedParent = this._storageService.get(STARTER_PROJECT_PARENT_KEY, StorageScope.APPLICATION);
@@ -192,6 +197,19 @@ export class StarterProjectGallery extends Disposable {
 			if (!this._busy) {
 				this._useExistingFolder();
 			}
+		}));
+
+		// Paid models wait for the Pro plan; the Copilot extension's OpenRouter
+		// provider registers the command that adds the user to its waitlist.
+		const pro = dom.append(footer, dom.$('.starter-project-pro'));
+		dom.append(pro, dom.$('span')).textContent = localize('starterProjects.proSoon', "Сейчас работают бесплатные модели. Claude, GPT и другие будут в тарифе Pro.");
+		const proButton = dom.append(pro, dom.$('button.starter-project-link')) as HTMLButtonElement;
+		proButton.type = 'button';
+		proButton.textContent = localize('starterProjects.proNotify', "Сообщить о запуске");
+		this._register(dom.addDisposableListener(proButton, dom.EventType.CLICK, () => {
+			this._commandService.executeCommand(JOIN_PRO_WAITLIST_COMMAND).catch(() => {
+				this._status.textContent = localize('starterProjects.proUnavailable', "Сначала войдите через Яндекс или VK.");
+			});
 		}));
 	}
 

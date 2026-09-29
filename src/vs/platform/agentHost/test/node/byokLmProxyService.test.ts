@@ -364,6 +364,21 @@ suite('ByokLmProxyService', () => {
 		);
 	});
 
+	test('returns a 400 with the plain text for an error meant for the user', async () => {
+		await withProxy(
+			async () => ({ output: [], error: 'Error: [arni-user-error] Дневной лимит исчерпан.' }),
+			async (handle) => {
+				const response = await fetch(responsesUrl(handle, 'acme'), {
+					method: 'POST',
+					headers: authHeaders(handle),
+					body: JSON.stringify({ model: 'm', input: [] }),
+				});
+				const body = await response.json() as { error?: { message?: string } };
+				assert.deepStrictEqual({ status: response.status, message: body.error?.message }, { status: 400, message: 'Дневной лимит исчерпан.' });
+			},
+		);
+	});
+
 	test('returns a 502 when the bridge throws', async () => {
 		await withProxy(
 			async () => { throw new Error('bridge exploded'); },

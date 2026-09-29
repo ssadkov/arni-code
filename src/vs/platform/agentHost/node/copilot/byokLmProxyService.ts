@@ -228,7 +228,12 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 				return;
 			}
 			if (result.error) {
-				this._writeJsonError(res, 502, result.error, 'api_error');
+				const userError = userFacingByokError(result.error);
+				if (userError !== undefined) {
+					this._writeJsonError(res, 400, userError, 'invalid_request_error');
+				} else {
+					this._writeJsonError(res, 502, result.error, 'api_error');
+				}
 				return;
 			}
 			if (body.stream === true) {
@@ -268,6 +273,22 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 		res.writeHead(status, { 'Content-Type': 'application/json' });
 		res.end(responsesErrorBody(message, type));
 	}
+}
+
+/**
+ * Marker the Arni OpenRouter provider (`extensions/copilot/.../openRouterProvider.ts`)
+ * puts on errors meant for the user, such as the free daily limit.
+ */
+const ARNI_USER_ERROR_PREFIX = '[arni-user-error] ';
+
+/**
+ * The user-facing text of a marked BYOK error, or `undefined` for other errors.
+ * Marked errors are answered with 400 so the agent shows them once instead of
+ * retrying the request as it does for 502.
+ */
+export function userFacingByokError(error: string): string | undefined {
+	const index = error.indexOf(ARNI_USER_ERROR_PREFIX);
+	return index === -1 ? undefined : error.slice(index + ARNI_USER_ERROR_PREFIX.length);
 }
 
 /**
