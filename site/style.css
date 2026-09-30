@@ -56,7 +56,11 @@ header.top {
 	text-decoration: none;
 }
 
-.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.brand img { display: block; width: 225px; height: 44px; object-fit: cover; object-position: center; }
+
+@media (prefers-color-scheme: dark) {
+	.brand img { filter: brightness(3); }
+}
 
 nav.links { display: flex; gap: 22px; font-size: 15px; }
 nav.links a { color: var(--muted); text-decoration: none; }
