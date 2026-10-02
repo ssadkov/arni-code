@@ -234,6 +234,8 @@ details p { color: var(--muted); margin: 10px 0 0; }
 
 .band h2 { color: #fff; }
 .band p { color: #bed4f5; margin: 0 0 24px; }
+.band .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.band .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .3); }
 
 footer {
 	padding: 28px 0;
