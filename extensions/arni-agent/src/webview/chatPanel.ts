@@ -32,6 +32,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 case 'checkApiKey':
                     // Just tell the UI it's OK, we handle auth silently via Yandex now
                     this._view?.webview.postMessage({ type: 'apiKeySaved' });
+                    void this.refreshFreeSteps();
                     break;
                 case 'openUrl':
                     if (data.value) {
@@ -91,6 +92,39 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         return undefined;
     }
 
+    private async refreshFreeSteps(): Promise<void> {
+        if (!this._view) {
+            return;
+        }
+        try {
+            let token = await this._secrets.get('arni.jwtToken');
+            if (!token) {
+                const session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
+                if (!session) {
+                    return;
+                }
+                token = await this.getArniToken();
+            }
+            if (!token) {
+                return;
+            }
+            const config = vscode.workspace.getConfiguration('arni');
+            const backendUrl = (config.get<string>('backendUrl') || 'https://api.arnion.ru').replace(/\/+$/, '').replace(/\/api$/i, '');
+            const response = await fetch(`${backendUrl}/api/account`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) {
+                return;
+            }
+            const data: any = await response.json();
+            if (data.user?.freeSteps) {
+                this._view.webview.postMessage({ type: 'freeSteps', value: data.user.freeSteps });
+            }
+        } catch (error) {
+            console.error('Failed to load free steps:', error);
+        }
+    }
+
     private async handleMessage(message: string) {
         if (!this._view) { return; }
 
@@ -129,6 +163,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 value: fullResponse,
                 done: true
             });
+            void this.refreshFreeSteps();
         } catch (error: any) {
             if (error.message?.includes('401')) {
                 // Если JWT протух, удаляем его, чтобы при следующем запросе получить новый
@@ -136,6 +171,9 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 this._view.webview.postMessage({ type: 'error', value: 'Сессия устарела. Пожалуйста, отправьте сообщение еще раз для переавторизации.' });
             } else if (error.message?.includes('402')) {
                 this._view.webview.postMessage({ type: 'error', value: 'На вашем балансе закончились токены. Перейдите в настройки для пополнения.' });
+            } else if (error.message?.includes('429')) {
+                void this.refreshFreeSteps();
+                this._view.webview.postMessage({ type: 'error', value: 'Дневной лимит бесплатных шагов исчерпан.' });
             } else {
                 this._view.webview.postMessage({ 
                     type: 'error', 

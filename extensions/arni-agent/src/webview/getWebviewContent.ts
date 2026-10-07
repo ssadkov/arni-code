@@ -23,6 +23,14 @@ export function getWebviewContent() {
             font-weight: bold;
             text-align: center;
         }
+        #free-steps {
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: normal;
+            color: var(--vscode-descriptionForeground);
+            background-color: var(--vscode-sideBar-background);
+            border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+        }
         #chat-container {
             flex: 1;
             overflow-y: auto;
@@ -100,6 +108,7 @@ export function getWebviewContent() {
 </head>
 <body>
     <div class="header">Arni Agent</div>
+    <div id="free-steps">Бесплатные шаги: …</div>
     
     <div id="setup-container">
         <h2>Добро пожаловать в Arni!</h2>
@@ -113,7 +122,7 @@ export function getWebviewContent() {
         <button id="save-key-btn" style="width: 100%;" type="button">Сохранить ключ</button>
     </div>
 
-    <div id="chat-wrapper" style="display: flex; flex-direction: column; height: 100%;">
+    <div id="chat-wrapper" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div id="chat-container">
             <div class="message arni-message">Привет! Я Arni — ваш умный AI-ассистент по коду. Чем я могу помочь сегодня?</div>
         </div>
@@ -142,6 +151,7 @@ export function getWebviewContent() {
             });
         }
 
+        const freeStepsEl = document.getElementById('free-steps');
         let currentArniMessage = null;
 
         vscode.postMessage({ type: 'checkApiKey' });
@@ -177,6 +187,15 @@ export function getWebviewContent() {
                     chatContainer.appendChild(errorMsg);
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                     currentArniMessage = null;
+                    break;
+                case 'freeSteps':
+                    if (freeStepsEl && message.value) {
+                        const steps = message.value;
+                        freeStepsEl.textContent = steps.remaining > 0
+                            ? `Бесплатные шаги: ${steps.remaining} из ${steps.limit}`
+                            : `Бесплатные шаги закончились · сброс в ${String(steps.resetsAt).slice(11, 16)} UTC`;
+                        freeStepsEl.title = `Сегодня ${steps.used} из ${steps.limit}. Всего ${steps.total}.`;
+                    }
                     break;
                 case 'clearChat':
                     chatContainer.innerHTML = '<div class="message arni-message">Hello! I am Arni, your intelligent coding assistant. How can I help you today?</div>';

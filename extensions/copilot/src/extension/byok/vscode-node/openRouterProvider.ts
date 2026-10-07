@@ -133,6 +133,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	private _arniJwt: string | undefined;
 	/** The backend `/api` base that last answered; tried first next time. */
 	private _reachableApiBase: string | undefined;
+	private _freeStepsItem: vscode.StatusBarItem | undefined;
 	private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
 	public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
@@ -164,6 +165,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			vscode.authentication.onDidChangeSessions(e => {
 				if (e.provider.id === 'yandex' || e.provider.id === 'vk') {
 					this._arniJwt = undefined;
+					this._freeStepsItem?.hide();
 					this._onDidChangeLanguageModelChatInformation.fire();
 				}
 			});
@@ -174,6 +176,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 
 	override async provideLanguageModelChatInformation(options: PrepareLanguageModelChatModelOptions, token: CancellationToken): Promise<OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>[]> {
 		const apiKey = await this.resolveArniApiKey(options.silent, options.configuration?.apiKey);
+		if (apiKey && !this._freeStepsItem?.text) {
+			void this.refreshFreeSteps(apiKey);
+		}
 		const configuration: LanguageModelChatConfiguration = { ...options.configuration, apiKey };
 		const models = await this.getAllModels(options.silent, apiKey, configuration);
 		return models.map(model => ({
@@ -190,9 +195,53 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			throw new Error('Sign in with Yandex or VK to use OpenRouter models.');
 		}
 		try {
-			return await super.provideLanguageModelChatResponse({ ...model, configuration: { ...model.configuration, apiKey } }, messages, options, progress, token);
+			const result = await super.provideLanguageModelChatResponse({ ...model, configuration: { ...model.configuration, apiKey } }, messages, options, progress, token);
+			void this.refreshFreeSteps(apiKey);
+			return result;
 		} catch (error) {
+			void this.refreshFreeSteps(apiKey);
 			throw this.toUserFacingError(error);
+		}
+	}
+
+	private showFreeSteps(steps: { used: number; limit: number; remaining: number; resetsAt: string; total: number } | undefined): void {
+		if (!steps) {
+			return;
+		}
+		try {
+			if (!this._freeStepsItem) {
+				this._freeStepsItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+				this._freeStepsItem.name = 'Arni free steps';
+			}
+			const reset = steps.resetsAt.slice(11, 16);
+			this._freeStepsItem.text = steps.remaining > 0
+				? `$(sparkle) ${steps.remaining} шагов`
+				: `$(warning) 0 шагов`;
+			this._freeStepsItem.tooltip = steps.remaining > 0
+				? `Бесплатные шаги: ${steps.used} из ${steps.limit} сегодня, осталось ${steps.remaining}. Сброс в ${reset} UTC. Всего использовано ${steps.total}.`
+				: `Дневной лимит бесплатных шагов исчерпан. Сброс в ${reset} UTC. Всего использовано ${steps.total}.`;
+			this._freeStepsItem.show();
+		} catch {
+			// vscode.window is unavailable in unit tests
+		}
+	}
+
+	private async refreshFreeSteps(apiKey: string): Promise<void> {
+		for (const apiBase of this.getBackendApiCandidates()) {
+			try {
+				const response = await fetch(`${apiBase}/account`, {
+					headers: { Authorization: `Bearer ${apiKey}` },
+				});
+				if (!response.ok) {
+					continue;
+				}
+				this._reachableApiBase = apiBase;
+				const data = await response.json() as { user?: { freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
+				this.showFreeSteps(data.user?.freeSteps);
+				return;
+			} catch (error) {
+				this._logService.warn(`Unable to load free steps from ${apiBase}: ${String(error)}`);
+			}
 		}
 	}
 
@@ -305,9 +354,10 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			return undefined;
 		}
 		if (response.ok) {
-			const data = await response.json() as { token?: string };
+			const data = await response.json() as { token?: string; user?: { freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
 			if (data.token) {
 				this._arniJwt = data.token;
+				this.showFreeSteps(data.user?.freeSteps);
 				return data.token;
 			}
 			return undefined;
