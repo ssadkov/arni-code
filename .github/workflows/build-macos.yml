@@ -40,6 +40,9 @@ jobs:
       APP_NAME: Arni Code.app
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
       SIGNING_ENABLED: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      # Postinstall scripts (ripgrep) and gulp download from the GitHub API;
+      # anonymous calls from shared macOS runners hit the rate limit (403).
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repository
