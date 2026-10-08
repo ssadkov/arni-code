@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import type { ServerOptions } from 'node:https';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -13,6 +14,8 @@ const PFX_FILE = 'localhost.pfx';
 const PASSPHRASE_SECRET_KEY = 'vk.localhostCertificate.passphrase';
 const KEY_FILE = 'localhost-key.pem';
 const CERT_FILE = 'localhost-cert.pem';
+const TRUSTED_MARKER_FILE = 'localhost-cert.trusted';
+const CREATE_FAILURE = 'Не удалось создать сертификат для входа через VK';
 
 /**
  * Returns TLS options for the https://localhost loopback server, creating a
@@ -64,28 +67,51 @@ try {
 async function ensureOpenSslCertificate(directory: string): Promise<ServerOptions> {
     const keyPath = path.join(directory, KEY_FILE);
     const certPath = path.join(directory, CERT_FILE);
+    const trustedMarkerPath = path.join(directory, TRUSTED_MARKER_FILE);
     if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+        // macOS rejects TLS server certificates without serverAuth or valid
+        // for more than 825 days, even when the user trusts them.
         await run('openssl', [
             'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-            '-keyout', keyPath, '-out', certPath, '-days', '1825',
+            '-keyout', keyPath, '-out', certPath, '-days', '820',
             '-subj', '/CN=localhost',
             '-addext', 'subjectAltName=DNS:localhost',
             '-addext', 'basicConstraints=critical,CA:FALSE',
+            '-addext', 'extendedKeyUsage=serverAuth',
         ]);
         await fs.promises.chmod(keyPath, 0o600);
+        await fs.promises.rm(trustedMarkerPath, { force: true });
+    }
+    if (process.platform === 'darwin' && !fs.existsSync(trustedMarkerPath)) {
+        await trustMacOSCertificate(certPath);
+        await fs.promises.writeFile(trustedMarkerPath, '');
     }
     return { key: await fs.promises.readFile(keyPath), cert: await fs.promises.readFile(certPath) };
+}
+
+/**
+ * Trusts the certificate for SSL in the user's login keychain, so the browser
+ * accepts the https://localhost redirect. macOS asks the user to confirm once.
+ */
+function trustMacOSCertificate(certPath: string): Promise<void> {
+    const keychain = path.join(os.homedir(), 'Library', 'Keychains', 'login.keychain-db');
+    return run(
+        '/usr/bin/security',
+        ['add-trusted-cert', '-r', 'trustRoot', '-p', 'ssl', '-k', keychain, certPath],
+        undefined,
+        'Не удалось добавить сертификат для входа через VK в доверенные'
+    );
 }
 
 function runPowerShell(script: string, env: Record<string, string>): Promise<void> {
     return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], env);
 }
 
-function run(command: string, args: string[], env?: Record<string, string>): Promise<void> {
+function run(command: string, args: string[], env?: Record<string, string>, failureMessage = CREATE_FAILURE): Promise<void> {
     return new Promise((resolve, reject) => {
         execFile(command, args, { windowsHide: true, env: { ...process.env, ...env } }, (error, _stdout, stderr) => {
             if (error) {
-                reject(new Error(`Не удалось создать сертификат для входа через VK: ${stderr.trim() || error.message}`));
+                reject(new Error(`${failureMessage}: ${stderr.trim() || error.message}`));
             } else {
                 resolve();
             }
