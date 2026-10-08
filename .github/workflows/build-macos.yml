@@ -1,0 +1,195 @@
+name: Build Arni Code — macOS arm64
+
+# Signing and notarization run when the MACOS_CERTIFICATE secret is set:
+#   MACOS_CERTIFICATE           base64 of the "Developer ID Application" .p12
+#   MACOS_CERTIFICATE_PASSWORD  password of that .p12
+#   APPLE_ID                    Apple ID email of the developer account
+#   APPLE_APP_PASSWORD          app-specific password for that Apple ID
+#   APPLE_TEAM_ID               10-character team ID
+# Without them the app is only ad-hoc signed: it runs after `xattr -cr`, which
+# is fine for internal testing but not for public downloads.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish artifacts to a GitHub Release'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Release tag (e.g. v1.0.0) to attach to. Empty = date-based tag; ignored on tag push'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS arm64
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      VSCODE_ARCH: arm64
+      APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-arm64
+      APP_NAME: Arni Code.app
+      PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
+      SIGNING_ENABLED: ${{ secrets.MACOS_CERTIFICATE != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read .nvmrc
+        id: nvmrc
+        run: echo "node_version=$(tr -d '\n\r' < .nvmrc)" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvmrc.outputs.node_version }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          npm_config_arch: arm64
+
+      - name: Build bundled Arni extensions
+        run: |
+          set -e
+          for dir in extensions/arni-agent extensions/yandex-authentication extensions/vk-authentication; do
+            echo "Building $dir"
+            (cd "$dir" && npm install && if [ -f esbuild.js ]; then node esbuild.js --production; fi)
+          done
+
+      - name: Build Arni Code (production)
+        run: npm run gulp vscode-darwin-arm64-min
+        env:
+          npm_config_arch: arm64
+
+      - name: Import signing certificate
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -e
+          KEYCHAIN="$RUNNER_TEMP/buildagent.keychain"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          echo "$MACOS_CERTIFICATE" | base64 -D > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | grep -oE '[0-9A-F]{40}' | head -n 1)
+          if [ -z "$IDENTITY" ]; then
+            echo "No 'Developer ID Application' identity in the certificate." >&2
+            exit 1
+          fi
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> $GITHUB_ENV
+
+      - name: Sign app with hardened runtime
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          AGENT_TEMPDIRECTORY: ${{ runner.temp }}
+        run: |
+          set -e
+          node build/darwin/sign.ts "$(dirname "$GITHUB_WORKSPACE")"
+          codesign --verify --deep --strict --verbose=2 "$APP_DIR/$APP_NAME"
+
+      - name: Ad-hoc sign app (no certificate)
+        if: env.SIGNING_ENABLED != 'true'
+        run: codesign --force --deep --sign - "$APP_DIR/$APP_NAME"
+
+      - name: Notarize app
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -e
+          ditto -c -k --keepParent "$APP_DIR/$APP_NAME" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 60m
+          xcrun stapler staple "$APP_DIR/$APP_NAME"
+          spctl --assess --type execute --verbose "$APP_DIR/$APP_NAME"
+
+      - name: Package zip and dmg
+        run: |
+          set -e
+          mkdir -p artifacts/macos
+          ditto -c -k --keepParent "$APP_DIR/$APP_NAME" artifacts/macos/ArniCode-darwin-arm64.zip
+
+          STAGE="$RUNNER_TEMP/dmg-stage"
+          mkdir -p "$STAGE"
+          ditto "$APP_DIR/$APP_NAME" "$STAGE/$APP_NAME"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "Arni Code" -srcfolder "$STAGE" -ov -format UDZO artifacts/macos/ArniCode-darwin-arm64.dmg
+
+      - name: Sign and notarize dmg
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -e
+          DMG=artifacts/macos/ArniCode-darwin-arm64.dmg
+          codesign --sign "$CODESIGN_IDENTITY" --timestamp "$DMG"
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 60m
+          xcrun stapler staple "$DMG"
+
+      - name: List artifacts
+        run: ls -lh artifacts/macos
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArniCode-darwin-arm64
+          path: artifacts/macos/
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: env.PUBLISH_RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -e
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          elif [ -n "$(echo "$INPUT_RELEASE_TAG" | tr -d '[:space:]')" ]; then
+            TAG="$(echo "$INPUT_RELEASE_TAG" | tr -d '[:space:]')"
+          else
+            TAG="v$(date -u +%Y.%m.%d-%H%M)"
+          fi
+          case "$TAG" in v*) ;; *) TAG="v$TAG" ;; esac
+
+          # The Windows build publishes to the same tag, so whichever job comes
+          # second uploads into the release the first one created.
+          if gh release view "$TAG" > /dev/null 2>&1 \
+            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --generate-notes --latest; then
+            gh release upload "$TAG" artifacts/macos/* --clobber
+          fi
+          echo "Release URL: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+
+      - name: Remove signing keychain
+        if: always() && env.SIGNING_ENABLED == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/buildagent.keychain" || true
