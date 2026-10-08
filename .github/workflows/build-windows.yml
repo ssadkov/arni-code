@@ -97,8 +97,10 @@ jobs:
           if (Test-Path $extensionDir) {
             Push-Location $extensionDir
             npm install
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             if (Test-Path "esbuild.js") {
               node esbuild.js --production
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
             Pop-Location
             Write-Host "Arni Agent extension built successfully."
@@ -113,8 +115,10 @@ jobs:
           if (Test-Path $yandexDir) {
             Push-Location $yandexDir
             npm install
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             if (Test-Path "esbuild.js") {
               node esbuild.js --production
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
             Pop-Location
             Write-Host "Yandex Authentication extension built successfully."
@@ -129,8 +133,10 @@ jobs:
           if (Test-Path $vkDir) {
             Push-Location $vkDir
             npm install
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             if (Test-Path "esbuild.js") {
               node esbuild.js --production
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
             Pop-Location
             Write-Host "VK Authentication extension built successfully."

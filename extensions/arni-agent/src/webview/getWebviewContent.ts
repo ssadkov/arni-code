@@ -192,9 +192,9 @@ export function getWebviewContent() {
                     if (freeStepsEl && message.value) {
                         const steps = message.value;
                         freeStepsEl.textContent = steps.remaining > 0
-                            ? `Бесплатные шаги: ${steps.remaining} из ${steps.limit}`
-                            : `Бесплатные шаги закончились · сброс в ${String(steps.resetsAt).slice(11, 16)} UTC`;
-                        freeStepsEl.title = `Сегодня ${steps.used} из ${steps.limit}. Всего ${steps.total}.`;
+                            ? 'Бесплатные шаги: ' + steps.remaining + ' из ' + steps.limit
+                            : 'Бесплатные шаги закончились · сброс в ' + String(steps.resetsAt).slice(11, 16) + ' UTC';
+                        freeStepsEl.title = 'Сегодня ' + steps.used + ' из ' + steps.limit + '. Всего ' + steps.total + '.';
                     }
                     break;
                 case 'clearChat':
