@@ -760,7 +760,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[ChatConfiguration.DefaultModel]: {
 			type: 'string',
-			default: 'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free',
+			default: '',
 			markdownDescription: nls.localize('chat.defaultModel.description', "The default model for new chat conversations. Use \"auto\" to let Copilot pick a model, a model family name (such as \"opus\" or \"gemini\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model."),
 			policy: {
 				name: 'ChatDefaultModel',
