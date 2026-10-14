@@ -2,6 +2,9 @@ name: Verify macOS test packages
 
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/billing-client-installers]
+    paths: [.github/workflows/verify-macos-packages.yml]
 
 permissions:
   actions: read
@@ -15,17 +18,32 @@ jobs:
         include:
           - arch: arm64
             runner: macos-15
+            build_run: 38543783786
           - arch: x64
             runner: macos-15-intel
+            build_run: 38540842482
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILD_RUN: ${{ matrix.build_run }}
+      ARTIFACT_NAME: ArniCode-darwin-${{ matrix.arch }}
       PACKAGE_COMMIT: ee4c1c397273a343ca6288656e91c21be7a723ed
     steps:
       - uses: actions/checkout@v4
       - name: Download completed billing build
-        run: gh run download 38540842482 --repo "$GITHUB_REPOSITORY" --name "ArniCode-darwin-${{ matrix.arch }}" --dir packages
+        run: |
+          set -euo pipefail
+          for attempt in {1..40}; do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN/artifacts" --jq '.artifacts[].name' | grep -Fx "$ARTIFACT_NAME"; then
+              gh run download "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir packages
+              exit 0
+            fi
+            echo "Waiting for $ARTIFACT_NAME from run $BUILD_RUN"
+            sleep 30
+          done
+          echo "Build artifact did not become available" >&2
+          exit 1
       - name: Verify checksums, app signature and CLI
         run: |
           set -euo pipefail
