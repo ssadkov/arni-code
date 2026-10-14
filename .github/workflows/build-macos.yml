@@ -1,4 +1,4 @@
-name: Build Arni Code — macOS arm64
+name: Build Arni Code — macOS
 
 # Signing and notarization run when the MACOS_CERTIFICATE secret is set:
 #   MACOS_CERTIFICATE           base64 of the "Developer ID Application" .p12
@@ -31,12 +31,20 @@ permissions:
 
 jobs:
   build-macos:
-    name: Build macOS arm64
-    runs-on: macos-latest
+    name: Build macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
-      VSCODE_ARCH: arm64
-      APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-arm64
+      VSCODE_ARCH: ${{ matrix.arch }}
+      APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-${{ matrix.arch }}
       APP_NAME: Arni Code.app
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
       SIGNING_ENABLED: ${{ secrets.MACOS_CERTIFICATE != '' }}
@@ -65,7 +73,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
         env:
-          npm_config_arch: arm64
+          npm_config_arch: ${{ matrix.arch }}
+
+      - name: Test billing client compatibility
+        working-directory: extensions/copilot
+        run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts
 
       - name: Build bundled Arni extensions
         run: |
@@ -76,9 +88,17 @@ jobs:
           done
 
       - name: Build Arni Code (production)
-        run: npm run gulp vscode-darwin-arm64-min
+        run: npm run gulp vscode-darwin-${{ matrix.arch }}-min
         env:
           npm_config_arch: arm64
+
+      - name: Verify bundled billing client
+        run: |
+          node scripts/verify-billing-package.mjs "$APP_DIR/$APP_NAME/Contents/Resources/app" artifacts/macos/build-manifest.json "$VSCODE_ARCH"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/$APP_NAME/Contents/Info.plist")
+          EXPECTED="$VSCODE_ARCH"
+          if [ "$EXPECTED" = x64 ]; then EXPECTED=x86_64; fi
+          test "$(lipo -archs "$APP_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE")" = "$EXPECTED"
 
       - name: Import signing certificate
         if: env.SIGNING_ENABLED == 'true'
@@ -136,13 +156,13 @@ jobs:
         run: |
           set -e
           mkdir -p artifacts/macos
-          ditto -c -k --keepParent "$APP_DIR/$APP_NAME" artifacts/macos/ArniCode-darwin-arm64.zip
+          ditto -c -k --keepParent "$APP_DIR/$APP_NAME" artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.zip
 
           STAGE="$RUNNER_TEMP/dmg-stage"
           mkdir -p "$STAGE"
           ditto "$APP_DIR/$APP_NAME" "$STAGE/$APP_NAME"
           ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "Arni Code" -srcfolder "$STAGE" -ov -format UDZO artifacts/macos/ArniCode-darwin-arm64.dmg
+          hdiutil create -volname "Arni Code" -srcfolder "$STAGE" -ov -format UDZO artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.dmg
 
       - name: Sign and notarize dmg
         if: env.SIGNING_ENABLED == 'true'
@@ -152,20 +172,24 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -e
-          DMG=artifacts/macos/ArniCode-darwin-arm64.dmg
+          DMG=artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.dmg
           codesign --sign "$CODESIGN_IDENTITY" --timestamp "$DMG"
           xcrun notarytool submit "$DMG" \
             --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --wait --timeout 60m
           xcrun stapler staple "$DMG"
 
-      - name: List artifacts
-        run: ls -lh artifacts/macos
+      - name: List artifacts and checksums
+        run: |
+          shasum -a 256 artifacts/macos/*.zip artifacts/macos/*.dmg > artifacts/macos/SHA256SUMS.txt
+          ls -lh artifacts/macos
+          echo "Commit: $GITHUB_SHA; architecture: $VSCODE_ARCH; Developer ID signing: $SIGNING_ENABLED" >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/macos/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ArniCode-darwin-arm64
+          name: ArniCode-darwin-${{ matrix.arch }}
           path: artifacts/macos/
           if-no-files-found: error
 

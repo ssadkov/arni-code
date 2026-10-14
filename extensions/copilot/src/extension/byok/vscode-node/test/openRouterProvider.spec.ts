@@ -28,8 +28,8 @@ class TestableOpenRouterLMProvider extends OpenRouterLMProvider {
 		return this.backendCandidates;
 	}
 
-	public listModels(silent: boolean) {
-		return this.getAllModels(silent, undefined, undefined);
+	public listModels(silent: boolean, apiKey?: string) {
+		return this.getAllModels(silent, apiKey, undefined);
 	}
 
 	public modelInfoFor(modelId: string) {
@@ -174,6 +174,20 @@ describe('Model discovery records capabilities', () => {
 });
 
 describe('Model catalog source', () => {
+	it('offers the authenticated managed catalog and never sends the account token to OpenRouter', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ arni_managed: true,
+			data: [{ id: 'us.anthropic.test-v1:0', name: 'Bedrock', supported_parameters: ['tools'], context_length: 32768, top_provider: { context_length: 32768, max_completion_tokens: 4096 } }],
+		}) });
+		vi.stubGlobal('fetch', fetchMock);
+		const provider = createProvider();
+		try {
+			const models = await provider.listModels(true, 'test-account-token');
+			expect({ ids: models.map(model => model.id), headers: fetchMock.mock.calls[0][1].headers }).toEqual({
+				ids: ['us.anthropic.test-v1:0'], headers: { Authorization: 'Bearer test-account-token' },
+			});
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
+	});
+
 	async function listWithFetch(fetchMock: ReturnType<typeof vi.fn>, backendCandidates?: string[]) {
 		vi.stubGlobal('fetch', fetchMock);
 		try {
