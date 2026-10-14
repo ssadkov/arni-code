@@ -1,0 +1,48 @@
+name: Verify macOS test packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PACKAGE_COMMIT: ee4c1c397273a343ca6288656e91c21be7a723ed
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download completed billing build
+        run: gh run download 38540842482 --repo "$GITHUB_REPOSITORY" --name "ArniCode-darwin-${{ matrix.arch }}" --dir packages
+      - name: Verify checksums, app signature and CLI
+        run: |
+          set -euo pipefail
+          sed 's|artifacts/macos/||g' packages/SHA256SUMS.txt > packages/checksums-local.txt
+          (cd packages && shasum -a 256 -c checksums-local.txt)
+          ditto -x -k "packages/ArniCode-darwin-${{ matrix.arch }}.zip" extracted
+          APP="$PWD/extracted/Arni Code.app"
+          GITHUB_SHA="$PACKAGE_COMMIT" node scripts/verify-billing-package.mjs "$APP/Contents/Resources/app" verification-manifest.json "${{ matrix.arch }}"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          "$APP/Contents/Resources/app/bin/code" --user-data-dir "$RUNNER_TEMP/billing-smoke-profile" --extensions-dir "$RUNNER_TEMP/billing-smoke-extensions" --version | tee cli-version.txt
+          grep -Fx "$PACKAGE_COMMIT" cli-version.txt
+          grep -Fx "${{ matrix.arch }}" cli-version.txt
+          cat cli-version.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-package-verification-${{ matrix.arch }}
+          path: |
+            verification-manifest.json
+            cli-version.txt
+          if-no-files-found: error
