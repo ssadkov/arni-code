@@ -90,7 +90,7 @@ jobs:
       - name: Build Arni Code (production)
         run: npm run gulp vscode-darwin-${{ matrix.arch }}-min
         env:
-          npm_config_arch: arm64
+          npm_config_arch: ${{ matrix.arch }}
 
       - name: Verify bundled billing client
         run: |
