@@ -58,7 +58,7 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 		this._providers.set(GeminiNativeBYOKLMProvider.providerId, gemini);
 		this._providers.set(XAIBYOKLMProvider.providerId, xai);
 		this._providers.set(OAIBYOKLMProvider.providerId, openai);
-		this._providers.set(OpenRouterLMProvider.providerId, instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService));
+		this._providers.set(OpenRouterLMProvider.providerId, this._register(instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService)));
 		this._providers.set(AzureBYOKModelProvider.providerId, instantiationService.createInstance(AzureBYOKModelProvider, this._byokStorageService));
 		this._providers.set(CustomOAIBYOKModelProvider.providerId, instantiationService.createInstance(CustomOAIBYOKModelProvider, this._byokStorageService));
 		this._providers.set(CustomEndpointBYOKModelProvider.providerId, instantiationService.createInstance(CustomEndpointBYOKModelProvider, this._byokStorageService));

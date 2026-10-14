@@ -913,4 +913,11 @@ describe('BYOK transient retries', () => {
 			reason: 'cancelled',
 		})).toBe(false);
 	});
+
+	it('does not retry account budget limits, even when the transport marks them 429 or failed', () => {
+		for (const code of ['five_hour_limit', 'weekly_limit', 'request_in_progress', 'insufficient_budget', 'access_expired']) {
+			expect(shouldRetryBYOKChatResponse({ ...dailyCap, reason: JSON.stringify({ error: { code } }), capiError: { code, message: code } })).toBe(false);
+			expect(shouldRetryBYOKChatResponse({ ...failedStream, reason: JSON.stringify({ error: { code } }) })).toBe(false);
+		}
+	});
 });

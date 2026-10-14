@@ -1,3 +1,7 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 export function getWebviewContent() {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -187,6 +191,12 @@ export function getWebviewContent() {
                     chatContainer.appendChild(errorMsg);
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                     currentArniMessage = null;
+                    break;
+                case 'budget':
+                    if (freeStepsEl && message.value) {
+                        freeStepsEl.textContent = message.value.text;
+                        freeStepsEl.title = message.value.tooltip;
+                    }
                     break;
                 case 'freeSteps':
                     if (freeStepsEl && message.value) {
