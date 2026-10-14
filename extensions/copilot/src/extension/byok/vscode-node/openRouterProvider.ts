@@ -83,6 +83,28 @@ export const PREFERRED_FREE_OPENROUTER_MODELS = [
 
 export const DEFAULT_OPENROUTER_MODEL_ID = PREFERRED_FREE_OPENROUTER_MODELS[0];
 
+export interface OpenRouterTrafficModel {
+	readonly id: string;
+	readonly arni_traffic?: 'green' | 'yellow' | 'red' | 'unknown';
+}
+
+/**
+ * The model a new chat should start on. Without traffic lights this stays the
+ * historical default. A red light moves to the next preferred model that is not red.
+ */
+export function preferredDefaultModelId(models: readonly OpenRouterTrafficModel[]): string {
+	if (!models.some(model => model.arni_traffic)) {
+		return DEFAULT_OPENROUTER_MODEL_ID;
+	}
+	for (const id of PREFERRED_FREE_OPENROUTER_MODELS) {
+		const model = models.find(item => item.id === id);
+		if (model && model.arni_traffic !== 'red') {
+			return id;
+		}
+	}
+	return DEFAULT_OPENROUTER_MODEL_ID;
+}
+
 /** Direct OpenRouter catalog. It refuses requests from Russia, so it is only a fallback. */
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models?supported_parameters=tools';
 
@@ -440,11 +462,12 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		this._knownModels = { ...this._knownModels, ...models };
 
 		const byokModels = byokKnownModelsToAPIInfoWithEffort(this._name, models);
+		const defaultModelId = preferredDefaultModelId(catalog);
 		return byokModels
 			.map(model => ({
 				...model,
 				url: modelsUrl!,
-				isDefault: model.id === DEFAULT_OPENROUTER_MODEL_ID
+				isDefault: model.id === defaultModelId
 			}))
 			.sort((a, b) => {
 				const rank = rankOpenRouterModelId(a.id) - rankOpenRouterModelId(b.id);

@@ -208,7 +208,7 @@
         "workbench.startupEditor": "none",
         "workbench.secondarySideBar.defaultVisibility": "maximized",
         "chat.byokUtilityModelDefault": "mainAgent",
-        "chat.defaultModel": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "chat.defaultModel": "",
         "chat.agentHost.allowSignedOutWhenUsable": true,
         "chat.agentHost.byokModels.enabled": true
     }

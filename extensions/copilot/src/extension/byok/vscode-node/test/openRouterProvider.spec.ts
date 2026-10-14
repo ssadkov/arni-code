@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { BYOKModelCapabilities } from '../../common/byokProvider';
-import { DEFAULT_OPENROUTER_MODEL_ID, isOpenRouterBaseUrl, OpenRouterLMProvider, rankOpenRouterModelId, resolveArniApiBaseUrl, resolveArniBackendOrigin } from '../openRouterProvider';
+import { DEFAULT_OPENROUTER_MODEL_ID, isOpenRouterBaseUrl, OpenRouterLMProvider, preferredDefaultModelId, rankOpenRouterModelId, resolveArniApiBaseUrl, resolveArniBackendOrigin } from '../openRouterProvider';
 
 /**
  * Tests for issue #324671:
@@ -239,5 +239,17 @@ describe('OpenRouter free-model ranking', () => {
 		expect(rankOpenRouterModelId(DEFAULT_OPENROUTER_MODEL_ID)).toBe(0);
 		expect(rankOpenRouterModelId('cohere/north-mini-code:free')).toBeLessThan(rankOpenRouterModelId('aion-labs/aion-2.0'));
 		expect(rankOpenRouterModelId('google/gemma-4-31b-it:free')).toBeLessThan(rankOpenRouterModelId('anthropic/claude-sonnet-4.5'));
+	});
+
+	it('keeps the historical default when the catalog has no traffic lights', () => {
+		expect(preferredDefaultModelId([{ id: DEFAULT_OPENROUTER_MODEL_ID }])).toBe(DEFAULT_OPENROUTER_MODEL_ID);
+	});
+
+	it('starts a new chat on the next preferred model when the default is red', () => {
+		expect(preferredDefaultModelId([
+			{ id: DEFAULT_OPENROUTER_MODEL_ID, arni_traffic: 'red' },
+			{ id: 'poolside/laguna-s-2.1:free', arni_traffic: 'green' },
+			{ id: 'cohere/north-mini-code:free', arni_traffic: 'green' },
+		])).toBe('poolside/laguna-s-2.1:free');
 	});
 });
