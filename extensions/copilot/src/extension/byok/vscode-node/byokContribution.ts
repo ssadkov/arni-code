@@ -22,6 +22,7 @@ import { OllamaLMProvider } from './ollamaProvider';
 import { OAIBYOKLMProvider } from './openAIProvider';
 import { OpenRouterLMProvider } from './openRouterProvider';
 import { XAIBYOKLMProvider } from './xAIProvider';
+import { ARNI_IMAGE_TOOL } from './arniImageTool';
 
 export class BYOKContrib extends Disposable implements IExtensionContribution {
 	public readonly id: string = 'byok-contribution';
@@ -80,6 +81,8 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 			for (const [providerId, provider] of this._providers) {
 				this._providerRegistrations.add(lm.registerLanguageModelChatProvider(providerId, provider));
 			}
+			const arni = this._providers.get(OpenRouterLMProvider.providerId) as OpenRouterLMProvider;
+			this._providerRegistrations.add(lm.registerTool(ARNI_IMAGE_TOOL, arni.createImageTool()));
 			this._providersRegistered = true;
 			this._logService.info(`BYOK: registered ${this._providers.size} provider(s): ${Array.from(this._providers.keys()).join(', ')}`);
 			if (!this._knownModelsRefreshed) {

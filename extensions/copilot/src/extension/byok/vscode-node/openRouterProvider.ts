@@ -21,6 +21,7 @@ import * as vscode from 'vscode';
 import { CancellationToken, LanguageModelChatMessage, LanguageModelChatMessage2, LanguageModelResponsePart2, PrepareLanguageModelChatModelOptions, Progress, ProvideLanguageModelChatResponseOptions } from 'vscode';
 import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
+import { ArniImageTool } from './arniImageTool';
 
 interface ArniBudgetWindow {
 	usedMicros: number;
@@ -217,6 +218,14 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 
 	dispose(): void {
 		this._disposables.dispose();
+	}
+
+	public createImageTool(): ArniImageTool {
+		return new ArniImageTool(this._fetcherService, async () => {
+			const token = await this.resolveArniApiKey(false);
+			if (!token) { throw new Error(vscode.l10n.t('Sign in to ArniCode to generate images.')); }
+			return { token, apiBase: this._reachableApiBase ?? this.getBackendApiCandidates()[0] };
+		});
 	}
 
 	override async provideLanguageModelChatInformation(options: PrepareLanguageModelChatModelOptions, token: CancellationToken): Promise<OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>[]> {

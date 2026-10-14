@@ -156,6 +156,24 @@
   "contributes": {
     "languageModelTools": [
       {
+        "name": "arni_generate_image",
+        "toolReferenceName": "generateImage",
+        "displayName": "%arni.tools.generateImage.name%",
+        "icon": "$(file-media)",
+        "userDescription": "%arni.tools.generateImage.description%",
+        "modelDescription": "Generate one PNG image asset (hero illustration, background, photo or mockup) for the current project using Amazon Bedrock Stable Image Core. Requires ArniCode sign-in and API budget. Write a detailed visual prompt and choose an unused relative savePath ending in .png. Repeating exactly the same prompt, aspectRatio and savePath recovers the original request without paying twice; never automatically retry a failed generation with changed inputs. The tool saves and previews the image and returns its path plus image. For landing pages, use generated assets in the HTML/CSS, then open the page in the browser, take a screenshot with screenshot_page and inspect it; generation is not a substitute for checking the rendered page.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "prompt": { "type": "string", "maxLength": 10000, "description": "Detailed description of the desired visual asset." },
+            "savePath": { "type": "string", "description": "Unused PNG path relative to the single open project folder, e.g. public/generated/hero.png." },
+            "aspectRatio": { "type": "string", "enum": ["16:9", "1:1", "21:9", "2:3", "3:2", "4:5", "5:4", "9:16", "9:21"] }
+          },
+          "required": ["prompt", "savePath"],
+          "additionalProperties": false
+        }
+      },
+      {
         "name": "copilot_searchCodebase",
         "toolReferenceName": "codebase",
         "displayName": "%copilot.tools.searchCodebase.name%",
