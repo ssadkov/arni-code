@@ -155,7 +155,14 @@ jobs:
           npm_config_arch: x64
 
       - name: Verify bundled billing client
-        run: node scripts/verify-billing-package.mjs ../ArniCode-win32-x64/resources/app artifacts/windows/build-manifest.json x64
+        run: node scripts/verify-billing-package.mjs ../ArniCode-win32-x64/resources/app artifacts/windows/build-manifest-win32-x64.json x64
+
+      - name: Verify native CLI
+        shell: pwsh
+        run: |
+          $output = & "../ArniCode-win32-x64/bin/arni-code.cmd" --user-data-dir "$env:RUNNER_TEMP/billing-cli-profile" --extensions-dir "$env:RUNNER_TEMP/billing-cli-extensions" --version
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains $env:GITHUB_SHA -or $output -notcontains 'x64') { throw "Unexpected Windows CLI version/commit/architecture" }
+          $output | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Build Windows installer
         if: env.BUILD_INSTALLER == 'true'
@@ -193,7 +200,7 @@ jobs:
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
           }
-          $checksums | Set-Content -LiteralPath artifacts/windows/SHA256SUMS.txt -Encoding utf8
+          $checksums | Set-Content -LiteralPath artifacts/windows/SHA256SUMS-win32-x64.txt -Encoding utf8
           "Commit: $env:GITHUB_SHA" | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           $checksums | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
@@ -251,9 +258,10 @@ jobs:
           $files = @(
             Get-ChildItem -Path "artifacts\windows\*Setup*.exe" -ErrorAction SilentlyContinue
             Get-ChildItem -Path "artifacts\windows\*.zip" -ErrorAction SilentlyContinue
+            Get-ChildItem -Path "artifacts\windows\*.json", "artifacts\windows\*.txt" -ErrorAction SilentlyContinue
           ) | Where-Object { $_ -ne $null }
 
-          if ($files.Count -eq 0) {
+          if (@($files | Where-Object { $_.Extension -in @('.exe', '.zip') }).Count -eq 0) {
             throw "No release assets found in artifacts\windows (expected *Setup*.exe and/or *.zip)."
           }
 
@@ -266,7 +274,7 @@ jobs:
             gh release upload $tag @($files.FullName) --clobber
           } else {
             Write-Host "Creating release '$tag'."
-            gh release create $tag @($files.FullName) --title $tag --generate-notes --latest
+            gh release create $tag @($files.FullName) --title $tag --target $env:GITHUB_SHA --generate-notes --latest
           }
 
           Write-Host "Release URL: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$tag"

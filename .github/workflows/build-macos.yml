@@ -103,7 +103,7 @@ jobs:
 
       - name: Verify bundled billing client
         run: |
-          GITHUB_SHA="$(git rev-parse HEAD)" node scripts/verify-billing-package.mjs "$APP_DIR/$APP_NAME/Contents/Resources/app" artifacts/macos/build-manifest.json "$VSCODE_ARCH"
+          GITHUB_SHA="$(git rev-parse HEAD)" node scripts/verify-billing-package.mjs "$APP_DIR/$APP_NAME/Contents/Resources/app" artifacts/macos/build-manifest-${{ matrix.arch }}.json "$VSCODE_ARCH"
           EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/$APP_NAME/Contents/Info.plist")
           EXPECTED="$VSCODE_ARCH"
           if [ "$EXPECTED" = x64 ]; then EXPECTED=x86_64; fi
@@ -163,6 +163,14 @@ jobs:
           xcrun stapler staple "$APP_DIR/$APP_NAME"
           spctl --assess --type execute --verbose "$APP_DIR/$APP_NAME"
 
+      - name: Verify native CLI
+        run: |
+          set -euo pipefail
+          "$APP_DIR/$APP_NAME/Contents/Resources/app/bin/code" --user-data-dir "$RUNNER_TEMP/billing-cli-profile" --extensions-dir "$RUNNER_TEMP/billing-cli-extensions" --version | tee "$RUNNER_TEMP/cli-version.txt"
+          grep -Fx "$(git rev-parse HEAD)" "$RUNNER_TEMP/cli-version.txt"
+          grep -Fx "$VSCODE_ARCH" "$RUNNER_TEMP/cli-version.txt"
+          cat "$RUNNER_TEMP/cli-version.txt" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Package zip
         id: package_zip
         run: |
@@ -208,13 +216,13 @@ jobs:
       - name: List artifacts and checksums
         if: always() && steps.package_zip.conclusion == 'success'
         run: |
-          : > artifacts/macos/SHA256SUMS.txt
+          : > artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt
           for file in artifacts/macos/*.zip artifacts/macos/*.dmg; do
-            if [ -f "$file" ]; then shasum -a 256 "$file" >> artifacts/macos/SHA256SUMS.txt; fi
+            if [ -f "$file" ]; then shasum -a 256 "$file" >> artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt; fi
           done
           ls -lh artifacts/macos
           echo "Commit: $(git rev-parse HEAD); architecture: $VSCODE_ARCH; Developer ID signing: $SIGNING_ENABLED" >> "$GITHUB_STEP_SUMMARY"
-          cat artifacts/macos/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build artifacts
         if: always() && steps.package_zip.conclusion == 'success'
@@ -243,7 +251,7 @@ jobs:
           # The Windows build publishes to the same tag, so whichever job comes
           # second uploads into the release the first one created.
           if gh release view "$TAG" > /dev/null 2>&1 \
-            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --generate-notes --latest; then
+            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --target "$(git rev-parse HEAD)" --generate-notes --latest; then
             gh release upload "$TAG" artifacts/macos/* --clobber
           fi
           echo "Release URL: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
