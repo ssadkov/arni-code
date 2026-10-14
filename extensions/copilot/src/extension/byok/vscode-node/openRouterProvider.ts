@@ -104,6 +104,7 @@ export const DEFAULT_OPENROUTER_MODEL_ID = PREFERRED_FREE_OPENROUTER_MODELS[0];
 
 export interface OpenRouterTrafficModel {
 	readonly id: string;
+	readonly arni_default?: boolean;
 	readonly arni_traffic?: 'green' | 'yellow' | 'red' | 'unknown';
 }
 
@@ -112,6 +113,10 @@ export interface OpenRouterTrafficModel {
  * historical default. A red light moves to the next preferred model that is not red.
  */
 export function preferredDefaultModelId(models: readonly OpenRouterTrafficModel[]): string {
+	const managedDefault = models.find(model => model.arni_default)?.id;
+	if (managedDefault) {
+		return managedDefault;
+	}
 	if (!models.some(model => model.arni_traffic)) {
 		return DEFAULT_OPENROUTER_MODEL_ID;
 	}
