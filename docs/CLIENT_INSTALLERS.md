@@ -65,4 +65,3 @@ macOS workflow запускает ту же проверку для arm64 и x64
 ccd1bd7d4f40cf299d29df2db3bb7be9bc27e77469148dc9b61c45a539e9d067  ArniCode-darwin-x64.dmg
 19644908bb06dbde3ec6ecac8ff10c6ca514fe0c9cb91bffb5d6547568571086  ArniCode-darwin-x64.zip
 ```
-
