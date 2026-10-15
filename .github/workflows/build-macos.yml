@@ -26,6 +26,11 @@ on:
         default: both
         type: choice
         options: [both, arm64, x64]
+      recover_signed_run:
+        description: 'Reuse the signed app artifact from this workflow run instead of rebuilding'
+        required: false
+        default: ''
+        type: string
       publish_release:
         description: 'Publish artifacts to a GitHub Release'
         required: false
@@ -110,15 +115,18 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
+        if: ${{ !inputs.recover_signed_run }}
         run: npm ci
         env:
           npm_config_arch: ${{ matrix.arch }}
 
       - name: Test billing client compatibility
+        if: ${{ !inputs.recover_signed_run }}
         working-directory: extensions/copilot
         run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts
 
       - name: Build bundled Arni extensions
+        if: ${{ !inputs.recover_signed_run }}
         run: |
           set -e
           for dir in extensions/arni-agent extensions/yandex-authentication extensions/vk-authentication; do
@@ -127,9 +135,30 @@ jobs:
           done
 
       - name: Build Arni Code (production)
+        if: ${{ !inputs.recover_signed_run }}
         run: npm run gulp vscode-darwin-${{ matrix.arch }}-min
         env:
           npm_config_arch: ${{ matrix.arch }}
+
+      - name: Download signed app for recovery
+        if: inputs.recover_signed_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.recover_signed_run }}
+          name: ArniCode-signed-pending-notarization-${{ matrix.arch }}
+          path: ${{ runner.temp }}/signed-recovery
+
+      - name: Restore and verify signed app
+        if: inputs.recover_signed_run != ''
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$APP_DIR"
+          ditto -x -k "$RUNNER_TEMP/signed-recovery/notarize.zip" "$APP_DIR"
+          codesign --verify --deep --strict --verbose=2 "$APP_DIR/$APP_NAME"
+          codesign --display --verbose=4 "$APP_DIR/$APP_NAME" 2>&1 | grep -Fx "TeamIdentifier=$APPLE_TEAM_ID"
 
       - name: Verify bundled billing client
         run: |
@@ -164,7 +193,7 @@ jobs:
           echo "CODESIGN_IDENTITY=$IDENTITY" >> $GITHUB_ENV
 
       - name: Sign app with hardened runtime
-        if: env.SIGNING_ENABLED == 'true'
+        if: env.SIGNING_ENABLED == 'true' && !inputs.recover_signed_run
         env:
           AGENT_TEMPDIRECTORY: ${{ runner.temp }}
         run: |
@@ -192,7 +221,7 @@ jobs:
         run: ditto -c -k --keepParent "$APP_DIR/$APP_NAME" "$RUNNER_TEMP/notarize.zip"
 
       - name: Preserve signed app for notarization recovery
-        if: env.SIGNING_ENABLED == 'true'
+        if: env.SIGNING_ENABLED == 'true' && !inputs.recover_signed_run
         uses: actions/upload-artifact@v4
         with:
           name: ArniCode-signed-pending-notarization-${{ matrix.arch }}
@@ -218,8 +247,17 @@ jobs:
             sleep 20
           done
           test "$STAPLED" = true
-          xcrun stapler validate "$APP_DIR/$APP_NAME"
-          spctl --assess --type execute --verbose "$APP_DIR/$APP_NAME"
+          for action in validate assess; do
+            VERIFIED=false
+            for attempt in 1 2 3 4 5; do
+              if { [ "$action" = validate ] && xcrun stapler validate "$APP_DIR/$APP_NAME"; } || { [ "$action" = assess ] && spctl --assess --type execute --verbose "$APP_DIR/$APP_NAME"; }; then
+                VERIFIED=true
+                break
+              fi
+              sleep 20
+            done
+            test "$VERIFIED" = true
+          done
 
       - name: Verify native CLI
         run: |
@@ -284,7 +322,15 @@ jobs:
             sleep 20
           done
           test "$STAPLED" = true
-          xcrun stapler validate "$DMG"
+          VERIFIED=false
+          for attempt in 1 2 3 4 5; do
+            if xcrun stapler validate "$DMG"; then
+              VERIFIED=true
+              break
+            fi
+            sleep 20
+          done
+          test "$VERIFIED" = true
 
       - name: List artifacts and checksums
         if: always() && steps.package_zip.conclusion == 'success'
