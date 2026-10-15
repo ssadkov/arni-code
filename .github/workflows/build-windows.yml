@@ -19,7 +19,7 @@ on:
       publish_release:
         description: 'Publish artifacts to a GitHub Release'
         required: false
-        default: true
+        default: false
         type: boolean
       release_tag:
         description: 'Release tag (e.g. v1.0.0). Empty = date-based tag for manual runs; ignored on tag push'
@@ -36,6 +36,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_INSTALLER: ${{ github.event_name == 'push' || inputs.build_installer }}
       BUILD_ARCHIVE: ${{ github.event_name == 'push' || inputs.build_archive }}
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
@@ -89,6 +90,10 @@ jobs:
           npm_config_arch: x64
           npm_config_build_from_source: false
           GYP_MSVS_VERSION: '2022'
+
+      - name: Test billing client compatibility
+        working-directory: extensions/copilot
+        run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts
 
       - name: Build Arni Agent extension
         shell: pwsh
@@ -149,6 +154,16 @@ jobs:
         env:
           npm_config_arch: x64
 
+      - name: Verify bundled billing client
+        run: node scripts/verify-billing-package.mjs ../ArniCode-win32-x64/resources/app artifacts/windows/build-manifest-win32-x64.json x64
+
+      - name: Verify native CLI
+        shell: pwsh
+        run: |
+          $output = & "../ArniCode-win32-x64/bin/arni-code.cmd" --user-data-dir "$env:RUNNER_TEMP/billing-cli-profile" --extensions-dir "$env:RUNNER_TEMP/billing-cli-extensions" --version
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains $env:GITHUB_SHA -or $output -notcontains 'x64') { throw "Unexpected Windows CLI version/commit/architecture" }
+          $output | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
       - name: Build Windows installer
         if: env.BUILD_INSTALLER == 'true'
         run: npm run gulp vscode-win32-x64-user-setup
@@ -168,7 +183,7 @@ jobs:
             Compress-Archive -Path "$stageDir\ArniCode" -DestinationPath "artifacts\windows\ArniCode-win32-x64.zip" -CompressionLevel Optimal
             Write-Host "Archive created successfully."
           } else {
-            Write-Warning "Source directory $srcDir not found for archive!"
+            throw "Source directory $srcDir not found for archive!"
           }
 
       - name: Collect artifacts
@@ -176,12 +191,18 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path artifacts\windows -Force | Out-Null
 
-          # Find and collect installer (.exe)
-          $installerFiles = Get-ChildItem -Path ".build" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
-          foreach ($f in $installerFiles) {
-            Copy-Item $f.FullName -Destination "artifacts\windows\" -Force
-            Write-Host "Found installer: $($f.FullName)"
+          if ($env:BUILD_INSTALLER -eq 'true') {
+            $installer = ".build\win32-x64\user-setup\ArniCodeSetup.exe"
+            if (-not (Test-Path -LiteralPath $installer)) { throw "Expected installer missing: $installer" }
+            Copy-Item -LiteralPath $installer -Destination "artifacts\windows\ArniCodeSetup.exe" -Force
           }
+          $checksums = Get-ChildItem -LiteralPath artifacts/windows -File | Where-Object { $_.Extension -in @('.exe', '.zip') } | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $checksums | Set-Content -LiteralPath artifacts/windows/SHA256SUMS-win32-x64.txt -Encoding utf8
+          "Commit: $env:GITHUB_SHA" | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $checksums | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
           # List artifacts
           Write-Host "`nCollected artifacts in artifacts\windows:"
@@ -196,7 +217,7 @@ jobs:
         with:
           name: ArniCodeSetup-x64
           path: artifacts/windows/*Setup*.exe
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload portable archive
         if: env.BUILD_ARCHIVE == 'true'
@@ -204,14 +225,14 @@ jobs:
         with:
           name: ArniCode-win32-x64
           path: artifacts/windows/*.zip
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload all build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ArniCode-build-output
           path: artifacts/windows/
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Publish GitHub Release
         if: env.PUBLISH_RELEASE == 'true'
@@ -237,9 +258,10 @@ jobs:
           $files = @(
             Get-ChildItem -Path "artifacts\windows\*Setup*.exe" -ErrorAction SilentlyContinue
             Get-ChildItem -Path "artifacts\windows\*.zip" -ErrorAction SilentlyContinue
+            Get-ChildItem -Path "artifacts\windows\*.json", "artifacts\windows\*.txt" -ErrorAction SilentlyContinue
           ) | Where-Object { $_ -ne $null }
 
-          if ($files.Count -eq 0) {
+          if (@($files | Where-Object { $_.Extension -in @('.exe', '.zip') }).Count -eq 0) {
             throw "No release assets found in artifacts\windows (expected *Setup*.exe and/or *.zip)."
           }
 
@@ -252,7 +274,7 @@ jobs:
             gh release upload $tag @($files.FullName) --clobber
           } else {
             Write-Host "Creating release '$tag'."
-            gh release create $tag @($files.FullName) --title $tag --generate-notes --latest
+            gh release create $tag @($files.FullName) --title $tag --target $env:GITHUB_SHA --generate-notes --latest
           }
 
           Write-Host "Release URL: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$tag"

@@ -1,0 +1,66 @@
+name: Verify macOS test packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/billing-client-installers]
+    paths: [.github/workflows/verify-macos-packages.yml]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            build_run: 38543783786
+          - arch: x64
+            runner: macos-15-intel
+            build_run: 38540842482
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILD_RUN: ${{ matrix.build_run }}
+      ARTIFACT_NAME: ArniCode-darwin-${{ matrix.arch }}
+      PACKAGE_COMMIT: ee4c1c397273a343ca6288656e91c21be7a723ed
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download completed billing build
+        run: |
+          set -euo pipefail
+          for attempt in {1..40}; do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN/artifacts" --jq '.artifacts[].name' | grep -Fx "$ARTIFACT_NAME"; then
+              gh run download "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir packages
+              exit 0
+            fi
+            echo "Waiting for $ARTIFACT_NAME from run $BUILD_RUN"
+            sleep 30
+          done
+          echo "Build artifact did not become available" >&2
+          exit 1
+      - name: Verify checksums, app signature and CLI
+        run: |
+          set -euo pipefail
+          sed 's|artifacts/macos/||g' packages/SHA256SUMS.txt > packages/checksums-local.txt
+          (cd packages && shasum -a 256 -c checksums-local.txt)
+          ditto -x -k "packages/ArniCode-darwin-${{ matrix.arch }}.zip" extracted
+          APP="$PWD/extracted/Arni Code.app"
+          GITHUB_SHA="$PACKAGE_COMMIT" node scripts/verify-billing-package.mjs "$APP/Contents/Resources/app" verification-manifest.json "${{ matrix.arch }}"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          "$APP/Contents/Resources/app/bin/code" --user-data-dir "$RUNNER_TEMP/billing-smoke-profile" --extensions-dir "$RUNNER_TEMP/billing-smoke-extensions" --version | tee cli-version.txt
+          grep -Fx "$PACKAGE_COMMIT" cli-version.txt
+          grep -Fx "${{ matrix.arch }}" cli-version.txt
+          cat cli-version.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-package-verification-${{ matrix.arch }}
+          path: |
+            verification-manifest.json
+            cli-version.txt
+          if-no-files-found: error

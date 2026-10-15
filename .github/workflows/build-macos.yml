@@ -1,4 +1,4 @@
-name: Build Arni Code — macOS arm64
+name: Build Arni Code — macOS
 
 # Signing and notarization run when the MACOS_CERTIFICATE secret is set:
 #   MACOS_CERTIFICATE           base64 of the "Developer ID Application" .p12
@@ -15,6 +15,17 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      build_ref:
+        description: 'Source commit to package; empty uses the workflow commit'
+        required: false
+        default: ''
+        type: string
+      build_arch:
+        description: 'Architecture to build'
+        required: false
+        default: both
+        type: choice
+        options: [both, arm64, x64]
       publish_release:
         description: 'Publish artifacts to a GitHub Release'
         required: false
@@ -31,12 +42,16 @@ permissions:
 
 jobs:
   build-macos:
-    name: Build macOS arm64
-    runs-on: macos-latest
+    name: Build macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.build_arch == 'arm64' && '[{"arch":"arm64","runner":"macos-15"}]' || inputs.build_arch == 'x64' && '[{"arch":"x64","runner":"macos-15-intel"}]' || '[{"arch":"arm64","runner":"macos-15"},{"arch":"x64","runner":"macos-15-intel"}]') }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
-      VSCODE_ARCH: arm64
-      APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-arm64
+      VSCODE_ARCH: ${{ matrix.arch }}
+      APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-${{ matrix.arch }}
       APP_NAME: Arni Code.app
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
       SIGNING_ENABLED: ${{ secrets.MACOS_CERTIFICATE != '' }}
@@ -47,6 +62,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.build_ref || github.sha }}
 
       - name: Read .nvmrc
         id: nvmrc
@@ -65,7 +82,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
         env:
-          npm_config_arch: arm64
+          npm_config_arch: ${{ matrix.arch }}
+
+      - name: Test billing client compatibility
+        working-directory: extensions/copilot
+        run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts
 
       - name: Build bundled Arni extensions
         run: |
@@ -76,9 +97,17 @@ jobs:
           done
 
       - name: Build Arni Code (production)
-        run: npm run gulp vscode-darwin-arm64-min
+        run: npm run gulp vscode-darwin-${{ matrix.arch }}-min
         env:
-          npm_config_arch: arm64
+          npm_config_arch: ${{ matrix.arch }}
+
+      - name: Verify bundled billing client
+        run: |
+          GITHUB_SHA="$(git rev-parse HEAD)" node scripts/verify-billing-package.mjs "$APP_DIR/$APP_NAME/Contents/Resources/app" artifacts/macos/build-manifest-${{ matrix.arch }}.json "$VSCODE_ARCH"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/$APP_NAME/Contents/Info.plist")
+          EXPECTED="$VSCODE_ARCH"
+          if [ "$EXPECTED" = x64 ]; then EXPECTED=x86_64; fi
+          test "$(lipo -archs "$APP_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE")" = "$EXPECTED"
 
       - name: Import signing certificate
         if: env.SIGNING_ENABLED == 'true'
@@ -115,7 +144,9 @@ jobs:
 
       - name: Ad-hoc sign app (no certificate)
         if: env.SIGNING_ENABLED != 'true'
-        run: codesign --force --deep --sign - "$APP_DIR/$APP_NAME"
+        run: |
+          codesign --force --deep --sign - "$APP_DIR/$APP_NAME"
+          codesign --verify --deep --strict --verbose=2 "$APP_DIR/$APP_NAME"
 
       - name: Notarize app
         if: env.SIGNING_ENABLED == 'true'
@@ -132,17 +163,40 @@ jobs:
           xcrun stapler staple "$APP_DIR/$APP_NAME"
           spctl --assess --type execute --verbose "$APP_DIR/$APP_NAME"
 
-      - name: Package zip and dmg
+      - name: Verify native CLI
+        run: |
+          set -euo pipefail
+          "$APP_DIR/$APP_NAME/Contents/Resources/app/bin/code" --user-data-dir "$RUNNER_TEMP/billing-cli-profile" --extensions-dir "$RUNNER_TEMP/billing-cli-extensions" --version | tee "$RUNNER_TEMP/cli-version.txt"
+          grep -Fx "$(git rev-parse HEAD)" "$RUNNER_TEMP/cli-version.txt"
+          grep -Fx "$VSCODE_ARCH" "$RUNNER_TEMP/cli-version.txt"
+          cat "$RUNNER_TEMP/cli-version.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package zip
+        id: package_zip
         run: |
           set -e
           mkdir -p artifacts/macos
-          ditto -c -k --keepParent "$APP_DIR/$APP_NAME" artifacts/macos/ArniCode-darwin-arm64.zip
+          ditto -c -k --keepParent "$APP_DIR/$APP_NAME" artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.zip
 
+      - name: Package dmg
+        run: |
+          set -e
           STAGE="$RUNNER_TEMP/dmg-stage"
           mkdir -p "$STAGE"
           ditto "$APP_DIR/$APP_NAME" "$STAGE/$APP_NAME"
           ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "Arni Code" -srcfolder "$STAGE" -ov -format UDZO artifacts/macos/ArniCode-darwin-arm64.dmg
+          DMG="artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.dmg"
+          CREATED=false
+          for attempt in 1 2 3; do
+            if hdiutil create -verbose -fs HFS+ -volname "Arni Code" -srcfolder "$STAGE" -ov -format UDZO "$DMG"; then
+              CREATED=true
+              break
+            fi
+            echo "DMG creation attempt $attempt failed"
+            sleep 15
+          done
+          test "$CREATED" = true
+          hdiutil verify "$DMG"
 
       - name: Sign and notarize dmg
         if: env.SIGNING_ENABLED == 'true'
@@ -152,20 +206,29 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -e
-          DMG=artifacts/macos/ArniCode-darwin-arm64.dmg
+          DMG=artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.dmg
           codesign --sign "$CODESIGN_IDENTITY" --timestamp "$DMG"
           xcrun notarytool submit "$DMG" \
             --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --wait --timeout 60m
           xcrun stapler staple "$DMG"
 
-      - name: List artifacts
-        run: ls -lh artifacts/macos
+      - name: List artifacts and checksums
+        if: always() && steps.package_zip.conclusion == 'success'
+        run: |
+          : > artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt
+          for file in artifacts/macos/*.zip artifacts/macos/*.dmg; do
+            if [ -f "$file" ]; then shasum -a 256 "$file" >> artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt; fi
+          done
+          ls -lh artifacts/macos
+          echo "Commit: $(git rev-parse HEAD); architecture: $VSCODE_ARCH; Developer ID signing: $SIGNING_ENABLED" >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build artifacts
+        if: always() && steps.package_zip.conclusion == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: ArniCode-darwin-arm64
+          name: ArniCode-darwin-${{ matrix.arch }}
           path: artifacts/macos/
           if-no-files-found: error
 
@@ -188,7 +251,7 @@ jobs:
           # The Windows build publishes to the same tag, so whichever job comes
           # second uploads into the release the first one created.
           if gh release view "$TAG" > /dev/null 2>&1 \
-            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --generate-notes --latest; then
+            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --target "$(git rev-parse HEAD)" --generate-notes --latest; then
             gh release upload "$TAG" artifacts/macos/* --clobber
           fi
           echo "Release URL: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
