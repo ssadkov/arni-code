@@ -113,14 +113,12 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 			Quality: quality
 		};
 
-		if (quality === 'stable' || quality === 'insider') {
+		const contextMenu = (product as { win32ContextMenu?: Record<string, { clsid: string }> }).win32ContextMenu?.[arch];
+		if ((quality === 'stable' || quality === 'insider') && contextMenu) {
 			definitions['AppxPackage'] = `${quality === 'stable' ? 'code' : 'code_insider'}_${arch}.appx`;
 			definitions['AppxPackageDll'] = `${quality === 'stable' ? 'code' : 'code_insider'}_explorer_command_${arch}.dll`;
 			definitions['AppxPackageName'] = `${product.win32AppUserModelId}`;
-			const ctxMenu = (product as { win32ContextMenu?: Record<string, { clsid: string }> }).win32ContextMenu;
-			if (ctxMenu && ctxMenu[arch]) {
-				definitions['FileExplorerContextMenuCLSID'] = ctxMenu[arch].clsid;
-			}
+			definitions['FileExplorerContextMenuCLSID'] = contextMenu.clsid;
 		}
 
 		fs.writeFileSync(productJsonPath, JSON.stringify(productJson, undefined, '\t'));
