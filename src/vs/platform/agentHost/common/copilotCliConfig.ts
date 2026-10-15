@@ -14,7 +14,7 @@ import { reasoningEffortLevels } from './reasoningEffort.js';
  * provider-agnostic `agentHostCustomizationConfigSchema`.
  */
 export const enum CopilotCliConfigKey {
-	/** Use Agent Host's custom terminal tool instead of the SDK's default. Off by default. */
+	/** Use Agent Host's custom terminal tool instead of the SDK's default. On by default. */
 	EnableCustomTerminalTool = 'enableCustomTerminalTool',
 	/** Apply the shell init script a client published for a session to SDK shell commands. Off by default. */
 	EnableShellInitScript = 'enableShellInitScript',

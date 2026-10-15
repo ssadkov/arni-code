@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import '../../../browser/chat.shared.contribution.js';
+import { Registry } from '../../../../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { OS, OperatingSystem } from '../../../../../../base/common/platform.js';
@@ -243,6 +246,10 @@ async function flush(): Promise<void> {
 // =============================================================================
 
 suite('AgentHostTerminalContribution', () => {
+	test('enables the UI terminal preference by default so forwarding does not disable the host default', () => {
+		const properties = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfigurationProperties();
+		assert.strictEqual(properties[AgentHostCustomTerminalToolEnabledSettingId].default, true);
+	});
 
 	const disposables = new DisposableStore();
 
