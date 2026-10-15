@@ -9,12 +9,14 @@ import type * as vscode from 'vscode';
 import { IChatHookService, type IPreToolUseHookResult } from '../../../../../platform/chat/common/chatHookService';
 import { ConfigKey, IConfigurationService } from '../../../../../platform/configuration/common/configurationService';
 import { IEndpointProvider } from '../../../../../platform/endpoint/common/endpointProvider';
+import { MockEndpoint } from '../../../../../platform/endpoint/test/node/mockEndpoint';
 import type { IChatEndpoint } from '../../../../../platform/networking/common/networking';
 import { DeferredPromise } from '../../../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../../../util/vs/base/common/cancellation';
 import { Event } from '../../../../../util/vs/base/common/event';
 import { constObservable } from '../../../../../util/vs/base/common/observable';
 import { IInstantiationService } from '../../../../../util/vs/platform/instantiation/common/instantiation';
+import { SyncDescriptor } from '../../../../../util/vs/platform/instantiation/common/descriptors';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry';
 import { SpyingTelemetryService } from '../../../../../platform/telemetry/node/spyingTelemetryService';
 import { LanguageModelChatMessage, LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult, LanguageModelToolResultPart } from '../../../../../vscodeTypes';
@@ -224,9 +226,32 @@ class ParallelAwareToolsService implements IToolsService {
 	}
 }
 
+// These are tool-rendering unit tests, not recorded model-metadata simulations.
+// Keep them independent of the Git LFS SQLite simulation cache and network.
+class ToolTestEndpointProvider implements IEndpointProvider {
+	declare readonly _serviceBrand: undefined;
+	readonly onDidModelsRefresh = Event.None;
+	private readonly endpoint: MockEndpoint;
+	constructor(@IInstantiationService instantiationService: IInstantiationService) {
+		this.endpoint = instantiationService.createInstance(MockEndpoint, 'gpt-4.1');
+		this.endpoint.supportsVision = true;
+		this.endpoint.supportsToolCalls = true;
+	}
+	async getChatEndpoint() { return this.endpoint; }
+	async getAllChatEndpoints() { return [this.endpoint]; }
+	async getAllCompletionModels() { return []; }
+	async getEmbeddingsEndpoint(): Promise<never> { throw new Error('Embeddings are not used by tool-rendering tests'); }
+}
+
+function createToolTestingServices() {
+	const services = createExtensionUnitTestingServices();
+	services.define(IEndpointProvider, new SyncDescriptor(ToolTestEndpointProvider));
+	return services;
+}
+
 describe('ChatToolCalls (toolCalling.tsx)', () => {
 	test.each(['https://example.invalid/api/chat/completions', undefined])('embeds tool images without GitHub auth for custom or missing endpoint metadata: %s', async urlOrRequestMetadata => {
-		const services = createExtensionUnitTestingServices();
+		const services = createToolTestingServices();
 		const accessor = services.createTestingAccessor();
 		const endpoint = await accessor.get(IEndpointProvider).getChatEndpoint('copilot-utility');
 		const customEndpoint = { ...endpoint, supportsVision: true, urlOrRequestMetadata } as IChatEndpoint;
@@ -258,7 +283,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 			tags: [],
 		};
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		const toolsService = new ParallelAwareToolsService(toolInfo);
 		testingServiceCollection.define(IToolsService, toolsService);
 
@@ -330,7 +355,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 			tags: [],
 		};
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		const toolsService = new CapturingToolsService(toolInfo);
 		const hookService = new CapturingChatHookService(hookResult);
 		testingServiceCollection.define(IToolsService, toolsService);
@@ -418,7 +443,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 			tags: [],
 		};
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		const toolsService = new CapturingToolsService(toolInfo);
 		const hookService = new CapturingChatHookService(hookResult);
 		testingServiceCollection.define(IToolsService, toolsService);
@@ -492,7 +517,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 			tags: [],
 		};
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		testingServiceCollection.define(IToolsService, new CapturingToolsService(toolInfo));
 
 		const accessor = testingServiceCollection.createTestingAccessor();
@@ -590,7 +615,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 			tags: [],
 		};
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		const toolsService = new CapturingToolsService(toolInfo);
 		testingServiceCollection.define(IToolsService, toolsService);
 
@@ -654,7 +679,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 			tags: [],
 		};
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		const toolsService = new CapturingToolsService(toolInfo);
 		testingServiceCollection.define(IToolsService, toolsService);
 
@@ -719,7 +744,7 @@ describe('ChatToolCalls (toolCalling.tsx)', () => {
 		// Previously, it used raw BasePromptRenderer which bypassed DI, causing 'Cannot read properties
 		// of undefined (reading "supportsVision")' when a tool result contained an image.
 
-		const testingServiceCollection = createExtensionUnitTestingServices();
+		const testingServiceCollection = createToolTestingServices();
 		const spyingTelemetryService = new SpyingTelemetryService();
 		testingServiceCollection.define(ITelemetryService, spyingTelemetryService);
 		const accessor = testingServiceCollection.createTestingAccessor();
