@@ -44,7 +44,7 @@ function byokErrorHaystack(response: ChatResponse): string {
  */
 export function shouldRetryBYOKChatResponse(response: ChatResponse): boolean {
 	const haystack = byokErrorHaystack(response);
-	if (/insufficient tokens|free-models-per-day|openrouter_free_tier_daily/.test(haystack)) {
+	if (/insufficient tokens|free-models-per-day|openrouter_free_tier_daily|five_hour_limit|weekly_limit|insufficient_budget|access_expired|request_in_progress|free_daily_limit|pricing_unavailable|context_too_large|unsupported_request/.test(haystack)) {
 		return false;
 	}
 	switch (response.type) {

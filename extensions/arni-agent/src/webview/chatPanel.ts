@@ -1,3 +1,7 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 import * as vscode from 'vscode';
 import { getWebviewContent } from './getWebviewContent';
 import { ArniProvider } from '../providers/arniProvider';
@@ -116,8 +120,20 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             if (!response.ok) {
                 return;
             }
-            const data: any = await response.json();
-            if (data.user?.freeSteps) {
+            const data = await response.json() as { user?: { freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number }; budget?: {
+                enabled: boolean; expired: boolean; balanceMicros: number; validUntil: string;
+                fiveHour: { usedMicros: number; limitMicros: number; requests: number; requestLimit: number; resetsAt: string | null };
+                weekly: { usedMicros: number; limitMicros: number; requests: number; requestLimit: number; resetsAt: string | null };
+            } } };
+            if (data.user?.budget) {
+                const budget = data.user.budget;
+                const money = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
+                const available = Math.max(0, Math.min(budget.balanceMicros, budget.fiveHour.limitMicros - budget.fiveHour.usedMicros, budget.weekly.limitMicros - budget.weekly.usedMicros));
+                this._view.webview.postMessage({ type: 'budget', value: {
+                    text: !budget.enabled || budget.expired ? vscode.l10n.t('Доступ приостановлен или истёк') : vscode.l10n.t('Доступно API: {0}', money(available)),
+                    tooltip: vscode.l10n.t('Бюджет {0}. За 5 часов: {1}/{2} запросов. За неделю: {3}/{4} запросов. Доступ до {5}.', money(budget.balanceMicros), budget.fiveHour.requests, budget.fiveHour.requestLimit, budget.weekly.requests, budget.weekly.requestLimit, new Date(budget.validUntil).toLocaleString()),
+                } });
+            } else if (data.user?.freeSteps) {
                 this._view.webview.postMessage({ type: 'freeSteps', value: data.user.freeSteps });
             }
         } catch (error) {

@@ -28,8 +28,8 @@ class TestableOpenRouterLMProvider extends OpenRouterLMProvider {
 		return this.backendCandidates;
 	}
 
-	public listModels(silent: boolean) {
-		return this.getAllModels(silent, undefined, undefined);
+	public listModels(silent: boolean, apiKey?: string) {
+		return this.getAllModels(silent, apiKey, undefined);
 	}
 
 	public modelInfoFor(modelId: string) {
@@ -174,6 +174,24 @@ describe('Model discovery records capabilities', () => {
 });
 
 describe('Model catalog source', () => {
+	it('offers the authenticated managed catalog and never sends the account token to OpenRouter', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ arni_managed: true,
+			data: [
+				{ id: 'us.anthropic.test-v1:0', name: 'Bedrock', arni_default: true, supported_parameters: ['tools'], context_length: 32768, top_provider: { context_length: 32768, max_completion_tokens: 4096 } },
+				{ id: 'us.anthropic.second-v1:0', name: 'Second', supported_parameters: ['tools'], context_length: 32768, top_provider: { context_length: 32768, max_completion_tokens: 4096 } },
+			],
+		}) });
+		vi.stubGlobal('fetch', fetchMock);
+		const provider = createProvider();
+		try {
+			const models = await provider.listModels(true, 'test-account-token');
+			expect({ ids: models.map(model => model.id), headers: fetchMock.mock.calls[0][1].headers }).toEqual({
+				ids: ['us.anthropic.second-v1:0', 'us.anthropic.test-v1:0'], headers: { Authorization: 'Bearer test-account-token' },
+			});
+			expect(models.filter(model => model.isDefault).map(model => model.id)).toEqual(['us.anthropic.test-v1:0']);
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
+	});
+
 	async function listWithFetch(fetchMock: ReturnType<typeof vi.fn>, backendCandidates?: string[]) {
 		vi.stubGlobal('fetch', fetchMock);
 		try {

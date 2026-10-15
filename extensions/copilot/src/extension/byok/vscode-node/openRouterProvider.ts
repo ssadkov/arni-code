@@ -20,6 +20,25 @@ import { IBYOKStorageService } from './byokStorageService';
 import * as vscode from 'vscode';
 import { CancellationToken, LanguageModelChatMessage, LanguageModelChatMessage2, LanguageModelResponsePart2, PrepareLanguageModelChatModelOptions, Progress, ProvideLanguageModelChatResponseOptions } from 'vscode';
 import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
+import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
+import { ArniImageTool } from './arniImageTool';
+
+interface ArniBudgetWindow {
+	usedMicros: number;
+	limitMicros: number;
+	requests: number;
+	requestLimit: number;
+	resetsAt: string | null;
+}
+
+interface ArniBudget {
+	enabled: boolean;
+	expired: boolean;
+	balanceMicros: number;
+	validUntil: string;
+	fiveHour: ArniBudgetWindow;
+	weekly: ArniBudgetWindow;
+}
 
 interface OpenRouterModelData {
 	id: string;
@@ -85,6 +104,7 @@ export const DEFAULT_OPENROUTER_MODEL_ID = PREFERRED_FREE_OPENROUTER_MODELS[0];
 
 export interface OpenRouterTrafficModel {
 	readonly id: string;
+	readonly arni_default?: boolean;
 	readonly arni_traffic?: 'green' | 'yellow' | 'red' | 'unknown';
 }
 
@@ -93,6 +113,10 @@ export interface OpenRouterTrafficModel {
  * historical default. A red light moves to the next preferred model that is not red.
  */
 export function preferredDefaultModelId(models: readonly OpenRouterTrafficModel[]): string {
+	const managedDefault = models.find(model => model.arni_default)?.id;
+	if (managedDefault) {
+		return managedDefault;
+	}
 	if (!models.some(model => model.arni_traffic)) {
 		return DEFAULT_OPENROUTER_MODEL_ID;
 	}
@@ -156,7 +180,8 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	/** The backend `/api` base that last answered; tried first next time. */
 	private _reachableApiBase: string | undefined;
 	private _freeStepsItem: vscode.StatusBarItem | undefined;
-	private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+	private readonly _disposables = new DisposableStore();
+	private readonly _onDidChangeLanguageModelChatInformation = this._disposables.add(new vscode.EventEmitter<void>());
 	public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
 	constructor(
@@ -179,21 +204,33 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			expService
 		);
 		try {
-			vscode.commands.registerCommand(JOIN_PRO_WAITLIST_COMMAND, () => this.joinProWaitlist());
+			this._disposables.add(vscode.commands.registerCommand(JOIN_PRO_WAITLIST_COMMAND, () => this.joinProWaitlist()));
 		} catch {
 			// vscode.commands is unavailable in unit tests
 		}
 		try {
-			vscode.authentication.onDidChangeSessions(e => {
+			this._disposables.add(vscode.authentication.onDidChangeSessions(e => {
 				if (e.provider.id === 'yandex' || e.provider.id === 'vk') {
 					this._arniJwt = undefined;
 					this._freeStepsItem?.hide();
 					this._onDidChangeLanguageModelChatInformation.fire();
 				}
-			});
+			}));
 		} catch {
 			// vscode.authentication is unavailable in unit tests
 		}
+	}
+
+	dispose(): void {
+		this._disposables.dispose();
+	}
+
+	public createImageTool(): ArniImageTool {
+		return new ArniImageTool(this._fetcherService, async () => {
+			const token = await this.resolveArniApiKey(false);
+			if (!token) { throw new Error(vscode.l10n.t('Sign in to ArniCode to generate images.')); }
+			return { token, apiBase: this._reachableApiBase ?? this.getBackendApiCandidates()[0] };
+		});
 	}
 
 	override async provideLanguageModelChatInformation(options: PrepareLanguageModelChatModelOptions, token: CancellationToken): Promise<OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>[]> {
@@ -232,8 +269,8 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		}
 		try {
 			if (!this._freeStepsItem) {
-				this._freeStepsItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-				this._freeStepsItem.name = 'Arni free steps';
+				this._freeStepsItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100));
+				this._freeStepsItem.name = vscode.l10n.t('Баланс Arni');
 			}
 			const reset = steps.resetsAt.slice(11, 16);
 			this._freeStepsItem.text = steps.remaining > 0
@@ -248,6 +285,26 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		}
 	}
 
+	private showBudget(budget: ArniBudget): void {
+		try {
+			if (!this._freeStepsItem) {
+				this._freeStepsItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100));
+				this._freeStepsItem.name = vscode.l10n.t('Баланс Arni');
+			}
+			const money = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
+			const available = Math.max(0, Math.min(budget.balanceMicros, budget.fiveHour.limitMicros - budget.fiveHour.usedMicros, budget.weekly.limitMicros - budget.weekly.usedMicros));
+			this._freeStepsItem.text = budget.expired
+				? `$(warning) ${vscode.l10n.t('Срок доступа истёк')}` : !budget.enabled
+					? `$(warning) ${vscode.l10n.t('Доступ приостановлен')}` : `$(sparkle) ${vscode.l10n.t('API {0}', money(available))}`;
+			const windowText = (window: ArniBudgetWindow) => vscode.l10n.t('{0} из {1}; запросы {2}/{3}; сброс: {4}',
+				money(window.usedMicros), money(window.limitMicros), window.requests, window.requestLimit,
+				window.resetsAt ? new Date(window.resetsAt).toLocaleString() : vscode.l10n.t('после первого запроса'));
+			this._freeStepsItem.tooltip = vscode.l10n.t('Бюджет API: {0}\n5 часов: {1}\nНеделя: {2}\nДоступ до: {3}',
+				money(budget.balanceMicros), windowText(budget.fiveHour), windowText(budget.weekly), new Date(budget.validUntil).toLocaleString());
+			this._freeStepsItem.show();
+		} catch { /* vscode.window is unavailable in unit tests. */ }
+	}
+
 	private async refreshFreeSteps(apiKey: string): Promise<void> {
 		for (const apiBase of this.getBackendApiCandidates()) {
 			try {
@@ -258,8 +315,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 					continue;
 				}
 				this._reachableApiBase = apiBase;
-				const data = await response.json() as { user?: { freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
-				this.showFreeSteps(data.user?.freeSteps);
+				const data = await response.json() as { user?: { budget?: ArniBudget; freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
+				if (data.user?.budget) { this.showBudget(data.user.budget); }
+				else { this.showFreeSteps(data.user?.freeSteps); }
 				return;
 			} catch (error) {
 				this._logService.warn(`Unable to load free steps from ${apiBase}: ${String(error)}`);
@@ -441,7 +499,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	}
 
 	protected override async getAllModels(silent: boolean, apiKey: string | undefined, configuration: any | undefined): Promise<OpenAICompatibleLanguageModelChatInformation<any>[]> {
-		const catalog = await this.fetchModelCatalog();
+		const catalog = await this.fetchModelCatalog(apiKey);
 		// Chat requests go to whichever backend answered the catalog request.
 		const modelsUrl = this.getModelsBaseUrl();
 		const models: any = {};
@@ -480,15 +538,17 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	 * because openrouter.ai refuses requests from Russia; the direct URL and a
 	 * built-in list keep the picker usable if the backend is unreachable.
 	 */
-	private async fetchModelCatalog(): Promise<readonly OpenRouterModelData[]> {
+	private async fetchModelCatalog(apiKey?: string): Promise<readonly OpenRouterModelData[]> {
 		const backendUrls = this.getBackendApiCandidates().map(apiBase => ({ url: `${apiBase}/models`, apiBase }));
 		for (const { url, apiBase } of [...backendUrls, { url: OPENROUTER_MODELS_URL, apiBase: undefined }]) {
 			try {
-				const res = await fetch(url);
+				const res = await fetch(url, apiBase && apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : undefined);
 				if (res.ok) {
-					const json = await res.json() as { data?: OpenRouterModelData[] };
+					const json = await res.json() as { data?: OpenRouterModelData[]; arni_managed?: boolean };
 					// The backend already sends only free models; the direct OpenRouter catalog does not.
-					const models = json.data?.filter(isFreeOpenRouterModel);
+					const managed = apiBase && apiKey && json.arni_managed;
+					const models = managed ? json.data : json.data?.filter(isFreeOpenRouterModel);
+					if (managed && !models?.length) { this._reachableApiBase = apiBase; return []; }
 					if (models?.length) {
 						if (apiBase) {
 							this._reachableApiBase = apiBase;
