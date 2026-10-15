@@ -2129,6 +2129,7 @@ export class CopilotAgentSession extends Disposable {
 			?.filter(c => c.type === ToolResultContentType.EmbeddedResource)
 			.map(c => ({ data: c.data, mimeType: c.contentType, type: (/^image(\/|$)/.test(c.contentType) ? 'image' : 'resource') as 'image' | 'resource' }));
 		const textResultForLlm = textContent.trim() ? textContent : getEmptyToolResultText(binaryResults);
+		this._logService.trace(`[Copilot:${this.sessionId}] Client tool result: success=${result.success}, binaryParts=${binaryResults?.length ?? 0}`);
 
 		if (result.success) {
 			this._pendingClientToolCalls.respondOrBuffer(toolCallId, {

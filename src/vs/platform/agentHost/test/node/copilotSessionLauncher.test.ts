@@ -198,7 +198,7 @@ suite('resolveByokSessionConfig', () => {
 				{ name: 'globex', type: 'openai', wireApi: 'responses', baseUrl: 'http://127.0.0.1:1/v/globex', bearerToken: 'NONCE.sess-1' },
 			],
 			models: [
-				{ id: 'claude', provider: 'acme', name: 'Acme Claude', maxContextWindowTokens: 200000, maxPromptTokens: 195904, maxOutputTokens: 4096, capabilities: { supports: { vision: true }, limits: { max_context_window_tokens: 200000, max_prompt_tokens: 195904 } } },
+				{ id: 'claude', provider: 'acme', name: 'Acme Claude', capabilities: { supports: { vision: true }, limits: { max_context_window_tokens: 200000, max_prompt_tokens: 195904, max_output_tokens: 4096 } } },
 				{ id: 'gpt', provider: 'acme' },
 				{ id: 'llama', provider: 'globex', name: 'Globex Llama' },
 			],

@@ -103,6 +103,8 @@ export class AgentHostByokLmHandler extends Disposable implements IAgentHostByok
 		};
 
 		try {
+			const toolImages = messages.flatMap(message => message.content).filter(part => part.type === 'tool_result').flatMap(part => part.value).filter(part => part.type === 'data' && part.mimeType.startsWith('image/')).length;
+			this._logService.trace(`[AgentHostByokLm] model=${request.modelId}, toolImages=${toolImages}`);
 			const response = await this._languageModelsService.sendChatRequest(modelIdentifier, undefined, messages, options, token);
 
 			const output: IByokLmOutputItem[] = [];

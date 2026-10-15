@@ -577,14 +577,14 @@ export async function resolveByokSessionConfig(
 		id: getByokLmSelectionModelId(m),
 		provider: m.vendor,
 		...(m.name !== undefined ? { name: m.name } : {}),
-		...(m.maxContextWindowTokens !== undefined ? { maxContextWindowTokens: m.maxContextWindowTokens } : {}),
-		...(m.maxPromptTokens !== undefined ? { maxPromptTokens: m.maxPromptTokens } : {}),
-		...(m.maxOutputTokens !== undefined ? { maxOutputTokens: m.maxOutputTokens } : {}),
-		...(m.maxContextWindowTokens !== undefined || m.maxPromptTokens !== undefined || m.supportsVision !== undefined ? { capabilities: {
+		// The runtime's legacy flat limits replace the capability defaults and can
+		// discard vision. Keep all limits in the typed capability object.
+		...(m.maxContextWindowTokens !== undefined || m.maxPromptTokens !== undefined || m.maxOutputTokens !== undefined || m.supportsVision !== undefined ? { capabilities: {
 			...(m.supportsVision !== undefined ? { supports: { vision: m.supportsVision } } : {}),
 			limits: {
 				...(m.maxContextWindowTokens !== undefined ? { max_context_window_tokens: m.maxContextWindowTokens } : {}),
 				...(m.maxPromptTokens !== undefined ? { max_prompt_tokens: m.maxPromptTokens } : {}),
+				...(m.maxOutputTokens !== undefined ? { max_output_tokens: m.maxOutputTokens } : {}),
 			},
 		} } : {}),
 	}));
