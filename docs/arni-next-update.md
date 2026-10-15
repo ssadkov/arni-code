@@ -1,5 +1,7 @@
 # Arni Code: model, cost and runtime update
 
+Итоговая памятка на русском: [что реализовано, что узнали, кэширование и готовый видеопромпт](releases/2026-10-15-qwen3-media-and-updates.md). Ниже — журнал выпуска и проверок.
+
 Authorized on 2026-10-15. Preserve the user's source checkout and video project.
 
 - [x] Publish verified Qwen3 models for the existing test account, with current prices, supported input modalities and context limits.

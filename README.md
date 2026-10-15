@@ -2,6 +2,8 @@
 
 This checkout is the Arni Code fork of Code - OSS. To clone it and launch the editor from Cursor, follow [docs/DEV_SETUP.md](docs/DEV_SETUP.md).
 
+Текущий выпуск и проверка продукта: [Arni Code 1.0.1 — модели, кэш, расходы и видеотест](docs/releases/2026-10-15-qwen3-media-and-updates.md), [установщики и обновления](docs/CLIENT_INSTALLERS.md), [доступ и бюджет API](docs/BILLING_AND_ACCESS.md).
+
 # Visual Studio Code - Open Source ("Code - OSS")
 [![Feature Requests](https://img.shields.io/github/issues/microsoft/vscode/feature-request.svg)](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
 [![Bugs](https://img.shields.io/github/issues/microsoft/vscode/bug.svg)](https://github.com/microsoft/vscode/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
