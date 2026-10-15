@@ -119,12 +119,21 @@ jobs:
         if: ${{ !inputs.recover_signed_run }}
         run: npm ci
         env:
+          npm_config_fetch_retries: '4'
+          npm_config_fetch_retry_mintimeout: '10000'
+          npm_config_fetch_retry_maxtimeout: '60000'
           npm_config_arch: ${{ matrix.arch }}
 
       - name: Test billing client compatibility
         if: ${{ !inputs.recover_signed_run }}
         working-directory: extensions/copilot
         run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts src/extension/prompts/node/panel/test/toolCalling.spec.ts
+
+      - name: Test SDK image and hook completion
+        if: ${{ !inputs.recover_signed_run }}
+        run: |
+          npm run transpile-client
+          node scripts/test-sdk-vision-bridge.mjs
 
       - name: Build bundled Arni extensions
         if: ${{ !inputs.recover_signed_run }}

@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CopilotClient, RuntimeConnection, approveAll } from '@github/copilot-sdk';
 import { resolveByokSessionConfig } from '../out/vs/platform/agentHost/node/copilot/copilotSessionLauncher.js';
+import { toSdkHooks } from '../out/vs/platform/agentHost/node/copilot/copilotPluginConverters.js';
 import { bridgeResultToResponsesBody, bridgeResultToResponsesSseFrames, responsesRequestToBridge } from '../out/vs/platform/agentHost/node/copilot/byokResponsesTranslation.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -33,7 +34,7 @@ const server = http.createServer(async (req, res) => {
 		}
 		const result = { output: calls === 1
 			? [{ type: 'function_call', callId: 'view-frame', name: 'viewImage', argumentsJson: '{}' }]
-			: [{ type: 'message', content: [{ type: 'text', text: 'done' }] }], usage: { inputTokens: 10, outputTokens: 2 } };
+			: [{ type: 'message', content: [{ type: 'text', text: 'Кадр просмотрен.' }] }], usage: { inputTokens: 10, outputTokens: 2 } };
 		res.setHeader('content-type', body.stream ? 'text/event-stream' : 'application/json');
 		res.end(body.stream ? bridgeResultToResponsesSseFrames(result, body.model).join('') : bridgeResultToResponsesBody(result, body.model));
 	} catch (error) {
@@ -45,7 +46,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
 const client = new CopilotClient({
 	useLoggedInUser: false,
-	connection: RuntimeConnection.forStdio({ path: path.join(root, 'node_modules', '@github', `copilot-${process.platform}-${process.arch}`, 'index.js') }),
+	connection: RuntimeConnection.forStdio({ path: process.argv[2] ?? path.join(root, 'node_modules', '@github', `copilot-${process.platform}-${process.arch}`, 'index.js') }),
 	env: { ...process.env, COPILOT_AUTO_UPDATE: 'false' },
 	logLevel: 'error',
 });
@@ -59,14 +60,20 @@ try {
 		configDirectory: runDir, workingDirectory: runDir, enableConfigDiscovery: false, enableSessionTelemetry: false,
 		largeOutput: { maxSizeBytes: 8192 }, infiniteSessions: { enabled: true },
 		onPermissionRequest: approveAll,
+		hooks: toSdkHooks([], {
+			onPreToolUse: async () => undefined,
+			onPostToolUse: async () => undefined,
+			onUserPromptSubmitted: () => undefined,
+		}),
 		tools: [{ name: 'viewImage', description: 'Return a synthetic test pixel', parameters: { type: 'object', properties: {} },
 			handler: async () => ({ resultType: 'success', textResultForLlm: 'Attached synthetic pixel', binaryResultsForLlm: [{ type: 'image', mimeType: 'image/png', data: pixel }] }) }],
 	});
-	await session.sendAndWait({ prompt: 'Call viewImage, then reply done.' }, 30000);
+	const reply = await session.sendAndWait({ prompt: 'Call viewImage, then reply done.' }, 30000);
 	if (failure) { throw failure; }
 	assert.equal(calls, 2, 'Expected a tool call and one completion');
 	assert.equal(receivedImages, 1, 'The SDK must retain the tool image with the actual launcher token limits');
-	console.log('SDK vision bridge passed: 2 local requests, 1 synthetic image, no external model calls.');
+	assert.equal(reply?.data.content, 'Кадр просмотрен.', 'Hooks must not stall final reply and session.idle notifications');
+	console.log('SDK vision bridge passed: 2 local requests, 1 image, hooks and final reply completed, no external model calls.');
 } finally {
 	await client.stop();
 	await new Promise(resolve => server.close(resolve));
