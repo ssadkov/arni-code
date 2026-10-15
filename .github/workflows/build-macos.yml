@@ -78,6 +78,23 @@ jobs:
             exit 1
           fi
 
+      - name: Validate macOS signing container before building
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/signing-preflight.keychain"
+          P12="$RUNNER_TEMP/signing-preflight.p12"
+          trap 'rm -f "$P12"; security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true' EXIT
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 -D > "$P12"
+          security import "$P12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application'
+
       - name: Read .nvmrc
         id: nvmrc
         run: echo "node_version=$(tr -d '\n\r' < .nvmrc)" >> $GITHUB_OUTPUT
