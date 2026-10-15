@@ -99,6 +99,7 @@ export interface IByokLmCustomTool {
 export type IByokLmTool = IByokLmFunctionTool | IByokLmCustomTool;
 
 export interface IByokLmChatRequest {
+	readonly chatId?: string;
 	readonly vendor: string;
 	readonly modelId: string;
 	readonly instructions?: string;
@@ -127,6 +128,8 @@ export interface IByokLmChatResult {
 		readonly inputTokens?: number;
 		readonly outputTokens?: number;
 		readonly reasoningTokens?: number;
+		readonly cachedTokens?: number;
+		readonly cacheWriteTokens?: number;
 	};
 	readonly error?: string;
 }
@@ -151,6 +154,9 @@ export interface IByokLmModelInfo {
 	readonly modelIdentifier?: string;
 	/** Maximum context window tokens (prompt + output), when known. */
 	readonly maxContextWindowTokens?: number;
+	/** Effective prompt and output limits enforced by the provider. */
+	readonly maxPromptTokens?: number;
+	readonly maxOutputTokens?: number;
 	/** Whether the model accepts image inputs, when known. */
 	readonly supportsVision?: boolean;
 	/** Reasoning effort values advertised by the renderer model, when known. */

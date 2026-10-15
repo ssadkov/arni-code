@@ -96,7 +96,7 @@ export class AgentHostByokLmHandler extends Disposable implements IAgentHostByok
 			}))
 			: undefined;
 		const options: ILanguageModelChatRequestOptions = {
-			modelOptions: request.modelOptions,
+			modelOptions: { ...request.modelOptions, ...(request.chatId ? { arniChatId: request.chatId } : {}) },
 			includeEncryptedThinking: true,
 			...(request.reasoningEffort ? { configuration: { reasoningEffort: request.reasoningEffort } } : {}),
 			...(tools ? { tools } : {}),
@@ -177,6 +177,8 @@ export class AgentHostByokLmHandler extends Disposable implements IAgentHostByok
 					name: metadata.name,
 					modelIdentifier: identifier,
 					maxContextWindowTokens: metadata.maxInputTokens + metadata.maxOutputTokens,
+					maxPromptTokens: metadata.maxInputTokens,
+					maxOutputTokens: metadata.maxOutputTokens,
 					supportsVision: !!metadata.capabilities?.vision,
 					...(supportedReasoningEfforts?.length ? { supportedReasoningEfforts } : {}),
 					...(defaultReasoningEffort !== undefined ? { defaultReasoningEffort } : {}),
@@ -426,10 +428,14 @@ export class AgentHostByokLmHandler extends Disposable implements IAgentHostByok
 			const outputDetails = typeof value.completion_tokens_details === 'object' && value.completion_tokens_details !== null
 				? value.completion_tokens_details as Record<string, unknown>
 				: undefined;
+			const inputDetails = typeof value.prompt_tokens_details === 'object' && value.prompt_tokens_details !== null
+				? value.prompt_tokens_details as Record<string, unknown> : undefined;
 			return {
 				inputTokens: this._numberProperty(value, 'prompt_tokens'),
 				outputTokens: this._numberProperty(value, 'completion_tokens'),
 				reasoningTokens: outputDetails ? this._numberProperty(outputDetails, 'reasoning_tokens') : undefined,
+				cachedTokens: inputDetails ? this._numberProperty(inputDetails, 'cached_tokens') : undefined,
+				cacheWriteTokens: inputDetails ? this._numberProperty(inputDetails, 'cache_creation_input_tokens') : undefined,
 			};
 		} catch {
 			return undefined;

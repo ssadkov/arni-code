@@ -308,3 +308,15 @@ div.chat-terminal-content-part.progress-step > div.chat-terminal-output-containe
 	display: inline;
 	white-space: nowrap;
 }
+.chat-terminal-task-progress {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--vscode-descriptionForeground);
+	font-variant-numeric: tabular-nums;
+	padding: 4px 8px;
+}
+
+.chat-terminal-task-progress:empty {
+	display: none;
+}

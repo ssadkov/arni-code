@@ -44,16 +44,16 @@ suite('MainThreadLanguageModelTools', () => {
 				// The extension host can resolve the extension model, not its main-thread-only copy.
 				assert.notStrictEqual(dto.modelId, picker, 'Language model unavailable');
 				forwarded.push(dto.modelId);
-				return { content: [{ kind: 'data', mimeType: 'image/png', data: image }] };
+				return { content: [{ kind: 'data', value: { mimeType: 'image/png', data: image } }] };
 			},
 		};
 		const bridge = store.add(new MainThreadLanguageModelTools(SingleProxyRPCProtocol(proxy), tools, new NullLogService(), TestProductService, models));
 		bridge.$registerTool('copilot_viewImage', false);
 		assert.ok(implementation);
 		for (const modelId of [picker, original, 'native-model', undefined]) {
-			const invocation: IToolInvocation = { callId: 'view-frame', toolId: 'copilot_viewImage', parameters: { filePath: '/project/frame.png' }, modelId };
+			const invocation: IToolInvocation = { callId: 'view-frame', toolId: 'copilot_viewImage', parameters: { filePath: '/project/frame.png' }, modelId, context: undefined };
 			const result = await implementation.invoke(invocation, async () => 0, { report: () => { } }, CancellationToken.None);
-			assert.deepStrictEqual(result.content, [{ kind: 'data', mimeType: 'image/png', data: image }]);
+			assert.deepStrictEqual(result.content, [{ kind: 'data', value: { mimeType: 'image/png', data: image } }]);
 			assert.strictEqual(invocation.modelId, modelId, 'the chat model selection must stay unchanged');
 		}
 		assert.deepStrictEqual(forwarded, [original, original, 'native-model', undefined]);

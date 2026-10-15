@@ -722,3 +722,9 @@ nor exposes them.
 | `stateManager.getSessionSummary(session)?._meta` + `setSessionMeta(...)` for prompt cache | `IAgentHostPromptCache.read` / `.write` |
 | `stateManager.onDidChangeSessionTitle` for OTel | `IAgentHostSessionTitleSignal.onDidChangeSessionTitle` |
 | `onSessionConfigChanged` / `onChatConfigChanged` provider hooks | `IAgentConfigurationService.onDidSessionConfigChange` |
+
+## Managed BYOK limits and cost correlation
+
+The renderer publishes effective prompt, output and total-context limits in `IByokLmModelInfo`. The Copilot launcher supplies both provider model limits and capability overrides so the SDK does not fall back to a generic context window. Cache read/write counts cross the BYOK bridge and Responses translation.
+
+The loopback proxy attaches its session-scoped chat identifier to bridge requests. The Arni provider sends it as `X-Arni-Chat-Id` to the authenticated backend ledger. USD costs remain separate from Copilot credits; the backend owns persistence and account isolation. Agent Host PTY shell tools are enabled by default, and terminal progress is rendered from command output without model polling.

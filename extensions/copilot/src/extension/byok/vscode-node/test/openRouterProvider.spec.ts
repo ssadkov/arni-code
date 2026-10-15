@@ -56,6 +56,13 @@ function createProvider(): TestableOpenRouterLMProvider {
 }
 
 describe('OpenRouterLMProvider context window (issue #324671)', () => {
+	it('shows managed USD prices and preserves Qwen vision and effective limits', () => {
+		const caps = createProvider().resolveCapabilities({ id: 'qwen.qwen3-vl-235b-a22b', name: 'Qwen3 VL', supported_parameters: ['tools'],
+			architecture: { input_modalities: ['text', 'image'] }, context_length: 262144,
+			top_provider: { context_length: 262144, max_completion_tokens: 4096 }, pricing: { prompt: '0.00000053', completion: '0.00000266' } });
+		expect({ name: caps?.name, input: caps?.maxInputTokens, output: caps?.maxOutputTokens, vision: caps?.vision, tools: caps?.toolCalling })
+			.toEqual({ name: 'Qwen3 VL · $0.53/$2.66 за 1М вх./вых.', input: 258048, output: 4096, vision: true, tools: true });
+	});
 	it('derives maxInputTokens from the model-level context_length, not top_provider', () => {
 		const provider = createProvider();
 

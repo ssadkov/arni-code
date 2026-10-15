@@ -87,6 +87,20 @@
 	cursor: pointer;
 }
 
+.starter-project-model {
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+	max-width: 100%;
+	white-space: normal;
+}
+
+.starter-project-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
 .starter-project-create:hover {
 	background: var(--vscode-button-hoverBackground);
 }

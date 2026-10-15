@@ -44,6 +44,7 @@ interface ArniBudget {
 interface OpenRouterModelData {
 	id: string;
 	name: string;
+	pricing?: { prompt?: string; completion?: string };
 	supported_parameters?: string[];
 	architecture?: {
 		input_modalities?: string[];
@@ -181,6 +182,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	/** The backend `/api` base that last answered; tried first next time. */
 	private _reachableApiBase: string | undefined;
 	private _freeStepsItem: vscode.StatusBarItem | undefined;
+	private _activeChatId: string | undefined;
 	private readonly _disposables = new DisposableStore();
 	private readonly _onDidChangeLanguageModelChatInformation = this._disposables.add(new vscode.EventEmitter<void>());
 	public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
@@ -206,6 +208,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		);
 		try {
 			this._disposables.add(vscode.commands.registerCommand(JOIN_PRO_WAITLIST_COMMAND, () => this.joinProWaitlist()));
+			this._disposables.add(vscode.commands.registerCommand('arni.showApiUsage', () => this.showApiUsage()));
 		} catch {
 			// vscode.commands is unavailable in unit tests
 		}
@@ -255,7 +258,10 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			throw new Error('Sign in with Yandex or VK to use OpenRouter models.');
 		}
 		try {
-			const result = await super.provideLanguageModelChatResponse({ ...model, configuration: { ...model.configuration, apiKey } }, messages, options, progress, token);
+			const arniChatId = typeof options.modelOptions?.arniChatId === 'string' ? options.modelOptions.arniChatId : undefined;
+			this._activeChatId = arniChatId;
+			const configuration = { ...model.configuration, apiKey, arniChatId };
+			const result = await super.provideLanguageModelChatResponse({ ...model, configuration }, messages, options, progress, token);
 			void this.refreshFreeSteps(apiKey);
 			return result;
 		} catch (error) {
@@ -293,6 +299,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 				this._freeStepsItem.name = vscode.l10n.t('Баланс Arni');
 			}
 			const money = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
+			this._freeStepsItem.command = 'arni.showApiUsage';
 			const available = Math.max(0, Math.min(budget.balanceMicros, budget.fiveHour.limitMicros - budget.fiveHour.usedMicros, budget.weekly.limitMicros - budget.weekly.usedMicros));
 			this._freeStepsItem.text = budget.expired
 				? `$(warning) ${vscode.l10n.t('Срок доступа истёк')}` : !budget.enabled
@@ -304,6 +311,27 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 				money(budget.balanceMicros), windowText(budget.fiveHour), windowText(budget.weekly), new Date(budget.validUntil).toLocaleString());
 			this._freeStepsItem.show();
 		} catch { /* vscode.window is unavailable in unit tests. */ }
+	}
+
+	private async showApiUsage(): Promise<void> {
+		const apiKey = await this.resolveArniApiKey(false);
+		if (!apiKey) { return; }
+		const base = this._reachableApiBase ?? this.getBackendApiCandidates()[0];
+		const selection = await vscode.window.showQuickPick([
+			...(this._activeChatId ? [{ label: vscode.l10n.t('Текущий чат'), chatId: this._activeChatId }] : []),
+			{ label: vscode.l10n.t('Все запросы аккаунта'), chatId: undefined },
+		], { title: vscode.l10n.t('Расходы API в USD') });
+		if (!selection) { return; }
+		try {
+			const response = await fetch(`${base}/account/usage${selection.chatId ? `?chatId=${encodeURIComponent(selection.chatId)}` : ''}`, { headers: { Authorization: `Bearer ${apiKey}` } });
+			if (!response.ok) { throw new Error(vscode.l10n.t('Не удалось загрузить расходы API ({0})', response.status)); }
+			const data = await response.json() as { totalMicros: number; requestCount: number; requests: { model: string; createdAt: string; costMicros: number | null; accounting: string; promptTokens: number; completionTokens: number; cacheReadTokens: number }[] };
+			await vscode.window.showQuickPick(data.requests.map(row => ({
+				label: `${row.costMicros == null ? '—' : `$${(row.costMicros / 1_000_000).toFixed(6)}`} · ${row.model}`,
+				description: `${new Date(row.createdAt).toLocaleString()} · ${row.accounting}`,
+				detail: vscode.l10n.t('Вход: {0}; выход: {1}; из кэша: {2}', row.promptTokens, row.completionTokens, row.cacheReadTokens),
+			})), { title: vscode.l10n.t('Всего ${0} · {1} запросов; показаны последние 100', (data.totalMicros / 1_000_000).toFixed(6), data.requestCount) });
+		} catch (error) { void vscode.window.showErrorMessage(String(error)); }
 	}
 
 	private async refreshFreeSteps(apiKey: string): Promise<void> {
@@ -595,8 +623,12 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		// non-positive prompt budget.
 		const requestedMaxOutputTokens = openRouterModelData.top_provider.max_completion_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
 		const maxOutputTokens = Math.min(requestedMaxOutputTokens, Math.floor(contextWindow / 2));
+		const price = openRouterModelData.pricing;
+		const rates = price && [price.prompt, price.completion].map(value => Number(value) * 1_000_000);
+		const priceLabel = rates?.every(value => Number.isFinite(value) && value >= 0)
+			? vscode.l10n.t(' · ${0}/${1} за 1М вх./вых.', rates[0], rates[1]) : '';
 		return {
-			name: openRouterModelData.name,
+			name: openRouterModelData.name + priceLabel,
 			toolCalling: supportedParameters.includes('tools'),
 			vision: openRouterModelData.architecture?.input_modalities?.includes('image') ?? false,
 			maxInputTokens: contextWindow - maxOutputTokens,
@@ -607,6 +639,10 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 
 	protected override async createOpenAIEndPoint(model: OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>): Promise<OpenAIEndpoint> {
 		const modelInfo = this.getModelInfo(model.id, model.url);
+		const chatId = (model.configuration as LanguageModelChatConfiguration & { arniChatId?: string } | undefined)?.arniChatId;
+		if (chatId && !isOpenRouterBaseUrl(model.url)) {
+			modelInfo.requestHeaders = { ...modelInfo.requestHeaders, 'X-Arni-Chat-Id': chatId };
+		}
 		// The Arni proxy exposes only an OpenAI-compatible `/chat/completions`
 		// route, so Anthropic's native Messages API is reachable solely when
 		// requests go straight to OpenRouter.

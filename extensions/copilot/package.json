@@ -2454,6 +2454,11 @@
     ],
     "commands": [
       {
+        "command": "arni.showApiUsage",
+        "title": "Расходы API в USD",
+        "category": "Arni"
+      },
+      {
         "command": "github.copilot.chat.triggerPermissiveSignIn",
         "title": "%github.copilot.command.triggerPermissiveSignIn%"
       },

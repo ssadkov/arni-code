@@ -100,6 +100,7 @@ const JOIN_PRO_WAITLIST_COMMAND = 'arni.joinProWaitlist';
 
 export class StarterProjectGallery extends Disposable {
 	readonly element: HTMLElement;
+	readonly modelPickerButton: HTMLButtonElement;
 	private readonly _ideaInput: HTMLTextAreaElement;
 	private readonly _ideaButton: HTMLButtonElement;
 	private readonly _cards: HTMLElement;
@@ -138,7 +139,12 @@ export class StarterProjectGallery extends Disposable {
 		this._ideaInput.rows = 3;
 		this._ideaInput.placeholder = localize('starterProjects.ideaPlaceholder', "Например: сайт для моей кофейни с меню и картой");
 		this._ideaInput.setAttribute('aria-label', localize('starterProjects.ideaLabel', "Опишите идею проекта"));
-		this._ideaButton = dom.append(ideaRow, dom.$('button.starter-project-create')) as HTMLButtonElement;
+		const actions = dom.append(ideaRow, dom.$('.starter-project-actions'));
+		this.modelPickerButton = dom.append(actions, dom.$('button.starter-project-link.starter-project-model')) as HTMLButtonElement;
+		this.modelPickerButton.type = 'button';
+		this.modelPickerButton.setAttribute('aria-haspopup', 'dialog');
+		this.modelPickerButton.textContent = localize('starterProjects.chooseModel', "Выбрать модель");
+		this._ideaButton = dom.append(actions, dom.$('button.starter-project-create')) as HTMLButtonElement;
 		this._ideaButton.type = 'button';
 		this._ideaButton.textContent = localize('starterProjects.create', "Создать");
 		this._register(dom.addDisposableListener(this._ideaButton, dom.EventType.CLICK, () => void this._createFromIdea()));
@@ -199,10 +205,8 @@ export class StarterProjectGallery extends Disposable {
 			}
 		}));
 
-		// Paid models wait for the Pro plan; the Copilot extension's OpenRouter
-		// provider registers the command that adds the user to its waitlist.
 		const pro = dom.append(footer, dom.$('.starter-project-pro'));
-		dom.append(pro, dom.$('span')).textContent = localize('starterProjects.proSoon', "Сейчас работают бесплатные модели. Claude, GPT и другие будут в тарифе Pro.");
+		dom.append(pro, dom.$('span')).textContent = localize('starterProjects.availableModels', "Выберите доступную вашему аккаунту модель перед запуском. Для платных моделей нужен бюджет API.");
 		const proButton = dom.append(pro, dom.$('button.starter-project-link')) as HTMLButtonElement;
 		proButton.type = 'button';
 		proButton.textContent = localize('starterProjects.proNotify', "Сообщить о запуске");

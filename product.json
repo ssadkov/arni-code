@@ -122,7 +122,7 @@
             },
             "yandex": {
                 "id": "yandex",
-                "name": "\u042f\u043d\u0434\u0435\u043a\u0441 ID"
+                "name": "Яндекс ID"
             },
             "vk": {
                 "id": "vk",
@@ -211,5 +211,8 @@
         "chat.defaultModel": "",
         "chat.agentHost.allowSignedOutWhenUsable": true,
         "chat.agentHost.byokModels.enabled": true
-    }
+    },
+    "quality": "stable",
+    "updateUrl": "https://api.arnion.ru",
+    "downloadUrl": "https://github.com/ssadkov/arni-code/releases/latest"
 }

@@ -27,7 +27,8 @@ import '../media/chatTerminalToolProgressPart.css';
 import type { ICodeBlockRenderOptions } from '../codeBlockPart.js';
 import { Action, IAction } from '../../../../../../../base/common/actions.js';
 import { ActionBar } from '../../../../../../../base/browser/ui/actionbar/actionbar.js';
-import { timeout } from '../../../../../../../base/common/async.js';
+import { IntervalTimer, timeout } from '../../../../../../../base/common/async.js';
+import { TerminalTaskProgress } from '../../../../common/terminalTaskProgress.js';
 import { IAhpTerminalCommandSource, IChatTerminalOutputSource, IChatTerminalToolProgressPart, ITerminalChatService, ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, ITerminalInstance, ITerminalService } from '../../../../../terminal/browser/terminal.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
@@ -96,6 +97,7 @@ const MIN_DATA_EVENTS_FOR_REAL_OUTPUT = 2;
  * Remembers whether a tool invocation was last expanded so state survives virtualization re-renders.
  */
 const expandedStateByInvocation = new WeakMap<IChatToolInvocation | IChatToolInvocationSerialized, boolean>();
+const observedStartByInvocation = new WeakMap<IChatToolInvocation | IChatToolInvocationSerialized, number>();
 
 // --- Command registrations for terminal tool progress toolbar ---
 
@@ -309,6 +311,11 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 	private readonly _isSerializedInvocation: boolean;
 	private _terminalInstance: ITerminalInstance | undefined;
 	private _outputSource: IChatTerminalOutputSource | undefined;
+	private readonly _taskProgress = new TerminalTaskProgress();
+	private readonly _progressTicker = this._register(new IntervalTimer());
+	private readonly _progressDataListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly _progressLabel: HTMLElement;
+	private readonly _observedStart: number;
 	private readonly _outputSourceListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly _decoration: TerminalCommandDecoration;
 	private _userToggledOutput: boolean = false;
@@ -371,6 +378,13 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 			h('.chat-terminal-content-message@message')
 		]);
 		this._titleElement = elements.title;
+		this._progressLabel = dom.append(elements.container, dom.$('.chat-terminal-task-progress'));
+		this._progressLabel.setAttribute('aria-live', 'off');
+		this._observedStart = observedStartByInvocation.get(toolInvocation) ?? Date.now();
+		observedStartByInvocation.set(toolInvocation, this._observedStart);
+		if (!this._isSerializedInvocation) {
+			this._progressTicker.cancelAndSet(() => this._updateTaskProgress(), 1000);
+		}
 
 		const command = (terminalData.commandLine.forDisplay ?? terminalData.commandLine.userEdited ?? terminalData.commandLine.toolEdited ?? terminalData.commandLine.original).trimStart();
 		this._commandText = command;
@@ -651,6 +665,10 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 			const isNewInstance = this._terminalInstance !== instance;
 			if (isNewInstance) {
 				this._terminalInstance = instance;
+				this._progressDataListener.value = instance.onWillData(data => {
+					this._taskProgress.update(removeAnsiEscapeCodes(data));
+					this._updateTaskProgress();
+				});
 				this._registerInstanceListener(instance);
 			}
 			this._updateToolbarContextKeys(instance, terminalToolSessionId);
@@ -793,7 +811,7 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 			? migrateLegacyTerminalToolSpecificData(this.toolInvocation.toolSpecificData)
 			: this._terminalData;
 		if (currentTerminalData.isPty === false) {
-			if (this._outputSource?.exitCode !== undefined || currentTerminalData.terminalCommandState?.exitCode !== undefined) {
+			if (this._outputSource?.hasExited || this._outputSource?.exitCode !== undefined || currentTerminalData.terminalCommandState?.exitCode !== undefined) {
 				return false;
 			}
 			if (!IChatToolInvocation.isComplete(this.toolInvocation)) {
@@ -1108,6 +1126,8 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 			void this._toggleOutput(true);
 		}));
 		store.add(source.onDidChange(() => {
+			this._taskProgress.update(removeAnsiEscapeCodes(source.output.slice(-16384)));
+			this._updateTaskProgress();
 			this._decoration.update();
 			this._updateToolbarContextKeys(undefined, this._terminalData.terminalToolSessionId);
 			void this._outputView.refresh();
@@ -1124,6 +1144,23 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 		this._decoration.update();
 		this._updateToolbarContextKeys(undefined, this._terminalData.terminalToolSessionId);
 		void this._outputView.refresh();
+	}
+
+	private _updateTaskProgress(): void {
+		if (!this._isInvocationRunning()) {
+			this._progressLabel.textContent = '';
+			this._progressTicker.cancel();
+			return;
+		}
+		const elapsed = Math.max(0, Math.floor((Date.now() - this._observedStart) / 1000));
+		const duration = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+		const percent = this._taskProgress.percent;
+		const eta = this._taskProgress.estimatedRemainingSeconds(elapsed);
+		this._progressLabel.textContent = percent === undefined
+			? localize('terminalTaskRunning', "Выполняется · {0}", duration(elapsed))
+			: eta === undefined
+				? localize('terminalTaskProgress', "{0}% · прошло {1}", percent.toFixed(1), duration(elapsed))
+				: localize('terminalTaskProgressEta', "{0}% · прошло {1} · осталось примерно {2}", percent.toFixed(1), duration(elapsed), duration(eta));
 	}
 
 	private _handleOutputFocus(): void {

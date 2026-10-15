@@ -151,7 +151,7 @@ suite('AgentHostByokLmHandler', () => {
 			disabledModels: [],
 			disabledResult: { output: [], error: 'BYOK models are disabled by policy.' },
 			enabledModels: [
-				{ vendor: 'acme', id: 'claude', name: 'acme claude', modelIdentifier: 'id-acme', maxContextWindowTokens: 2000, supportsVision: false },
+				{ vendor: 'acme', id: 'claude', name: 'acme claude', modelIdentifier: 'id-acme', maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000, supportsVision: false },
 			],
 			requestSent: false,
 		});
@@ -171,7 +171,7 @@ suite('AgentHostByokLmHandler', () => {
 		const models = await handler.listModels(CancellationToken.None);
 
 		assert.deepStrictEqual(models, [
-			{ vendor: 'acme', id: 'claude', name: 'acme claude', modelIdentifier: 'id-acme', maxContextWindowTokens: 2000, supportsVision: true },
+			{ vendor: 'acme', id: 'claude', name: 'acme claude', modelIdentifier: 'id-acme', maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000, supportsVision: true },
 		]);
 	});
 
@@ -192,8 +192,8 @@ suite('AgentHostByokLmHandler', () => {
 		const models = await handler.listModels(CancellationToken.None);
 
 		assert.deepStrictEqual(models, [
-			{ vendor: 'openrouter', id: 'ai21/jamba-large-1.7', name: 'openrouter ai21/jamba-large-1.7', modelIdentifier: groupedId, maxContextWindowTokens: 2000, supportsVision: false },
-			{ vendor: 'openrouter', id: 'gpt-4', name: 'openrouter gpt-4', modelIdentifier: 'openrouter/gpt-4', maxContextWindowTokens: 2000, supportsVision: false },
+			{ vendor: 'openrouter', id: 'ai21/jamba-large-1.7', name: 'openrouter ai21/jamba-large-1.7', modelIdentifier: groupedId, maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000, supportsVision: false },
+			{ vendor: 'openrouter', id: 'gpt-4', name: 'openrouter gpt-4', modelIdentifier: 'openrouter/gpt-4', maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000, supportsVision: false },
 		]);
 	});
 
@@ -237,7 +237,7 @@ suite('AgentHostByokLmHandler', () => {
 				id: 'ai21/jamba-large-1.7',
 				name: 'openrouter ai21/jamba-large-1.7',
 				modelIdentifier: sourceIdentifier,
-				maxContextWindowTokens: 2000,
+				maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000,
 				supportsVision: false,
 			}],
 			sourceHiddenModels: [],
@@ -247,7 +247,7 @@ suite('AgentHostByokLmHandler', () => {
 				id: 'ai21/jamba-large-1.7',
 				name: 'openrouter ai21/jamba-large-1.7',
 				modelIdentifier: sourceIdentifier,
-				maxContextWindowTokens: 2000,
+				maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000,
 				supportsVision: false,
 			}],
 		});
@@ -294,13 +294,13 @@ suite('AgentHostByokLmHandler', () => {
 				id: 'reasoning',
 				name: 'acme reasoning',
 				modelIdentifier: 'id-reasoning',
-				maxContextWindowTokens: 2000,
+				maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000,
 				supportsVision: false,
 				supportedReasoningEfforts: ['minimal', 'low', 'high'],
 				defaultReasoningEffort: 'high',
 			},
-			{ vendor: 'acme', id: 'malformed', name: 'acme malformed', modelIdentifier: 'id-malformed', maxContextWindowTokens: 2000, supportsVision: false },
-			{ vendor: 'acme', id: 'plain', name: 'acme plain', modelIdentifier: 'id-plain', maxContextWindowTokens: 2000, supportsVision: false },
+			{ vendor: 'acme', id: 'malformed', name: 'acme malformed', modelIdentifier: 'id-malformed', maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000, supportsVision: false },
+			{ vendor: 'acme', id: 'plain', name: 'acme plain', modelIdentifier: 'id-plain', maxContextWindowTokens: 2000, maxPromptTokens: 1000, maxOutputTokens: 1000, supportsVision: false },
 		]);
 	});
 
@@ -336,7 +336,7 @@ suite('AgentHostByokLmHandler', () => {
 				{ type: 'tool_use', name: 'getWeather', toolCallId: 't1', parameters: { city: 'NYC' } },
 				{ type: 'tool_use', name: 'apply_patch', toolCallId: 't2', parameters: { input: 'patch' } },
 				{ type: 'data', mimeType: 'stateful_marker', data: VSBuffer.fromString('claude\\resp_provider') },
-				{ type: 'data', mimeType: 'usage', data: VSBuffer.fromString('{"prompt_tokens":10,"completion_tokens":5,"completion_tokens_details":{"reasoning_tokens":2}}') },
+				{ type: 'data', mimeType: 'usage', data: VSBuffer.fromString('{"prompt_tokens":10,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":8,"cache_creation_input_tokens":2},"completion_tokens_details":{"reasoning_tokens":2}}') },
 			]),
 		);
 		const handler = createHandler(service);
@@ -364,7 +364,7 @@ suite('AgentHostByokLmHandler', () => {
 				{ type: 'custom_tool_call', callId: 't2', name: 'apply_patch', input: 'patch' },
 			],
 			responseId: 'resp_provider',
-			usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: 2 },
+			usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: 2, cachedTokens: 8, cacheWriteTokens: 2 },
 		});
 	});
 

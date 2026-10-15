@@ -3,9 +3,9 @@ name: Build Arni Code — macOS
 # Signing and notarization run when the MACOS_CERTIFICATE secret is set:
 #   MACOS_CERTIFICATE           base64 of the "Developer ID Application" .p12
 #   MACOS_CERTIFICATE_PASSWORD  password of that .p12
-#   APPLE_ID                    Apple ID email of the developer account
-#   APPLE_APP_PASSWORD          app-specific password for that Apple ID
-#   APPLE_TEAM_ID               10-character team ID
+#   APPLE_API_KEY               App Store Connect team API key (.p8 contents)
+#   APPLE_API_KEY_ID            public Key ID
+#   APPLE_API_ISSUER            public Issuer ID
 # Without them the app is only ad-hoc signed: it runs after `xattr -cr`, which
 # is fine for internal testing but not for public downloads.
 
@@ -64,6 +64,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.build_ref || github.sha }}
+
+      - name: Validate release credentials
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ "$SIGNING_ENABLED" = true ]; then
+            test -n "$APPLE_API_KEY" && test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER"
+          elif [ "$PUBLISH_RELEASE" = true ]; then
+            echo 'Public macOS releases require Developer ID signing and notarization.' >&2
+            exit 1
+          fi
 
       - name: Read .nvmrc
         id: nvmrc
@@ -151,15 +164,13 @@ jobs:
       - name: Notarize app
         if: env.SIGNING_ENABLED == 'true'
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -e
           ditto -c -k --keepParent "$APP_DIR/$APP_NAME" "$RUNNER_TEMP/notarize.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
-            --wait --timeout 60m
+          bash scripts/notarize-macos.sh "$RUNNER_TEMP/notarize.zip"
           xcrun stapler staple "$APP_DIR/$APP_NAME"
           spctl --assess --type execute --verbose "$APP_DIR/$APP_NAME"
 
@@ -201,16 +212,14 @@ jobs:
       - name: Sign and notarize dmg
         if: env.SIGNING_ENABLED == 'true'
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -e
           DMG=artifacts/macos/ArniCode-darwin-${{ matrix.arch }}.dmg
           codesign --sign "$CODESIGN_IDENTITY" --timestamp "$DMG"
-          xcrun notarytool submit "$DMG" \
-            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
-            --wait --timeout 60m
+          bash scripts/notarize-macos.sh "$DMG"
           xcrun stapler staple "$DMG"
 
       - name: List artifacts and checksums
@@ -223,6 +232,10 @@ jobs:
           ls -lh artifacts/macos
           echo "Commit: $(git rev-parse HEAD); architecture: $VSCODE_ARCH; Developer ID signing: $SIGNING_ENABLED" >> "$GITHUB_STEP_SUMMARY"
           cat artifacts/macos/SHA256SUMS-darwin-${{ matrix.arch }}.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create signed update manifest
+        if: env.SIGNING_ENABLED == 'true'
+        run: node scripts/create-macos-update.mjs "${{ matrix.arch }}" artifacts/macos
 
       - name: Upload build artifacts
         if: always() && steps.package_zip.conclusion == 'success'

@@ -88,7 +88,7 @@ suite('byokResponsesTranslation', () => {
 				{ type: 'function_call', callId: 'call_1', name: 'getWeather', argumentsJson: '{"city":"NYC"}' },
 				{ type: 'custom_tool_call', callId: 'call_2', name: 'apply_patch', input: 'patch' },
 			],
-			usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: 2 },
+			usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: 2, cachedTokens: 8, cacheWriteTokens: 2 },
 		};
 
 		const events = bridgeResultToResponsesSseFrames(result, 'gpt-5').map(frame => {
@@ -143,7 +143,7 @@ suite('byokResponsesTranslation', () => {
 			outputTypes: ['reasoning', 'message', 'function_call', 'custom_tool_call'],
 			usage: {
 				input_tokens: 10,
-				input_tokens_details: { cached_tokens: 0 },
+				input_tokens_details: { cached_tokens: 8, cache_write_tokens: 2 },
 				output_tokens: 5,
 				output_tokens_details: { reasoning_tokens: 2 },
 				total_tokens: 15,

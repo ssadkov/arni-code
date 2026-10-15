@@ -578,6 +578,15 @@ export async function resolveByokSessionConfig(
 		provider: m.vendor,
 		...(m.name !== undefined ? { name: m.name } : {}),
 		...(m.maxContextWindowTokens !== undefined ? { maxContextWindowTokens: m.maxContextWindowTokens } : {}),
+		...(m.maxPromptTokens !== undefined ? { maxPromptTokens: m.maxPromptTokens } : {}),
+		...(m.maxOutputTokens !== undefined ? { maxOutputTokens: m.maxOutputTokens } : {}),
+		...(m.maxContextWindowTokens !== undefined || m.maxPromptTokens !== undefined || m.supportsVision !== undefined ? { capabilities: {
+			...(m.supportsVision !== undefined ? { supports: { vision: m.supportsVision } } : {}),
+			limits: {
+				...(m.maxContextWindowTokens !== undefined ? { max_context_window_tokens: m.maxContextWindowTokens } : {}),
+				...(m.maxPromptTokens !== undefined ? { max_prompt_tokens: m.maxPromptTokens } : {}),
+			},
+		} } : {}),
 	}));
 	logService.info(`[Copilot:${sessionId}] Wired ${models.length} BYOK model(s) across ${providers.length} provider(s) via loopback proxy ${handle.baseUrl}`);
 	return { providers, models };

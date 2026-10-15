@@ -152,7 +152,7 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 
 		const vendor = this._parseVendorFromResponsesPath(pathname);
 		if (method === 'POST' && vendor !== undefined) {
-			await this._handleResponses(req, res, runtime, vendor);
+			await this._handleResponses(req, res, runtime, vendor, auth.sessionId);
 			return;
 		}
 
@@ -185,7 +185,7 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 		return vendor;
 	}
 
-	private async _handleResponses(req: http.IncomingMessage, res: http.ServerResponse, runtime: ILoopbackProxyRuntime<ByokLmProxyState>, vendor: string): Promise<void> {
+	private async _handleResponses(req: http.IncomingMessage, res: http.ServerResponse, runtime: ILoopbackProxyRuntime<ByokLmProxyState>, vendor: string, chatId: string): Promise<void> {
 		let body: IResponsesRequest;
 		try {
 			const raw = await readProxyRequestBody(req);
@@ -223,7 +223,7 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 		res.on('close', onClose);
 
 		try {
-			const result = await connection.chat(bridgeRequest);
+			const result = await connection.chat({ ...bridgeRequest, chatId });
 			if (entry.ac.signal.aborted || res.writableEnded) {
 				return;
 			}

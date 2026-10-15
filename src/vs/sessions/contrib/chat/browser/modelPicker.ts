@@ -95,7 +95,7 @@ export class ModelPicker extends Disposable {
 		const action = { id: 'sessions.modelPicker', label: '', enabled: true, class: undefined, tooltip: '', run: () => { } };
 		this._modelPicker = this._register(instantiationService.createInstance(ModelPickerActionItem, action, this._delegate, pickerOptions));
 		this._register(this._newChatModelPickerService.registerModelPicker({
-			open: () => this._modelPicker.openModelPicker(),
+			open: anchor => this._modelPicker.show(anchor),
 			switchToModel: modelIdentifier => this.switchToModel(modelIdentifier),
 		}));
 

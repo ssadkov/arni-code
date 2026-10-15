@@ -11,6 +11,8 @@ const [app, output, architecture] = process.argv.slice(2);
 assert.ok(app && output && architecture, 'Pass app resources, manifest output, and architecture');
 const product = JSON.parse(fs.readFileSync(path.join(app, 'product.json'), 'utf8'));
 assert.equal(product.commit, process.env.GITHUB_SHA, 'Packaged commit must match the workflow commit');
+assert.equal(product.quality, 'stable', 'Update channel must be included');
+assert.equal(product.updateUrl, 'https://api.arnion.ru', 'The product update feed must be included');
 const extensions = [];
 for (const name of ['copilot', 'arni-agent', 'yandex-authentication', 'vk-authentication']) {
 	const folder = path.join(app, 'extensions', name);
@@ -19,7 +21,7 @@ for (const name of ['copilot', 'arni-agent', 'yandex-authentication', 'vk-authen
 	if (!fs.existsSync(main)) { main += '.js'; }
 	const bundle = fs.readFileSync(main, 'utf8');
 	if (name === 'copilot') {
-		for (const marker of ['balanceMicros', 'arni_managed', 'five_hour_limit', 'weekly_limit']) {
+		for (const marker of ['balanceMicros', 'arni_managed', 'five_hour_limit', 'weekly_limit', 'arni.showApiUsage', 'X-Arni-Chat-Id']) {
 			assert.ok(bundle.includes(marker), 'Missing billing client marker: ' + marker);
 		}
 	}
@@ -27,5 +29,5 @@ for (const name of ['copilot', 'arni-agent', 'yandex-authentication', 'vk-authen
 	extensions.push({ name, version: manifest.version, sha256: crypto.createHash('sha256').update(bundle).digest('hex') });
 }
 fs.mkdirSync(path.dirname(output), { recursive: true });
-fs.writeFileSync(output, JSON.stringify({ commit: product.commit, architecture, builtAt: new Date().toISOString(), extensions }, null, 2) + '\n');
+fs.writeFileSync(output, JSON.stringify({ commit: product.commit, version: product.version, quality: product.quality, updateUrl: product.updateUrl, architecture, builtAt: new Date().toISOString(), extensions }, null, 2) + '\n');
 console.log('Verified packaged billing client, authentication extensions and commit: ' + product.commit);

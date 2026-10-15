@@ -436,7 +436,7 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 	}
 
 	/** Opens the model picker dropdown. */
-	openModelPicker(): void { this._newChatModelPickerService.openModelPicker(); }
+	openModelPicker(anchor?: HTMLElement): void { this._newChatModelPickerService.openModelPicker(anchor); }
 
 	/** Moves the provider-contributed session controls into the given container. */
 	renderSessionControls(container: HTMLElement): void {
@@ -1913,6 +1913,10 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 
 	getVoiceModels() {
 		return this._modelSelection.state.get().models;
+	}
+
+	selectModel(identifier: string): boolean {
+		return this._modelSelection.selectModel(identifier);
 	}
 
 	selectVoiceModel(identifier: string): boolean {

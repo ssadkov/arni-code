@@ -425,9 +425,10 @@ export async function createShellTools(
 
 	const primaryTool: Tool<IShellToolArgs> = {
 		name: shellType,
-		description: shellType === 'bash'
+		description: (shellType === 'bash'
 			? (isZsh(executable) ? createZshModelDescription(sandboxEnabled, networkDomains) : createBashModelDescription(sandboxEnabled, networkDomains))
-			: createPowerShellModelDescription(shellType, executable, sandboxEnabled, networkDomains),
+			: createPowerShellModelDescription(shellType, executable, sandboxEnabled, networkDomains))
+			+ '\nLong-running commands stream output live to the user terminal. Start a render once; do not repeatedly poll it or start another copy just to show progress. Prefer unbuffered output (for example python -u). If it continues in the background, report that it is running and show the terminal; do not claim completion until an exit result confirms it.',
 		parameters: {
 			type: 'object',
 			properties: {

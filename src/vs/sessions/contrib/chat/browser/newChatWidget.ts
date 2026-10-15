@@ -465,6 +465,7 @@ export class NewChatWidget extends Disposable {
 			// or composer pointing at some other folder next to it.
 			let starterStarted = false;
 			const gallery = this._starterGallery = this._register(this.instantiationService.createInstance(StarterProjectGallery, chatWidgetContent, async (folderUri: URI, prompt: string) => {
+				const selectedModel = this._newChatInput.selectedModelState.get().currentModel?.identifier;
 				const result = await this._createNewSession(folderUri);
 				if (!result.session) {
 					throw new Error(result.trustDeclined
@@ -472,6 +473,9 @@ export class NewChatWidget extends Disposable {
 						: localize('starterProjects.sessionUnavailable', "Агент пока недоступен для этой папки."));
 				}
 				this._workspacePicker.setSelectedWorkspace(folderUri, { fireEvent: false });
+				if (selectedModel && !this._newChatInput.selectModel(selectedModel)) {
+					throw new Error(localize('starterProjects.modelUnavailable', "Выбранная модель больше недоступна. Выберите модель и повторите запуск."));
+				}
 				this._newChatInput.prefillInput(prompt);
 				starterStarted = true;
 				this.newSessionComposerService.setStarterProjectsRequested(false);
@@ -484,6 +488,13 @@ export class NewChatWidget extends Disposable {
 				this.newSessionComposerService.setStarterProjectsRequested(false);
 				updateGalleryVisibility();
 				this.focusInput();
+			}));
+			this._register(dom.addDisposableListener(gallery.modelPickerButton, dom.EventType.CLICK, () => this._newChatInput.openModelPicker(gallery.modelPickerButton)));
+			this._register(autorun(reader => {
+				const state = this._newChatInput.selectedModelState.read(reader);
+				gallery.modelPickerButton.textContent = state.currentModel
+					? localize('starterProjects.selectedModel', "Модель: {0}", state.currentModel.metadata.name)
+					: localize('starterProjects.chooseModel', "Выбрать модель");
 			}));
 			const updateGalleryVisibility = () => {
 				// The New Project command brings the gallery back at any time.

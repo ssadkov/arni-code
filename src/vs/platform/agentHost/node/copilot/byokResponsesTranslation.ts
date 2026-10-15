@@ -344,7 +344,8 @@ function prepareResponse(result: IByokLmChatResult, model: string) {
 	const outputTokens = result.usage?.outputTokens ?? 0;
 	const usage = {
 		input_tokens: inputTokens,
-		input_tokens_details: { cached_tokens: 0 },
+		input_tokens_details: { cached_tokens: result.usage?.cachedTokens ?? 0,
+			...(result.usage?.cacheWriteTokens !== undefined ? { cache_write_tokens: result.usage.cacheWriteTokens } : {}) },
 		output_tokens: outputTokens,
 		output_tokens_details: { reasoning_tokens: result.usage?.reasoningTokens ?? 0 },
 		total_tokens: inputTokens + outputTokens,
