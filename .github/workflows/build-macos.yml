@@ -169,7 +169,16 @@ jobs:
           AGENT_TEMPDIRECTORY: ${{ runner.temp }}
         run: |
           set -e
-          node build/darwin/sign.ts "$(dirname "$GITHUB_WORKSPACE")"
+          SIGNED=false
+          for attempt in 1 2 3; do
+            if node build/darwin/sign.ts "$(dirname "$GITHUB_WORKSPACE")"; then
+              SIGNED=true
+              break
+            fi
+            echo "Signing attempt $attempt failed; retrying after a delay"
+            sleep 30
+          done
+          test "$SIGNED" = true
           codesign --verify --deep --strict --verbose=2 "$APP_DIR/$APP_NAME"
 
       - name: Ad-hoc sign app (no certificate)
