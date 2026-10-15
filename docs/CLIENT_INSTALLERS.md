@@ -1,6 +1,6 @@
 # Клиентские пакеты с бюджетом API
 
-Статус на 15 октября 2026: опубликован стабильный [Arni Code 1.0.1](https://github.com/ssadkov/arni-code/releases/tag/v1.0.1), Windows установлен и проверен; macOS arm64/x64 подписаны Developer ID и прошли notarization. [Изменения, проверки и видеопромпт](releases/2026-10-15-qwen3-media-and-updates.md). Исторический prerelease 14 октября приведён ниже отдельно.
+Статус на 16 октября 2026: опубликован стабильный [Arni Code 1.0.3](https://github.com/ssadkov/arni-code/releases/tag/v1.0.3), Windows установлена и открыта в тестовом проекте; macOS arm64/x64 подписаны Developer ID и прошли notarization. [Бесплатные/платные модели, расходы, проверки и видеопромпт](releases/2026-10-15-free-paid-models.md). Исторический prerelease 14 октября приведён ниже отдельно.
 
 Полная модель доступа: [BILLING_AND_ACCESS.md](BILLING_AND_ACCESS.md). Серверный выпуск: [отчёт](releases/2026-10-14-billing-backend.md).
 
@@ -8,23 +8,23 @@
 
 | Платформа | Файлы | Установка |
 | --- | --- | --- |
-| Windows x64 | ArniCodeSetup.exe | Запустить user installer; portable ZIP есть в архивном prerelease 1.0.0, не в 1.0.1 |
+| Windows x64 | ArniCodeSetup.exe | Запустить user installer; portable ZIP есть в архивном prerelease 1.0.0, не в 1.0.3 |
 | macOS Apple Silicon | ArniCode-darwin-arm64.dmg, .zip | Открыть DMG и перенести Arni Code.app в Applications |
 | macOS Intel | ArniCode-darwin-x64.dmg, .zip | Открыть DMG и перенести Arni Code.app в Applications |
 
-Новый пакет устанавливается с прежними application ID, bundle ID и каталогами профиля. Удалять профиль/настройки для обновления не нужно. В 1.0.1 Windows собрана из ba48e106, обе macOS — из 40229563: последующее Windows-only исправление AppX и изменения workflow не меняли Mac runtime. Отчёты: build-manifest-win32-x64.json, build-manifest-arm64.json, build-manifest-x64.json и SHA256SUMS-win32-x64.txt / SHA256SUMS-darwin-*.txt; дополнительно update-darwin-*.json для ZIP. Все 13 assets сверены с локальными SHA-256 и GitHub digest/size.
+Новый пакет устанавливается с прежними application ID, bundle ID и каталогами профиля. Удалять профиль/настройки для обновления не нужно. В 1.0.3 все три платформы упакованы из 685bac1a69f1e20f691f3371f4854d7097cd60e6. Отчёты: build-manifest-win32-x64.json, build-manifest-arm64.json, build-manifest-x64.json и SHA256SUMS-win32-x64.txt / SHA256SUMS-darwin-*.txt; дополнительно update-darwin-*.json для ZIP. Все 13 assets сверены с локальными SHA-256 и GitHub digest/size. Windows CLI, расширения и установленный runtime 1.0.84 дополнительно проверены после установки; синтетический image/hooks тест установленного runtime прошёл без внешних модельных вызовов.
 
 Перед установкой закрыть запущенный Arni Code. На Mac заменить старый Arni Code.app в Applications; на Windows запустить EXE для того же пользователя.
 
 ## Автообновление
 
-В 1.0.1 включены stable-канал и updateUrl https://api.arnion.ru. Серверный feed реализован для macOS: выдаёт проверенные ZIP нужной архитектуры только для более новой версии; нативный updater проверяет подпись. Старым сборкам без updateUrl нужна одна ручная установка DMG. Реальный GUI-переход между версиями на Mac ещё требует пользовательской проверки. Windows feed в этой версии не реализован: обновление через EXE вручную.
+С 1.0.1 включены stable-канал и updateUrl https://api.arnion.ru. Серверный feed реализован для macOS: выдаёт проверенные ZIP нужной архитектуры только для более новой версии; нативный updater проверяет подпись. После публикации 1.0.3 оба домена и обе архитектуры проверены: 1.0.2 получает 200 с правильными SHA-256/size/commit, текущая 1.0.3 — 204. Два начальных RU ARM запроса истекли по таймауту, повтор прошёл. Старым сборкам без updateUrl нужна одна ручная установка DMG. Реальный GUI-переход между версиями на Mac ещё требует пользовательской проверки. Windows feed в этой версии не реализован: обновление через EXE вручную.
 
-Для внутренних тестов использовать publish_release=false и отдельный prerelease, не меняя stable/latest. Выпуск 1.0.1 опубликован намеренно как stable/latest после проверок. Если вручную публикуются заранее проверенные assets, остановить дублирующие tag-triggered сборки до их публикации, чтобы они не перезаписали эти файлы.
+Для внутренних тестов использовать publish_release=false и отдельный prerelease, не меняя stable/latest. Выпуск 1.0.3 опубликован как stable/latest после проверок. Если вручную публикуются заранее проверенные assets, остановить дублирующие tag-triggered сборки, чтобы они не перезаписали эти файлы.
 
 ## macOS и подпись
 
-С 1.0.1 настроены GitHub Secrets для Developer ID и App Store Connect API key. Приложения и DMG обеих архитектур получили Apple Accepted; staple/validate, Gatekeeper, архитектура и CLI проверены. Секреты в документацию не копировать. Текущий сертификат действует до 2027-02-01; для новых выпусков после истечения его нужно обновить. Подробнее о повторах CloudKit и восстановлении signed ZIP — в отчёте 1.0.1.
+С 1.0.1 настроены GitHub Secrets для Developer ID и App Store Connect API key. Приложения и DMG 1.0.3 обеих архитектур получили Apple Accepted; staple/validate, Gatekeeper, архитектура и CLI проверены. Intel-пакет восстановлен из подписанного архива на свежем runner после сетевого сбоя CloudKit; код не пересобирался. Секреты в документацию не копировать. Текущий сертификат действует до 2027-02-01; для новых выпусков после истечения его нужно обновить. Подробности восстановления — в отчётах 1.0.1 и 1.0.3.
 
 Только для **архивного ad-hoc prerelease 14 октября** после проверки источника и SHA256 могло требоваться снятие quarantine с установленного приложения:
 
