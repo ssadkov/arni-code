@@ -59,7 +59,7 @@ export interface IByokLmFunctionCallItem {
 export interface IByokLmFunctionCallOutputItem {
 	readonly type: 'function_call_output';
 	readonly callId: string;
-	readonly output: string;
+	readonly output: string | IByokLmContentPart[];
 }
 
 export interface IByokLmCustomToolCallItem {
@@ -72,7 +72,7 @@ export interface IByokLmCustomToolCallItem {
 export interface IByokLmCustomToolCallOutputItem {
 	readonly type: 'custom_tool_call_output';
 	readonly callId: string;
-	readonly output: string;
+	readonly output: string | IByokLmContentPart[];
 }
 
 export type IByokLmInputItem =

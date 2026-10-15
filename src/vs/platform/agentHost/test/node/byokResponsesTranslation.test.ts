@@ -71,6 +71,22 @@ suite('byokResponsesTranslation', () => {
 		]);
 	});
 
+	test('preserves SDK image blocks in function and custom tool outputs', () => {
+		for (const type of ['function_call_output', 'custom_tool_call_output']) {
+			const result = responsesRequestToBridge('acme', { model: 'vision', input: [{ type, call_id: 'frame', output: [
+				{ type: 'input_text', text: 'attached image' },
+				{ type: 'input_image', image_url: 'data:image/png;base64,aW1hZ2U=' },
+			] }] });
+			assert.deepStrictEqual(result.input, [{ type, callId: 'frame', output: [
+				{ type: 'text', text: 'attached image' },
+				{ type: 'image', mimeType: 'image/png', data: 'aW1hZ2U=' },
+			] }]);
+			assert.throws(() => responsesRequestToBridge('acme', { model: 'vision', input: [{ type, call_id: 'frame', output: [
+				{ type: 'input_image', image_url: 'https://example.com/frame.png' },
+			] }] }), ResponsesTranslationError);
+		}
+	});
+
 	test('rejects missing models and unsupported input items', () => {
 		assert.throws(() => responsesRequestToBridge('acme', { input: [] }), ResponsesTranslationError);
 		assert.throws(() => responsesRequestToBridge('acme', {

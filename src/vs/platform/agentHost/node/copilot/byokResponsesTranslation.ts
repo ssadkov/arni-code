@@ -49,7 +49,7 @@ interface IResponsesInputItem {
 	readonly name?: string;
 	readonly arguments?: string;
 	readonly input?: string;
-	readonly output?: string;
+	readonly output?: string | IResponsesContentPart[];
 }
 
 interface IResponsesTool {
@@ -160,7 +160,7 @@ function toBridgeInputItem(item: IResponsesInputItem, index: number): IByokLmInp
 			return {
 				type: 'function_call_output',
 				callId: requiredString(item.call_id, `input[${index}].call_id`),
-				output: item.output ?? '',
+				output: Array.isArray(item.output) ? toContentParts(item.output, index) : item.output ?? '',
 			};
 		case 'custom_tool_call':
 			return {
@@ -173,7 +173,7 @@ function toBridgeInputItem(item: IResponsesInputItem, index: number): IByokLmInp
 			return {
 				type: 'custom_tool_call_output',
 				callId: requiredString(item.call_id, `input[${index}].call_id`),
-				output: item.output ?? '',
+				output: Array.isArray(item.output) ? toContentParts(item.output, index) : item.output ?? '',
 			};
 		default:
 			throw new ResponsesTranslationError(`Unsupported input[${index}] type '${item.type ?? ''}'`);

@@ -100,7 +100,7 @@ jobs:
         run: |
           npm run transpile-client
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & .\scripts\test.bat --run src/vs/workbench/api/test/browser/mainThreadLanguageModelTools.test.ts --grep MainThreadLanguageModelTools
+          & .\scripts\test.bat --run src/vs/workbench/api/test/browser/mainThreadLanguageModelTools.test.ts --run src/vs/platform/agentHost/test/node/byokResponsesTranslation.test.ts --run src/vs/workbench/contrib/chat/test/browser/agentSessions/agentHostByokLmHandler.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Arni Agent extension

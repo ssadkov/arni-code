@@ -506,6 +506,19 @@ suite('AgentHostByokLmHandler', () => {
 		});
 	});
 
+	test('preserves image tool output through the LM API bridge', async () => {
+		const service = new TestLanguageModelsService(new Map([['id', byokModel('acme', 'vision')]]), () => responseOf([{ type: 'text', value: 'ok' }]));
+		const handler = createHandler(service);
+		await handler.chat({ vendor: 'acme', modelId: 'vision', input: [{ type: 'function_call_output', callId: 'frame', output: [
+			{ type: 'text', text: 'attached image' },
+			{ type: 'image', mimeType: 'image/jpeg', data: 'aW1hZ2U=' },
+		] }] }, CancellationToken.None);
+		assert.deepStrictEqual(service.captured?.messages, [{ role: ChatMessageRole.User, content: [{ type: 'tool_result', toolCallId: 'frame', value: [
+			{ type: 'text', value: 'attached image' },
+			{ type: 'data', mimeType: 'image/jpeg', data: VSBuffer.fromString('image') },
+		] }] }]);
+	});
+
 	test('returns an error result when no BYOK model matches', async () => {
 		const service = new TestLanguageModelsService(new Map(), () => responseOf([]));
 		const handler = createHandler(service);

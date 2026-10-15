@@ -56,6 +56,11 @@ function createProvider(): TestableOpenRouterLMProvider {
 }
 
 describe('OpenRouterLMProvider context window (issue #324671)', () => {
+	it('rounds per-million labels without floating point tails', () => {
+		const caps = createProvider().resolveCapabilities({ id: 'test/cheap', name: 'Cheap', context_length: 131072,
+			top_provider: { context_length: 131072 }, pricing: { prompt: '0.0000001', completion: '0.0000004' } });
+		expect(caps?.name).toBe('Cheap · $0.1/$0.4 за 1М вх./вых.');
+	});
 	it('labels free vision and caching separately from per-token prices', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'test/vision:free', name: 'Vision', arni_provider: 'openrouter', arni_free: true,
 			architecture: { input_modalities: ['text', 'image'] }, context_length: 131072, supported_parameters: ['tools'],

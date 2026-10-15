@@ -645,7 +645,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const requestedMaxOutputTokens = openRouterModelData.top_provider.max_completion_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
 		const maxOutputTokens = Math.min(requestedMaxOutputTokens, Math.floor(contextWindow / 2));
 		const price = openRouterModelData.pricing;
-		const rates = price && [price.prompt, price.completion].map(value => Number(value) * 1_000_000);
+		const rates = price && [price.prompt, price.completion].map(value => Number((Number(value) * 1_000_000).toFixed(6)));
 		const priceLabel = rates?.every(value => Number.isFinite(value) && value >= 0)
 			? vscode.l10n.t(' · ${0}/${1} за 1М вх./вых.', rates[0], rates[1]) : '';
 		const labels = openRouterModelData.arni_provider ? [
