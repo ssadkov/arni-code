@@ -158,6 +158,7 @@
       {
         "name": "arni_generate_image",
         "toolReferenceName": "generateImage",
+        "canBeReferencedInPrompt": true,
         "displayName": "%arni.tools.generateImage.name%",
         "icon": "$(file-media)",
         "userDescription": "%arni.tools.generateImage.description%",
