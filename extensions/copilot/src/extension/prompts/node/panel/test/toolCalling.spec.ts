@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw } from '@vscode/prompt-tsx';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { IChatHookService, type IPreToolUseHookResult } from '../../../../../platform/chat/common/chatHookService';
 import { ConfigKey, IConfigurationService } from '../../../../../platform/configuration/common/configurationService';
@@ -17,7 +17,7 @@ import { constObservable } from '../../../../../util/vs/base/common/observable';
 import { IInstantiationService } from '../../../../../util/vs/platform/instantiation/common/instantiation';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry';
 import { SpyingTelemetryService } from '../../../../../platform/telemetry/node/spyingTelemetryService';
-import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../../../vscodeTypes';
+import { LanguageModelChatMessage, LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult, LanguageModelToolResultPart } from '../../../../../vscodeTypes';
 import { ChatVariablesCollection } from '../../../../prompt/common/chatVariablesCollection';
 import type { Conversation } from '../../../../prompt/common/conversation';
 import type { IBuildPromptContext, IToolCallRound } from '../../../../prompt/common/intents';
@@ -26,6 +26,8 @@ import { ToolName } from '../../../../tools/common/toolNames';
 import { IToolsService, type IToolValidationResult } from '../../../../tools/common/toolsService';
 import { renderPromptElement } from '../../base/promptRenderer';
 import { ChatToolCalls } from '../toolCalling';
+import { IAuthenticationService } from '../../../../../platform/authentication/common/authentication';
+import { LanguageModelAccessPrompt } from '../../../../conversation/vscode-node/languageModelAccessPrompt';
 
 class CapturingChatHookService implements IChatHookService {
 	declare readonly _serviceBrand: undefined;
@@ -223,6 +225,26 @@ class ParallelAwareToolsService implements IToolsService {
 }
 
 describe('ChatToolCalls (toolCalling.tsx)', () => {
+	test.each(['https://example.invalid/api/chat/completions', undefined])('embeds tool images without GitHub auth for custom or missing endpoint metadata: %s', async urlOrRequestMetadata => {
+		const services = createExtensionUnitTestingServices();
+		const accessor = services.createTestingAccessor();
+		const endpoint = await accessor.get(IEndpointProvider).getChatEndpoint('copilot-utility');
+		const customEndpoint = { ...endpoint, supportsVision: true, urlOrRequestMetadata } as IChatEndpoint;
+		await accessor.get(IConfigurationService).setConfig(ConfigKey.EnableChatImageUpload, true);
+		const auth = vi.spyOn(accessor.get(IAuthenticationService), 'getGitHubSession').mockRejectedValue(new Error('GitHub auth must not be requested for inline tool images'));
+		try {
+			const pixel = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jp1sAAAAASUVORK5CYII=', 'base64'));
+			const { messages } = await renderPromptElement(accessor.get(IInstantiationService), customEndpoint, LanguageModelAccessPrompt, {
+				noSafety: true,
+				messages: [LanguageModelChatMessage.User([new LanguageModelToolResultPart('frame', [LanguageModelDataPart.image(pixel, 'image/png')])])],
+			});
+			expect(JSON.stringify(messages)).toContain('data:image/');
+			expect(auth).not.toHaveBeenCalled();
+		} finally {
+			auth.mockRestore();
+		}
+	});
+
 	test('starts multiple sub-agent tool calls in parallel', async () => {
 		const toolName = ToolName.CoreRunSubagent;
 		const firstCallId = 'subagent-call-1';

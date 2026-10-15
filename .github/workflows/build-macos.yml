@@ -124,7 +124,7 @@ jobs:
       - name: Test billing client compatibility
         if: ${{ !inputs.recover_signed_run }}
         working-directory: extensions/copilot
-        run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts
+        run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts src/extension/prompts/node/panel/test/toolCalling.spec.ts
 
       - name: Build bundled Arni extensions
         if: ${{ !inputs.recover_signed_run }}

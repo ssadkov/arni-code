@@ -817,7 +817,8 @@ class PrimitiveToolResult<T extends IPrimitiveToolResultProps> extends PromptEle
 			: false;
 
 		// Anthropic (from CAPI) currently does not support image uploads from tool calls.
-		const canUpload = uploadsEnabled && !!this.endpoint && modelCanUseMcpResultImageURL(this.endpoint);
+		const requestMetadata = this.endpoint?.urlOrRequestMetadata;
+		const canUpload = uploadsEnabled && !!this.endpoint && !!requestMetadata && typeof requestMetadata !== 'string' && modelCanUseMcpResultImageURL(this.endpoint);
 
 		// Enforce image budgets only when images will be inlined as base64.
 		// When uploads are available, the request body stays small (URL reference).
