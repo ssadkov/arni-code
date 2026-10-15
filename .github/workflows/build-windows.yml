@@ -95,6 +95,14 @@ jobs:
         working-directory: extensions/copilot
         run: npm run test:unit -- src/extension/byok/vscode-node/test/openRouterProvider.spec.ts src/extension/byok/node/test/openAIEndpoint.spec.ts
 
+      - name: Test agent-host image tool model binding
+        shell: pwsh
+        run: |
+          npm run transpile-client
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\scripts\test.bat --run src/vs/workbench/api/test/browser/mainThreadLanguageModelTools.test.ts --grep MainThreadLanguageModelTools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build Arni Agent extension
         shell: pwsh
         run: |

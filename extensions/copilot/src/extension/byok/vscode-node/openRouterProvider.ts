@@ -22,6 +22,7 @@ import { CancellationToken, LanguageModelChatMessage, LanguageModelChatMessage2,
 import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { ArniImageTool } from './arniImageTool';
+import { isNonRetryableBYOKError } from '../common/byokErrorPolicy';
 
 interface ArniBudgetWindow {
 	usedMicros: number;
@@ -333,6 +334,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	private toUserFacingError(error: unknown): unknown {
 		if (!(error instanceof Error)) {
 			return error;
+		}
+		if (isNonRetryableBYOKError(error.message)) {
+			return new Error(ARNI_USER_ERROR_PREFIX + error.message);
 		}
 		if (error.name === 'ChatQuotaExceeded') {
 			// The 402 message is replaced by Copilot's quota text on the way here.

@@ -173,6 +173,18 @@ describe('Model discovery records capabilities', () => {
 	});
 });
 
+describe('Non-retryable backend errors', () => {
+	it('marks invalid requests for the SDK proxy so it returns HTTP 400 rather than retrying as 502', () => {
+		const provider = createProvider();
+		try {
+			const failure = new Error('Request Failed: 400 {"error":{"code":"bedrock_error","message":"Expected toolResult blocks"}}');
+			const mapped = (provider as unknown as { toUserFacingError(error: unknown): unknown }).toUserFacingError(failure);
+			expect(mapped).toBeInstanceOf(Error);
+			expect((mapped as Error).message).toBe('[arni-user-error] ' + failure.message);
+		} finally { provider.dispose(); }
+	});
+});
+
 describe('Model catalog source', () => {
 	it('offers the authenticated managed catalog and never sends the account token to OpenRouter', async () => {
 		const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ arni_managed: true,

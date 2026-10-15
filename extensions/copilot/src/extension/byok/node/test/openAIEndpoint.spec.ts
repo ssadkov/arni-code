@@ -898,6 +898,15 @@ describe('BYOK transient retries', () => {
 		expect(shouldRetryBYOKChatResponse(upstream429)).toBe(true);
 	});
 
+	it('does not retry permanent HTTP request failures but retains transient retries', () => {
+		for (const status of [400, 401, 403, 404, 413, 422]) {
+			expect(shouldRetryBYOKChatResponse({ ...failedStream, reason: `Request Failed: ${status} invalid request` })).toBe(false);
+		}
+		for (const status of [500, 502, 503]) {
+			expect(shouldRetryBYOKChatResponse({ ...failedStream, reason: `Request Failed: ${status} temporary outage` })).toBe(true);
+		}
+	});
+
 	it('does not retry a daily free-model cap or Arni 402', () => {
 		expect(shouldRetryBYOKChatResponse(dailyCap)).toBe(false);
 		expect(shouldRetryBYOKChatResponse({

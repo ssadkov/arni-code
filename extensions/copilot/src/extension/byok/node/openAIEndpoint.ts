@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import type { CancellationToken } from 'vscode';
+import { isNonRetryableBYOKError } from '../common/byokErrorPolicy';
 import { IChatMLFetcher } from '../../../platform/chat/common/chatMLFetcher';
 import { ChatFetchResponseType, ChatResponse, RESPONSE_CONTAINED_NO_CHOICES } from '../../../platform/chat/common/commonTypes';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
@@ -44,6 +45,9 @@ function byokErrorHaystack(response: ChatResponse): string {
  */
 export function shouldRetryBYOKChatResponse(response: ChatResponse): boolean {
 	const haystack = byokErrorHaystack(response);
+	if (isNonRetryableBYOKError(haystack)) {
+		return false;
+	}
 	if (/insufficient tokens|free-models-per-day|openrouter_free_tier_daily|five_hour_limit|weekly_limit|insufficient_budget|access_expired|request_in_progress|free_daily_limit|pricing_unavailable|context_too_large|unsupported_request/.test(haystack)) {
 		return false;
 	}

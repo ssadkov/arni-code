@@ -11,6 +11,7 @@ import { isUriComponents, URI, UriComponents } from '../../../base/common/uri.js
 import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IProductService } from '../../../platform/product/common/productService.js';
+import { ILanguageModelsService } from '../../contrib/chat/common/languageModels.js';
 import { toToolSetKey } from '../../contrib/chat/common/tools/languageModelToolsContribution.js';
 import { CountTokensCallback, ILanguageModelToolsService, IToolData, IToolInvocation, IToolProgressStep, IToolResult, ToolDataSource, ToolProgress, toolResultHasBuffers, ToolSet } from '../../contrib/chat/common/tools/languageModelToolsService.js';
 import { extHostNamedCustomer, IExtHostContext } from '../../services/extensions/common/extHostCustomers.js';
@@ -32,6 +33,7 @@ export class MainThreadLanguageModelTools extends Disposable implements MainThre
 		@ILanguageModelToolsService private readonly _languageModelToolsService: ILanguageModelToolsService,
 		@ILogService private readonly _logService: ILogService,
 		@IProductService private readonly _productService: IProductService,
+		@ILanguageModelsService private readonly _languageModelsService: ILanguageModelsService,
 	) {
 		super();
 		this._proxy = extHostContext.getProxy(ExtHostContext.ExtHostLanguageModelTools);
@@ -54,6 +56,12 @@ export class MainThreadLanguageModelTools extends Disposable implements MainThre
 				inputSchema: tool.inputSchema,
 				source: tool.source,
 			} satisfies IToolDataDto));
+	}
+
+	private _invokeTool(dto: Dto<IToolInvocation>, token: CancellationToken) {
+		// Agent-host picker IDs cannot be resolved inside the extension host.
+		const originalModelId = dto.modelId ? this._languageModelsService.lookupLanguageModel(dto.modelId)?.byokModelIdentifier : undefined;
+		return this._proxy.$invokeTool(originalModelId ? { ...dto, modelId: originalModelId } : dto, token);
 	}
 
 	async $getTools(): Promise<IToolDataDto[]> {
@@ -96,7 +104,7 @@ export class MainThreadLanguageModelTools extends Disposable implements MainThre
 				invoke: async (dto, countTokens, progress, token) => {
 					try {
 						this._runningToolCalls.set(dto.callId, { countTokens, progress });
-						const resultSerialized = await this._proxy.$invokeTool(dto, token);
+						const resultSerialized = await this._invokeTool(dto, token);
 						const resultDto: Dto<IToolResult> = resultSerialized instanceof SerializableObjectWithBuffers ? resultSerialized.value : resultSerialized;
 						return revive<IToolResult>(resultDto);
 					} finally {
@@ -155,7 +163,7 @@ export class MainThreadLanguageModelTools extends Disposable implements MainThre
 				invoke: async (dto, countTokens, progress, token) => {
 					try {
 						this._runningToolCalls.set(dto.callId, { countTokens, progress });
-						const resultSerialized = await this._proxy.$invokeTool(dto, token);
+						const resultSerialized = await this._invokeTool(dto, token);
 						const resultDto: Dto<IToolResult> = resultSerialized instanceof SerializableObjectWithBuffers ? resultSerialized.value : resultSerialized;
 						return revive<IToolResult>(resultDto);
 					} finally {
