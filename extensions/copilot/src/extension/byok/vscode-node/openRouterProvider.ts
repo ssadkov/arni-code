@@ -44,6 +44,9 @@ interface ArniBudget {
 interface OpenRouterModelData {
 	id: string;
 	name: string;
+	arni_provider?: 'bedrock' | 'openrouter';
+	arni_free?: boolean;
+	arni_cache?: 'explicit' | 'automatic';
 	pricing?: { prompt?: string; completion?: string };
 	supported_parameters?: string[];
 	architecture?: {
@@ -209,6 +212,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		try {
 			this._disposables.add(vscode.commands.registerCommand(JOIN_PRO_WAITLIST_COMMAND, () => this.joinProWaitlist()));
 			this._disposables.add(vscode.commands.registerCommand('arni.showApiUsage', () => this.showApiUsage()));
+			this._disposables.add(vscode.commands.registerCommand('arni.getAccountSummary', () => this.getAccountSummary()));
 		} catch {
 			// vscode.commands is unavailable in unit tests
 		}
@@ -352,6 +356,23 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 				this._logService.warn(`Unable to load free steps from ${apiBase}: ${String(error)}`);
 			}
 		}
+	}
+
+	/** Read-only bridge for the always-visible Agents account widget. Never returns credentials. */
+	private async getAccountSummary(): Promise<unknown> {
+		const apiKey = await this.resolveArniApiKey(true);
+		if (!apiKey) { return undefined; }
+		const base = this._reachableApiBase ?? this.getBackendApiCandidates()[0];
+		const headers = { Authorization: `Bearer ${apiKey}` };
+		const response = await fetch(`${base}/account`, { headers, signal: AbortSignal.timeout(10_000) });
+		if (!response.ok) { throw new Error(`Account HTTP ${response.status}`); }
+		const data = await response.json() as { user: Record<string, unknown> };
+		let chatCostMicros: number | undefined;
+		if (this._activeChatId) {
+			const usage = await fetch(`${base}/account/usage?chatId=${encodeURIComponent(this._activeChatId)}`, { headers, signal: AbortSignal.timeout(10_000) });
+			if (usage.ok) { chatCostMicros = (await usage.json() as { totalMicros: number }).totalMicros; }
+		}
+		return { ...data.user, chatCostMicros };
 	}
 
 	/**
@@ -627,8 +648,13 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const rates = price && [price.prompt, price.completion].map(value => Number(value) * 1_000_000);
 		const priceLabel = rates?.every(value => Number.isFinite(value) && value >= 0)
 			? vscode.l10n.t(' · ${0}/${1} за 1М вх./вых.', rates[0], rates[1]) : '';
+		const labels = openRouterModelData.arni_provider ? [
+			openRouterModelData.arni_free ? vscode.l10n.t('Бесплатная') : vscode.l10n.t('Платная'),
+			...(openRouterModelData.architecture?.input_modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : []),
+			...(openRouterModelData.arni_cache ? [vscode.l10n.t('Кэш')] : []),
+		].join(' · ') : '';
 		return {
-			name: openRouterModelData.name + priceLabel,
+			name: openRouterModelData.name + priceLabel + (labels ? ` · ${labels}` : ''),
 			toolCalling: supportedParameters.includes('tools'),
 			vision: openRouterModelData.architecture?.input_modalities?.includes('image') ?? false,
 			maxInputTokens: contextWindow - maxOutputTokens,

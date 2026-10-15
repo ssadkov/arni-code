@@ -65,6 +65,14 @@ const signedOutAccountMenuWhen = ArniAccountSignedInContext.negate();
 const SessionsTitleBarAccountWidgetAction = 'sessions.action.titleBarAccountWidget';
 const SESSIONS_ACCOUNT_TITLEBAR_PANEL_WIDTH = 400;
 
+interface IArniAccountSummary {
+	email: string;
+	plan: string;
+	freeSteps: { remaining: number; limit: number };
+	budget?: { balanceMicros: number; enabled: boolean; expired: boolean; validUntil: string };
+	chatCostMicros?: number;
+}
+
 const PERSONALIZE_ACTION_IDS: readonly string[] = [
 	'workbench.action.openSettings',
 ];
@@ -210,6 +218,8 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 	private labelElement: HTMLElement | undefined;
 	private badgeElement: HTMLElement | undefined;
 	private accountName: string | undefined;
+	private arniAccount: IArniAccountSummary | undefined;
+	private arniAccountRefreshing = false;
 	private accountProviderId: string | undefined;
 	private accountProviderLabel: string | undefined;
 	private accountIcon: URI | undefined;
@@ -288,6 +298,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		this._register(runOnChange(this.allowSignedOutWhenUsable, () => this.renderState()));
 		this.refreshAccount();
 		this.refreshCodexAvatar();
+		this._register(disposableWindowInterval(mainWindow, () => { void this.refreshArniAccount(); }, 30_000));
 	}
 
 	override setFocusable(_focusable: boolean): void {
@@ -323,6 +334,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 
 	private async refreshAccount(): Promise<void> {
 		const requestId = ++this.accountRequestCounter;
+		this.arniAccount = undefined;
 		this.isAccountLoading = true;
 		this.renderState();
 
@@ -336,6 +348,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		this.accountProviderLabel = info?.accountProviderLabel;
 		this.accountIcon = info?.accountIcon;
 		this.isAccountLoading = false;
+		void this.refreshArniAccount();
 		this.refreshAvatar();
 		this.renderState();
 	}
@@ -389,13 +402,38 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 
 		this.iconElement.className = `sessions-account-titlebar-widget-icon ${ThemeIcon.asClassName(titleBarIcon)}`;
 		this.iconElement.classList.toggle('hidden', hasLoadedAvatar);
-		this.labelElement.textContent = '';
+		const arni = this.arniAccount;
+		this.container.classList.toggle('arni-account-visible', !!arni);
+		this.labelElement.textContent = arni ? `${arni.email} · ${arni.budget?.enabled && !arni.budget.expired ? `API $${(arni.budget.balanceMicros / 1_000_000).toFixed(2)}` : localize('arni.freeAccess', "Бесплатный")} · ${localize('arni.freeSteps', "{0} шагов", arni.freeSteps.remaining)}` : '';
+		if (arni) {
+			this.container.title = this.labelElement.textContent;
+			this.container.setAttribute('aria-label', this.labelElement.textContent);
+		} else {
+			this.container.removeAttribute('title');
+		}
 		this.badgeElement.textContent = '';
 		this.badgeElement.classList.toggle('dot-badge', shouldShowDotBadge);
 		this.badgeElement.classList.toggle('dot-badge-warning', shouldShowDotBadge && state.dotBadge === 'warning');
 		this.badgeElement.classList.toggle('dot-badge-error', shouldShowDotBadge && state.dotBadge === 'error');
 		this.badgeElement.style.display = shouldShowDotBadge ? '' : 'none';
 		this.renderCodexPanelAvatar();
+	}
+
+	private async refreshArniAccount(): Promise<void> {
+		if (this.arniAccountRefreshing || !['yandex', 'vk'].includes(this.accountProviderId ?? '')) { return; }
+		this.arniAccountRefreshing = true;
+		const request = this.accountRequestCounter;
+		try {
+			const account = await this.commandService.executeCommand<IArniAccountSummary | undefined>('arni.getAccountSummary');
+			if (request === this.accountRequestCounter && !this._store.isDisposed) {
+				this.arniAccount = account;
+				this.renderState();
+			}
+		} catch {
+			// Keep account controls usable while the extension starts or the API is offline.
+		} finally {
+			this.arniAccountRefreshing = false;
+		}
 	}
 
 	private getAvatarAltText(hasLoadedAvatar: boolean): string {
@@ -596,6 +634,23 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 
 	private createCombinedPanelContent(panelStore: DisposableStore): HTMLElement {
 		const panel = $('div.sessions-account-titlebar-panel');
+		if (this.arniAccount) {
+			const arni = this.arniAccount;
+			const summary = append(panel, $('.arni-account-summary'));
+			append(summary, $('strong')).textContent = arni.email;
+			append(summary, $('div')).textContent = localize('arni.plan', "Тариф: {0}", arni.plan === 'FREE' ? localize('arni.freePlan', "Бесплатный") : arni.plan);
+			append(summary, $('div')).textContent = localize('arni.stepsRemaining', "Бесплатные шаги: {0} из {1}", arni.freeSteps.remaining, arni.freeSteps.limit);
+			if (arni.budget) {
+				append(summary, $('div')).textContent = localize('arni.budget', "API-бюджет: ${0} · {1}", (arni.budget.balanceMicros / 1_000_000).toFixed(2),
+					arni.budget.expired ? localize('arni.expired', "срок истёк") : arni.budget.enabled ? localize('arni.enabled', "активен") : localize('arni.paused', "приостановлен"));
+			}
+			if (arni.chatCostMicros !== undefined) {
+				append(summary, $('div')).textContent = localize('arni.chatSpend', "Последний активный чат: ${0}", (arni.chatCostMicros / 1_000_000).toFixed(6));
+			}
+			const usage = append(summary, $('button', { type: 'button' }));
+			usage.textContent = localize('arni.showUsage', "Расходы и история запросов");
+			panelStore.add(addDisposableListener(usage, EventType.CLICK, () => { void this.commandService.executeCommand('arni.showApiUsage'); }));
+		}
 
 		// Build the menu actions once and partition them.
 		const menu = this.menuService.createMenu(AccountMenu, this.contextKeyService);
@@ -653,7 +708,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			if (partitioned.signOut) {
 				copilotActionBar.push(partitioned.signOut, { icon: true, label: false });
 			}
-			this.appendCopilotUsage(copilotAccount, panelStore);
+			if (!['yandex', 'vk'].includes(this.accountProviderId ?? '')) { this.appendCopilotUsage(copilotAccount, panelStore); }
 		} else if (partitioned.signIn) {
 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
 				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")

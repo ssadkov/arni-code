@@ -497,6 +497,27 @@ suite('CopilotShellTools', () => {
 		assert.match(terminalManager.writes[1].data, /^echo "<<<COPILOT_SENTINEL_[a-f0-9]+_EXIT_\$\?>>>"\r$/);
 	});
 
+	test('PowerShell cmdlets without LASTEXITCODE receive a numeric success sentinel', async () => {
+		const { instantiationService, terminalManager } = createServices();
+		terminalManager.defaultShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+		const shellManager = disposables.add(instantiationService.createInstance(ShellManager, URI.parse('copilot:/session-1'), undefined));
+		const tools = await createShellTools(shellManager, TEST_CHAT_URI, terminalManager, new NullLogService());
+		const tool = tools.find(tool => tool.name === 'powershell');
+		assert.ok(tool);
+		const args = { command: 'Get-Location', timeout: 1000 };
+		const promise = tool.handler!(args, { sessionId: 'session-1', toolCallId: 'tool-1', toolName: 'powershell', arguments: args }) as Promise<ToolResultObject>;
+		await waitForSentTexts(terminalManager, 2);
+		const sentinel = terminalManager.writes[1].data;
+		assert.match(sentinel, /\$__arniCommandSucceeded=\$\?/);
+		const id = sentinel.match(/COPILOT_SENTINEL_([a-f0-9]+)_EXIT_/);
+		assert.ok(id);
+		terminalManager.setContent(`C:\\project\r\n<<<COPILOT_SENTINEL_${id[1]}_EXIT_0>>>`);
+		terminalManager.fireData('done');
+		const result = await promise;
+		assert.strictEqual(result.resultType, 'success');
+		assert.match(result.textResultForLlm, /Exit code: 0/);
+	});
+
 	test('primary shell tool ignores echoed sentinel command text', async () => {
 		const { instantiationService, terminalManager } = createServices();
 

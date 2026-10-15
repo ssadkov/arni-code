@@ -601,7 +601,7 @@ export function formatTurnResponseDetails(
 	}
 	const displayName = formatTurnModelName(model, billedModelId);
 	const credits = usageInfoToChatUsage(usage)?.copilotCredits;
-	if (credits !== undefined) {
+	if (credits !== undefined && !model.name.includes(' · $')) {
 		return [displayName, formatCopilotCreditsLabel(credits)].join(' • ');
 	}
 	return [displayName, model.pricing].filter(Boolean).join(' · ');

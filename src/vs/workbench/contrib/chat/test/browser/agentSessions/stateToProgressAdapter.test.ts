@@ -3764,6 +3764,10 @@ suite('stateToProgressAdapter', () => {
 	});
 
 	suite('formatTurnResponseDetails', () => {
+		test('Arni USD models do not show unrelated Copilot credits', () => {
+			const model = { name: 'Qwen3 VL · $0.53/$2.66 за 1М вх./вых.' };
+			assert.strictEqual(formatTurnResponseDetails(model, undefined, { _meta: { cost: 0 } }), model.name);
+		});
 
 		const auto = { name: 'Auto' };
 

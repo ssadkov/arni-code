@@ -21,7 +21,7 @@ for (const name of ['copilot', 'arni-agent', 'yandex-authentication', 'vk-authen
 	if (!fs.existsSync(main)) { main += '.js'; }
 	const bundle = fs.readFileSync(main, 'utf8');
 	if (name === 'copilot') {
-		for (const marker of ['balanceMicros', 'arni_managed', 'five_hour_limit', 'weekly_limit', 'arni.showApiUsage', 'X-Arni-Chat-Id']) {
+		for (const marker of ['balanceMicros', 'arni_managed', 'five_hour_limit', 'weekly_limit', 'arni.showApiUsage', 'arni.getAccountSummary', 'arni_cache', 'X-Arni-Chat-Id']) {
 			assert.ok(bundle.includes(marker), 'Missing billing client marker: ' + marker);
 		}
 	}

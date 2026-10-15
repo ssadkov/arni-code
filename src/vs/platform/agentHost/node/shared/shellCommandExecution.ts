@@ -101,7 +101,9 @@ function makeSentinelId(): string {
 
 function buildSentinelCommand(sentinelId: string, shellType: ShellType): string {
 	if (shellType === 'powershell') {
-		return `Write-Output "${SENTINEL_PREFIX}${sentinelId}_EXIT_$LASTEXITCODE>>>"`;
+		// Cmdlets such as mkdir never initialize LASTEXITCODE. An empty sentinel
+		// cannot be parsed and made the very first successful command time out.
+		return `$__arniCommandSucceeded=$?; $__arniCommandExit=if ($__arniCommandSucceeded) { 0 } elseif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 }; Write-Output "${SENTINEL_PREFIX}${sentinelId}_EXIT_$__arniCommandExit>>>"`;
 	}
 	return `echo "${SENTINEL_PREFIX}${sentinelId}_EXIT_$?>>>"`;
 }

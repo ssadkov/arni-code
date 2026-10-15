@@ -56,6 +56,13 @@ function createProvider(): TestableOpenRouterLMProvider {
 }
 
 describe('OpenRouterLMProvider context window (issue #324671)', () => {
+	it('labels free vision and caching separately from per-token prices', () => {
+		const caps = createProvider().resolveCapabilities({ id: 'test/vision:free', name: 'Vision', arni_provider: 'openrouter', arni_free: true,
+			architecture: { input_modalities: ['text', 'image'] }, context_length: 131072, supported_parameters: ['tools'],
+			top_provider: { context_length: 131072, max_completion_tokens: 4096 }, pricing: { prompt: '0', completion: '0' } });
+		expect(caps?.name).toBe('Vision · $0/$0 за 1М вх./вых. · Бесплатная · Изображения');
+		expect(caps?.vision).toBe(true);
+	});
 	it('shows managed USD prices and preserves Qwen vision and effective limits', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'qwen.qwen3-vl-235b-a22b', name: 'Qwen3 VL', supported_parameters: ['tools'],
 			architecture: { input_modalities: ['text', 'image'] }, context_length: 262144,

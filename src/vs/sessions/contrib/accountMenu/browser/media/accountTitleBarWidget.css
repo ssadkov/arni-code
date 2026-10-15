@@ -69,6 +69,43 @@
 	display: none;
 }
 
+.agent-sessions-workbench .sessions-account-titlebar-widget.arni-account-visible {
+	width: auto;
+	max-width: 340px;
+	gap: var(--vscode-spacing-size60);
+	padding: 0 var(--vscode-spacing-size60);
+}
+
+.agent-sessions-workbench .arni-account-visible .sessions-account-titlebar-widget-label {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--vscode-fontSize-label2);
+}
+
+.agent-sessions-workbench .arni-account-summary {
+	display: grid;
+	gap: var(--vscode-spacing-size60);
+	padding: var(--vscode-spacing-size120);
+	border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+.agent-sessions-workbench .arni-account-summary button {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: var(--vscode-cornerRadius-small);
+	padding: var(--vscode-spacing-size60);
+	cursor: pointer;
+}
+
+@media (max-width: 700px) {
+	.agent-sessions-workbench .sessions-account-titlebar-widget.arni-account-visible {
+		max-width: 190px;
+	}
+}
+
 /* Spacing between titlebar-right action items (account widget, update indicator, etc.) */
 
 .monaco-workbench .part.titlebar > .sessions-titlebar-container > .titlebar-right > .titlebar-right-layout-container .monaco-action-bar .actions-container {
