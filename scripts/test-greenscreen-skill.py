@@ -18,6 +18,20 @@ spec.loader.exec_module(skill)
 
 
 class GreenScreenTest(unittest.TestCase):
+    def test_dependency_check(self):
+        args = type("Args", (), {"ffmpeg": os.environ.get("ARNI_TEST_FFMPEG", "ffmpeg"),
+                                  "ffprobe": os.environ.get("ARNI_TEST_FFPROBE", "ffprobe")})()
+        ready = skill.doctor(args)
+        self.assertEqual(ready["stage"], "dependencies_ready", ready)
+        args.ffmpeg = str(ROOT / ".build/definitely-missing-ffmpeg")
+        missing = skill.doctor(args)
+        self.assertEqual(missing["stage"], "dependencies_unavailable")
+        self.assertFalse(missing["checks"]["ffmpeg"])
+        self.assertTrue(missing["checks"]["ffprobe"], "Check all tools instead of stopping at the first failure")
+        args.ffmpeg = args.ffprobe
+        wrong = skill.doctor(args)
+        self.assertEqual(wrong["stage"], "dependencies_unavailable", "A different executable is not FFmpeg")
+
     def test_real_ffmpeg(self):
         ffmpeg = os.environ.get("ARNI_TEST_FFMPEG", "ffmpeg")
         ffprobe = os.environ.get("ARNI_TEST_FFPROBE", "ffprobe")

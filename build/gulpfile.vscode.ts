@@ -122,6 +122,7 @@ const vscodeResourceIncludes = [
 	'out-build/vs/sessions/prompts/*.prompt.md',
 	'out-build/vs/sessions/skills/**/SKILL.md',
 	'out-build/vs/sessions/skills/**/scripts/**/*.py',
+	'out-build/vs/sessions/skills/**/references/**/*.md',
 
 	// Extensions
 	'out-build/vs/workbench/contrib/extensions/browser/media/{theme-icon.png,language-icon.svg}',

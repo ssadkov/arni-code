@@ -135,6 +135,16 @@ jobs:
           npm run transpile-client
           node scripts/test-sdk-vision-bridge.mjs
 
+      - name: Test media skill with native macOS FFmpeg
+        if: ${{ !inputs.recover_signed_run }}
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            brew install ffmpeg
+          fi
+          python3 src/vs/sessions/skills/greenscreen-preview/scripts/greenscreen.py doctor
+          python3 scripts/test-greenscreen-skill.py
+
       - name: Build bundled Arni extensions
         if: ${{ !inputs.recover_signed_run }}
         run: |

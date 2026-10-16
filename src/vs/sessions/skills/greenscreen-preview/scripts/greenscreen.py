@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License. See License.txt in the project root.
-"""Local, dependency-free FFmpeg green-screen preview workflow (skill 1.0.0)."""
+"""Local FFmpeg green-screen preview workflow; Python standard library only."""
 
 import argparse
 import json
 import math
+import re
 import shutil
 import statistics
 import struct
@@ -16,7 +17,7 @@ import time
 import zlib
 from pathlib import Path
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 SAMPLE_WIDTH, SAMPLE_HEIGHT = 960, 540
 
 
@@ -33,6 +34,40 @@ def executable(value):
     if not resolved:
         raise ValueError("Executable not found: " + value)
     return str(Path(resolved).resolve())
+
+
+def doctor(args):
+    """Read-only dependency checks; never install packages or touch media."""
+    checks, tools, problems = {}, {}, []
+    for name in ("ffmpeg", "ffprobe"):
+        try:
+            path = executable(getattr(args, name))
+            result = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=15)
+            if result.returncode or not result.stdout.startswith(name + " version"):
+                raise ValueError("Not a working " + name + " executable")
+            tools[name] = {"path": path, "version": result.stdout.splitlines()[0]}
+            checks[name] = True
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            checks[name] = False
+            problems.append(str(error))
+    if checks["ffmpeg"]:
+        for option, required in (("-filters", ("scale", "crop", "pad", "setsar", "format", "chromakey", "despill", "overlay")),
+                                 ("-encoders", ("libx264", "mjpeg", "png", "rawvideo"))):
+            try:
+                result = subprocess.run([tools["ffmpeg"]["path"], "-hide_banner", option],
+                                        capture_output=True, text=True, timeout=15)
+                available = set(re.findall(r"^\s*[A-Z.]{2,6}\s+(\w+)\s", result.stdout, re.MULTILINE))
+                missing = sorted(set(required) - available)
+                checks[option[1:]] = result.returncode == 0 and not missing
+                if not checks[option[1:]]:
+                    problems.append("FFmpeg %s unavailable: %s" % (option[1:], ", ".join(missing) or "command failed"))
+            except (OSError, subprocess.SubprocessError) as error:
+                checks[option[1:]] = False
+                problems.append(str(error))
+    return {"stage": "dependencies_ready" if all(checks.values()) else "dependencies_unavailable",
+            "skill": "greenscreen-preview", "version": VERSION,
+            "python": {"path": sys.executable, "version": sys.version.split()[0]},
+            "tools": tools, "checks": checks, "problems": problems}
 
 
 def run(args, log, capture=False, timeout=90):
@@ -311,6 +346,9 @@ def render(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="mode", required=True)
+    preflight = commands.add_parser("doctor", help="Check dependencies without installing anything")
+    preflight.add_argument("--ffmpeg", default="ffmpeg")
+    preflight.add_argument("--ffprobe", default="ffprobe")
     first = commands.add_parser("prepare")
     for name in ("source", "background", "output"):
         first.add_argument("--" + name, required=True)
@@ -328,6 +366,10 @@ def main():
     second.add_argument("--blend", type=float)
     args = parser.parse_args()
     try:
+        if args.mode == "doctor":
+            report = doctor(args)
+            print(json.dumps(report, ensure_ascii=True), flush=True)
+            return 0 if report["stage"] == "dependencies_ready" else 1
         (prepare if args.mode == "prepare" else render)(args)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         event("failed", error=str(error))

@@ -2,12 +2,14 @@
 name: greenscreen-preview
 description: Replace a green screen behind a single presenter with a still background using installed FFmpeg. Prepare candidate frames, then render and verify a short video preview. Use for chroma key, green screen, and replacing a video's green background.
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Green-screen preview
 
-Use the bundled [Python helper](scripts/greenscreen.py) instead of writing a new shell/FFmpeg pipeline. Requires Python 3, FFmpeg and ffprobe already installed. Resolve this script relative to this SKILL.md, not to the workspace. Quote paths. On Windows use the available Python executable; do not use `&&` in Windows PowerShell 5.1. Missing dependencies are a limitation to report, not permission to install software.
+Use the bundled [Python helper](scripts/greenscreen.py) instead of writing a new shell/FFmpeg pipeline. Requires Python 3, FFmpeg and ffprobe. Resolve this script relative to this SKILL.md, not to the workspace. Quote paths. On Windows use the available Python executable; do not use `&&` in Windows PowerShell 5.1.
+
+Before inspecting media, check for a working Python 3 interpreter (`python3` on macOS; `python` or `py -3` on Windows). A command name alone is not proof: run it with `--version`. Then run `<python> "<skill-directory>/scripts/greenscreen.py" doctor`. This reports resolved paths, versions, missing tools, required FFmpeg filters and encoders without changing the computer. If Python is absent, or doctor fails, read [dependency setup](references/setup.md), explain precisely what is missing in the user's language, and offer the relevant installation. Existing authorization to install those dependencies is sufficient; otherwise obtain consent before installation. After installation, rerun doctor with resolved executable paths, then continue the original task. Do not loop on a missing command or ask the user to write a media pipeline.
 
 This first version targets one presenter against a mostly green background. Border-based color sampling and central foreground checks are heuristics, not person segmentation. Multiple people, green clothing, a moving camera, and uneven light can require another method.
 
@@ -22,4 +24,4 @@ This first version targets one presenter against a mostly green background. Bord
 5. Open `result-sheet.jpg` and `detail-sheet.jpg`. The result sheet's first row is source frames and its second row is the corresponding results, at the times listed in `report.json`. The detail sheet compares the central head/shoulder region, source left and result right; if the presenter is elsewhere, inspect the individual full frames instead. If transparency is ambiguous, view `masks.jpg`: white retains foreground, black removes background, gray is partial transparency. Review actual images; a technical pass does not certify visual quality. The helper reports `visual_review_required`, never a self-declared visual pass. If viewing is unavailable, say visual review was not performed. Record specific defects and uncertainty, not generic praise.
 6. Allow at most one new preview unless the user requests more. A correction uses another candidate and `--name preview_v2` (or explicit `--similarity` and `--blend`); do not rewrite the helper or repeat a failed command unchanged. If one correction still fails, report the best artifact and the limitation. Never render the full video without the user's request.
 
-Finish in the user's language with skill `greenscreen-preview` version 1.0.1, actual output path, technical checks, measured render time, observed visual defects, and whether the preview is usable. Keep full logs in files. Do not claim model prices, API cost, or total agent time from local render timing.
+Finish in the user's language with skill `greenscreen-preview` version 1.0.2, actual output path, technical checks, measured render time, observed visual defects, and whether the preview is usable. Keep full logs in files. Do not claim model prices, API cost, or total agent time from local render timing.
