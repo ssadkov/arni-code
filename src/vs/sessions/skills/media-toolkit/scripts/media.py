@@ -16,7 +16,7 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 def emit(stage, **data):
@@ -131,7 +131,7 @@ def render(command, log, seconds, timeout, cwd):
 
 
 def doctor(args):
-    checks, programs, problems = {}, {}, []
+    checks, programs, problems, capabilities = {}, {}, [], {}
     for name in ("ffmpeg", "ffprobe"):
         try:
             executable = tool(getattr(args, name))
@@ -149,11 +149,13 @@ def doctor(args):
             result = subprocess.run([programs["ffmpeg"]["path"], "-hide_banner", "-" + option], capture_output=True, text=True, timeout=15)
             available = set(re.findall(r"^\s*[A-Z.]{2,6}\s+(\w+)\s", result.stdout, re.MULTILINE))
             missing = sorted(set(required) - available)
+            if option == "filters":
+                capabilities["burn_in_captions"] = "subtitles" in available
             checks[option] = result.returncode == 0 and not missing
             if not checks[option]:
                 problems.append("Missing FFmpeg %s: %s" % (option, ", ".join(missing)))
     report = {"skill": "media-toolkit", "version": VERSION, "python": sys.version.split()[0],
-              "checks": checks, "programs": programs, "problems": problems}
+              "checks": checks, "programs": programs, "problems": problems, "capabilities": capabilities}
     emit("dependencies_ready" if all(checks.values()) else "dependencies_unavailable", **report)
     return all(checks.values())
 
@@ -319,6 +321,9 @@ def edit(args):
         graph.append("[%s][graphic%d]overlay=x=%d:y=%d:enable='between(t,%.9f,%.9f)':eof_action=pass[overlay%d]" % (visual, i, x, y, start, end, i))
         visual = "overlay%d" % i
     if plan.get("captions"):
+        filters = subprocess.run([ffmpeg, "-hide_banner", "-filters"], capture_output=True, text=True, timeout=15, check=True)
+        if not re.search(r"^\s*[A-Z.]{2,6}\s+subtitles\s", filters.stdout, re.MULTILINE):
+            raise ValueError("Burn-in captions need FFmpeg subtitles/libass; on macOS use the ffmpeg-full executable")
         captions = file(plan["captions"])
         before[str(captions)] = fingerprint(captions)
         if captions.suffix.lower() != ".srt":
@@ -353,7 +358,7 @@ def edit(args):
     graph_path.write_text(";\n".join(graph), encoding="utf-8")
     target = output / "preview.mp4"
     command = [ffmpeg, "-hide_banner", "-nostdin", "-n", "-filter_complex_threads", "2", *inputs,
-               "-filter_complex_script", str(graph_path), "-map", "[video]"]
+               "-/filter_complex", str(graph_path), "-map", "[video]"]
     if has_audio:
         command += ["-map", "[audio]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
     command += ["-t", "%.9f" % seconds, "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p",

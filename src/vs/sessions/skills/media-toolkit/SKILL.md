@@ -2,7 +2,7 @@
 name: media-toolkit
 description: Execute and verify local video edits from a JSON plan with FFmpeg. Shared engine for trimming, audio normalization, camera overlays, still inserts, reframing, subtitles and cached local transcription.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Local media toolkit

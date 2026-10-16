@@ -41,7 +41,13 @@ class MediaToolkitTest(unittest.TestCase):
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
             args = type("Args", (), {"plan": plan_path, "output": root / "edited", "ffmpeg": FFMPEG, "ffprobe": FFPROBE, "full": False, "timeout": 60})()
-            media.edit(args)
+            try:
+                media.edit(args)
+            except Exception:
+                # Preserve diagnostics in CI before TemporaryDirectory removes its files.
+                for log in args.output.glob("*.log"):
+                    print(log.name + ":\n" + log.read_text(errors="replace")[-12_000:], flush=True)
+                raise
             report = media.load(root / "edited/report.json")
             self.assertTrue(all(report["checks"].values()), report)
             self.assertEqual([report["width"], report["height"]], [180, 320])

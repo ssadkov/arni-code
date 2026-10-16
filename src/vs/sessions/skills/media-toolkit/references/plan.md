@@ -1,4 +1,6 @@
-# Plan and commands (engine 1.0.0)
+# Plan and commands (engine 1.0.1)
+
+The helper uses the current FFmpeg file-argument syntax `-/filter_complex` (supported by FFmpeg 8 and 9), not the removed `-filter_complex_script`. See [FFmpeg option syntax](https://www.ffmpeg.org/ffmpeg.html#Options). On macOS, burning captions requires libass: the regular Homebrew ffmpeg formula may omit it. Check `ffmpeg -filters` for `subtitles`; if missing, propose `brew install ffmpeg-full` and use `$(brew --prefix ffmpeg-full)/bin/ffmpeg` and the adjacent ffprobe (or add that bin directory to PATH). Obtain installation consent first. [Homebrew ffmpeg-full](https://formulae.brew.sh/formula/ffmpeg-full) is keg-only and includes libass.
 
 Run commands with the available Python interpreter. Resolve media.py relative to media-toolkit/SKILL.md. Source files are never overwritten; each edit/verify/captions output directory must be new or empty. `--ffmpeg` / `--ffprobe` are global options before the subcommand. Set `--timeout` in seconds when a user-authorized full export needs more than the 300-second preview limit.
 

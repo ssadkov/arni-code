@@ -146,9 +146,11 @@ jobs:
         if: ${{ !inputs.recover_signed_run }}
         run: |
           set -euo pipefail
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            brew install ffmpeg
-          fi
+          # The lean ffmpeg formula omits libass; subtitles need the full build.
+          brew install ffmpeg-full
+          export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
+          python3 src/vs/sessions/skills/media-toolkit/scripts/media.py doctor
           python3 src/vs/sessions/skills/greenscreen-preview/scripts/greenscreen.py doctor
           python3 scripts/test-greenscreen-skill.py
           python3 scripts/test-media-toolkit.py
