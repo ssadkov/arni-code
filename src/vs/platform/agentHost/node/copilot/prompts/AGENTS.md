@@ -15,6 +15,10 @@ data the SDK accepts directly.
 - `systemMessage.ts` — the default message (`COPILOT_AGENT_HOST_SYSTEM_MESSAGE`),
   shared identity text, the `fullSystemPrompt` / `sectionOverrides` builders, and
   `describeSystemMessageConfig` (the one-line log summary).
+
+Arni's video guidance routes green-screen work to the bundled
+`vs/sessions/skills/greenscreen-preview/SKILL.md`. Keep execution and verification
+details in that versioned skill/helper rather than expanding the universal prompt.
 - `toolInstructions.ts` — the model-agnostic `tool_instructions` layer: gated
   or unconditional nudges (`TOOL_INSTRUCTION_LINES`) composed into the SDK's
   `tool_instructions` section, including the setting-gated default-model

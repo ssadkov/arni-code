@@ -506,9 +506,10 @@ suite('CopilotShellTools', () => {
 		assert.ok(tool);
 		const args = { command: 'Get-Location', timeout: 1000 };
 		const promise = tool.handler!(args, { sessionId: 'session-1', toolCallId: 'tool-1', toolName: 'powershell', arguments: args }) as Promise<ToolResultObject>;
-		await waitForSentTexts(terminalManager, 2);
-		const sentinel = terminalManager.writes[1].data;
+		await waitForSentTexts(terminalManager, 1);
+		const sentinel = terminalManager.writes[0].data;
 		assert.match(sentinel, /\$__arniCommandSucceeded=\$\?/);
+		assert.match(sentinel, /scriptblock\]::Create\('Get-Location'\)/);
 		const id = sentinel.match(/COPILOT_SENTINEL_([a-f0-9]+)_EXIT_/);
 		assert.ok(id);
 		terminalManager.setContent(`C:\\project\r\n<<<COPILOT_SENTINEL_${id[1]}_EXIT_0>>>`);

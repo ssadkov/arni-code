@@ -107,6 +107,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/test-sdk-vision-bridge.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-powershell-sentinel.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node test/unit/node/index.js --run src/vs/platform/agentHost/test/node/copilotShellTools.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test bundled media skill with real FFmpeg
+        shell: pwsh
+        run: |
+          choco install ffmpeg --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test-greenscreen-skill.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Arni Agent extension
         shell: pwsh

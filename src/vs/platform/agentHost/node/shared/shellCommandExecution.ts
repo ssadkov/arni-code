@@ -99,11 +99,13 @@ function makeSentinelId(): string {
 	return generateUuid().replace(/-/g, '');
 }
 
-function buildSentinelCommand(sentinelId: string, shellType: ShellType): string {
+function buildSentinelCommand(sentinelId: string, shellType: ShellType, command: string): string {
 	if (shellType === 'powershell') {
-		// Cmdlets such as mkdir never initialize LASTEXITCODE. An empty sentinel
-		// cannot be parsed and made the very first successful command time out.
-		return `$__arniCommandSucceeded=$?; $__arniCommandExit=if ($__arniCommandSucceeded) { 0 } elseif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 }; Write-Output "${SENTINEL_PREFIX}${sentinelId}_EXIT_$__arniCommandExit>>>"`;
+		// The interactive prompt can reset $? between two sendText calls. Parse
+		// and run the command inside one invocation, so even syntax errors reach
+		// the sentinel. Dot sourcing preserves the terminal's variables/location.
+		const literal = command.replace(/'/g, "''");
+		return `. { $LASTEXITCODE=0; $__arniCommandExit=1; try { . ([scriptblock]::Create('${literal}')); $__arniCommandSucceeded=$?; $__arniCommandExit=if ($LASTEXITCODE -ne 0) { $LASTEXITCODE } elseif ($__arniCommandSucceeded) { 0 } else { 1 } } catch { Write-Error -ErrorRecord $_ -ErrorAction Continue; $__arniCommandExit=1 }; Write-Output "${SENTINEL_PREFIX}${sentinelId}_EXIT_$__arniCommandExit>>>" }`;
 	}
 	return `echo "${SENTINEL_PREFIX}${sentinelId}_EXIT_$?>>>"`;
 }
@@ -296,7 +298,7 @@ async function executeCommandWithSentinel(
 	logService: ILogService,
 ): Promise<IShellCommandResult> {
 	const sentinelId = makeSentinelId();
-	const sentinelCmd = buildSentinelCommand(sentinelId, target.shellType);
+	const sentinelCmd = buildSentinelCommand(sentinelId, target.shellType, command);
 	const disposables = new DisposableStore();
 
 	const contentBefore = terminalManager.getContent(target.terminalUri) ?? '';
@@ -360,11 +362,14 @@ async function executeCommandWithSentinel(
 	});
 
 	try {
-		await terminalManager.sendText(target.terminalUri, `${prefixForHistorySuppression(target.shellType)}${command}`, {
+		const inlineSentinel = target.shellType === 'powershell';
+		await terminalManager.sendText(target.terminalUri, inlineSentinel ? sentinelCmd : `${prefixForHistorySuppression(target.shellType)}${command}`, {
 			shouldExecute: true,
 			bracketedPasteMode: shouldUseBracketedPasteMode(command),
 		});
-		await terminalManager.sendText(target.terminalUri, sentinelCmd, { shouldExecute: true });
+		if (!inlineSentinel) {
+			await terminalManager.sendText(target.terminalUri, sentinelCmd, { shouldExecute: true });
+		}
 	} catch (err) {
 		disposables.dispose();
 		throw err;

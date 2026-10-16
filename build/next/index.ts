@@ -301,6 +301,7 @@ const desktopResourcePatterns = [
 	// Sessions - built-in prompts and skills
 	'vs/sessions/prompts/*.prompt.md',
 	'vs/sessions/skills/**/SKILL.md',
+	'vs/sessions/skills/**/scripts/**/*.py',
 ];
 
 // Resources for server target (minimal - no UI)
