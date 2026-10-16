@@ -2,10 +2,12 @@
 name: media-toolkit
 description: Execute and verify local video edits from a JSON plan with FFmpeg. Shared engine for trimming, audio normalization, camera overlays, still inserts, reframing, subtitles and cached local transcription.
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Local media toolkit
+
+Instructions version 1.0.2; the bundled Python engine remains 1.0.1. Listening requires an actual audio-capable model/tool. If the current session only supports text/images, do not claim to have heard the output or verified lip synchronization: inspect the available technical evidence, provide the preview and ask the user to play it for the audio check. A transcript or waveform is not proof of audible quality.
 
 Use [scripts/media.py](scripts/media.py), resolved relative to this file, instead of generating shell/FFmpeg pipelines. Python standard library only; requires working Python 3, FFmpeg and ffprobe. First run `<python> "<toolkit>/scripts/media.py" doctor`. On missing dependencies follow the installation workflow in `greenscreen-preview/references/setup.md` (a sibling skill); obtain installation consent unless already authorized. Resolve existing tools before installing another copy. Explicit executable options go BEFORE the subcommand: `media.py --ffmpeg "<path>" --ffprobe "<path>" doctor`.
 

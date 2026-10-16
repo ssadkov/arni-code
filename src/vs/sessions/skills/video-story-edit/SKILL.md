@@ -2,10 +2,12 @@
 name: video-story-edit
 description: "Plan conservative edits of spoken video from a timecoded transcript: remove setup, failed takes or approved repetitions while preserving meaning, then use checked media tools."
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Transcript-based edit
+
+If no audio-understanding tool/model is available, mark ambiguous words and cut boundaries for the user's playback review. Do not claim that text-only transcript analysis is listening or proves lip synchronization.
 
 Use `media-toolkit` cached local transcription, or an existing timecoded transcript. Do not send full video or repeatedly retranscribe unchanged audio to plan a cut. Read relevant transcript chunks, then listen to ambiguous boundaries and inspect the associated frames. Silence, breaths and repeated words are not automatically defects.
 
