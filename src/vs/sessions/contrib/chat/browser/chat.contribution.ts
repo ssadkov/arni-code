@@ -33,6 +33,8 @@ import { ISessionsTasksService, SessionsTasksService } from './sessionsTasksServ
 import { ISessionTaskRunnerRegistry, SessionTaskRunnerRegistry } from './sessionTaskRunner.js';
 import { RegisterDefaultSessionTaskRunnersContribution } from './registerDefaultSessionTaskRunners.js';
 import { AgenticPromptsService } from './promptsService.js';
+import { ArniSkillLibraryService, IArniSkillLibraryService } from './arniSkillLibraryService.js';
+import './arniSkillLibraryActions.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { IAICustomizationWorkspaceService } from '../../../../workbench/contrib/chat/common/aiCustomizationWorkspaceService.js';
 import { ICustomizationHarnessService } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
@@ -377,6 +379,7 @@ registerWorkbenchContribution2(SessionsChatPetAchievementContribution.ID, Sessio
 
 // register services
 registerSingleton(IPromptsService, AgenticPromptsService, InstantiationType.Delayed);
+registerSingleton(IArniSkillLibraryService, ArniSkillLibraryService, InstantiationType.Delayed);
 registerSingleton(ISessionTaskRunnerRegistry, SessionTaskRunnerRegistry, InstantiationType.Delayed);
 registerSingleton(ISessionsTasksService, SessionsTasksService, InstantiationType.Delayed);
 registerSingleton(IAICustomizationWorkspaceService, SessionsAICustomizationWorkspaceService, InstantiationType.Delayed);

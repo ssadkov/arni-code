@@ -36,6 +36,11 @@ on:
         required: false
         default: false
         type: boolean
+      prerelease:
+        description: 'Publish a test release without changing stable/latest'
+        required: false
+        default: false
+        type: boolean
       release_tag:
         description: 'Release tag (e.g. v1.0.0) to attach to. Empty = date-based tag; ignored on tag push'
         required: false
@@ -60,6 +65,7 @@ jobs:
       APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-${{ matrix.arch }}
       APP_NAME: Arni Code.app
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
+      PRERELEASE: ${{ github.event_name != 'push' && inputs.prerelease }}
       SIGNING_ENABLED: ${{ secrets.MACOS_CERTIFICATE != '' }}
       # Postinstall scripts (ripgrep) and gulp download from the GitHub API;
       # anonymous calls from shared macOS runners hit the rate limit (403).
@@ -134,6 +140,7 @@ jobs:
         run: |
           npm run transpile-client
           node scripts/test-sdk-vision-bridge.mjs
+          node test/unit/node/index.js --run src/vs/sessions/contrib/chat/test/browser/arniSkillLibrary.test.ts
 
       - name: Test media skill with native macOS FFmpeg
         if: ${{ !inputs.recover_signed_run }}
@@ -144,6 +151,7 @@ jobs:
           fi
           python3 src/vs/sessions/skills/greenscreen-preview/scripts/greenscreen.py doctor
           python3 scripts/test-greenscreen-skill.py
+          python3 scripts/test-media-toolkit.py
 
       - name: Build bundled Arni extensions
         if: ${{ !inputs.recover_signed_run }}
@@ -390,11 +398,13 @@ jobs:
             TAG="v$(date -u +%Y.%m.%d-%H%M)"
           fi
           case "$TAG" in v*) ;; *) TAG="v$TAG" ;; esac
+          RELEASE_FLAGS=(--latest)
+          if [ "$PRERELEASE" = true ]; then RELEASE_FLAGS=(--prerelease --latest=false); fi
 
           # The Windows build publishes to the same tag, so whichever job comes
           # second uploads into the release the first one created.
           if gh release view "$TAG" > /dev/null 2>&1 \
-            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --target "$(git rev-parse HEAD)" --generate-notes --latest; then
+            || ! gh release create "$TAG" artifacts/macos/* --title "$TAG" --target "$(git rev-parse HEAD)" --generate-notes "${RELEASE_FLAGS[@]}"; then
             gh release upload "$TAG" artifacts/macos/* --clobber
           fi
           echo "Release URL: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"

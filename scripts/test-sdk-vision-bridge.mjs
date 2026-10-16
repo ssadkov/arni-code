@@ -12,7 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CopilotClient, RuntimeConnection, approveAll } from '@github/copilot-sdk';
 import { resolveByokSessionConfig } from '../out/vs/platform/agentHost/node/copilot/copilotSessionLauncher.js';
-import { toSdkHooks } from '../out/vs/platform/agentHost/node/copilot/copilotPluginConverters.js';
+import { toSdkCustomAgents, toSdkHooks } from '../out/vs/platform/agentHost/node/copilot/copilotPluginConverters.js';
+import { URI } from '../out/vs/base/common/uri.js';
 import { bridgeResultToResponsesBody, bridgeResultToResponsesSseFrames, responsesRequestToBridge } from '../out/vs/platform/agentHost/node/copilot/byokResponsesTranslation.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -21,11 +22,13 @@ const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AA
 let calls = 0;
 let receivedImages = 0;
 let failure;
+const receivedRequests = [];
 const server = http.createServer(async (req, res) => {
 	try {
 		let raw = '';
 		for await (const chunk of req) { raw += chunk; }
 		const body = JSON.parse(raw);
+		receivedRequests.push(JSON.stringify(body));
 		calls++;
 		if (calls > 1) {
 			const request = responsesRequestToBridge('audit', body);
@@ -73,7 +76,18 @@ try {
 	assert.equal(calls, 2, 'Expected a tool call and one completion');
 	assert.equal(receivedImages, 1, 'The SDK must retain the tool image with the actual launcher token limits');
 	assert.equal(reply?.data.content, 'Кадр просмотрен.', 'Hooks must not stall final reply and session.idle notifications');
-	console.log('SDK vision bridge passed: 2 local requests, 1 image, hooks and final reply completed, no external model calls.');
+	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor'].map(name => ({
+		name, uri: URI.file(path.join(root, 'src/vs/sessions/agents', name + '.agent.md')),
+	})), { readFile: async uri => ({ value: await fs.readFile(uri.fsPath, 'utf8') }) });
+	assert.equal(customAgents.length, 2);
+	for (const agent of customAgents) {
+		const selected = await client.createSession({ ...config, model: 'audit/vision', customAgents, agent: agent.name,
+			configDirectory: runDir, workingDirectory: runDir, enableConfigDiscovery: false, enableSessionTelemetry: false, onPermissionRequest: approveAll });
+		const answer = await selected.sendAndWait({ prompt: 'Reply done without tools.' }, 30000);
+		assert.equal(answer?.data.content, 'Кадр просмотрен.');
+		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split('\n')[0]), 'The selected profession instructions must reach the model');
+	}
+	console.log('SDK vision/professions passed: tool image retained, hooks completed, both Russian profession names selected and instructions delivered; local HTTP only.');
 } finally {
 	await client.stop();
 	await new Promise(resolve => server.close(resolve));

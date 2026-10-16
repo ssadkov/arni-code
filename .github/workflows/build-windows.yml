@@ -21,6 +21,11 @@ on:
         required: false
         default: false
         type: boolean
+      prerelease:
+        description: 'Publish a test release without changing stable/latest'
+        required: false
+        default: false
+        type: boolean
       release_tag:
         description: 'Release tag (e.g. v1.0.0). Empty = date-based tag for manual runs; ignored on tag push'
         required: false
@@ -40,6 +45,7 @@ jobs:
       BUILD_INSTALLER: ${{ github.event_name == 'push' || inputs.build_installer }}
       BUILD_ARCHIVE: ${{ github.event_name == 'push' || inputs.build_archive }}
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
+      PRERELEASE: ${{ github.event_name != 'push' && inputs.prerelease }}
 
     steps:
       - name: Checkout repository
@@ -111,6 +117,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node test/unit/node/index.js --run src/vs/platform/agentHost/test/node/copilotShellTools.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node test/unit/node/index.js --run src/vs/sessions/contrib/chat/test/browser/arniSkillLibrary.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test bundled media skill with real FFmpeg
         shell: pwsh
@@ -118,6 +126,8 @@ jobs:
           choco install ffmpeg --yes --no-progress
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/test-greenscreen-skill.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test-media-toolkit.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Arni Agent extension
@@ -299,7 +309,9 @@ jobs:
             gh release upload $tag @($files.FullName) --clobber
           } else {
             Write-Host "Creating release '$tag'."
-            gh release create $tag @($files.FullName) --title $tag --target $env:GITHUB_SHA --generate-notes --latest
+            $releaseFlags = @('--latest')
+            if ($env:PRERELEASE -eq 'true') { $releaseFlags = @('--prerelease', '--latest=false') }
+            gh release create $tag @($files.FullName) --title $tag --target $env:GITHUB_SHA --generate-notes @releaseFlags
           }
 
           Write-Host "Release URL: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$tag"

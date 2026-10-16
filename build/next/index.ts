@@ -303,6 +303,7 @@ const desktopResourcePatterns = [
 	'vs/sessions/skills/**/SKILL.md',
 	'vs/sessions/skills/**/scripts/**/*.py',
 	'vs/sessions/skills/**/references/**/*.md',
+	'vs/sessions/agents/**/*.agent.md',
 ];
 
 // Resources for server target (minimal - no UI)
