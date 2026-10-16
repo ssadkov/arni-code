@@ -17,7 +17,7 @@ const extensions = [];
 const skillRoot = path.join(app, 'out', 'vs', 'sessions', 'skills', 'greenscreen-preview');
 const skills = ['SKILL.md', 'scripts/greenscreen.py'].map(file => {
 	const data = fs.readFileSync(path.join(skillRoot, file));
-	return { name: 'greenscreen-preview', version: '1.0.0', file, sha256: crypto.createHash('sha256').update(data).digest('hex') };
+	return { name: 'greenscreen-preview', version: '1.0.1', file, sha256: crypto.createHash('sha256').update(data).digest('hex') };
 });
 for (const name of ['copilot', 'arni-agent', 'yandex-authentication', 'vk-authentication']) {
 	const folder = path.join(app, 'extensions', name);

@@ -16,7 +16,7 @@ import time
 import zlib
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 SAMPLE_WIDTH, SAMPLE_HEIGHT = 960, 540
 
 
@@ -78,7 +78,18 @@ def png(path, width, height, rgb):
                      + chunk(b"IDAT", zlib.compress(scanlines, 4)) + chunk(b"IEND", b""))
 
 
-def sheet(path, frames, columns=3):
+def jpeg(path, width, height, rgb, tool, log):
+    # Photos in PNG accumulate across tool turns and can exceed the API body
+    # limit. Keep full frames locally; send compact, high-quality review sheets.
+    with log.open("ab") as errors:
+        result = subprocess.run([tool, "-v", "error", "-nostdin", "-n", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                                 "-s", "%dx%d" % (width, height), "-i", "pipe:0", "-frames:v", "1", "-q:v", "3", str(path)],
+                                input=rgb, stdout=subprocess.DEVNULL, stderr=errors, timeout=30)
+    if result.returncode:
+        raise RuntimeError("Review-sheet encoding failed; see " + str(log))
+
+
+def sheet(path, frames, tool, log, columns=3):
     width, height = SAMPLE_WIDTH // 2, SAMPLE_HEIGHT // 2
     rows = math.ceil(len(frames) / columns)
     board = bytearray(width * columns * height * rows * 3)
@@ -88,10 +99,10 @@ def sheet(path, frames, columns=3):
             thumbnail = b"".join(row[x:x + 3] for x in range(0, len(row), 6))
             offset = (((index // columns) * height + y) * width * columns + (index % columns) * width) * 3
             board[offset:offset + width * 3] = thumbnail
-    png(path, width * columns, height * rows, board)
+    jpeg(path, width * columns, height * rows, board, tool, log)
 
 
-def detail_sheet(path, source, result):
+def detail_sheet(path, source, result, tool, log):
     width, height = SAMPLE_WIDTH // 3, SAMPLE_HEIGHT * 3 // 5
     rgb = bytearray(width * 2 * height * 3)
     for column, frame in enumerate((source, result)):
@@ -99,7 +110,7 @@ def detail_sheet(path, source, result):
             start = (y * SAMPLE_WIDTH + SAMPLE_WIDTH // 3) * 3
             dest = (y * width * 2 + column * width) * 3
             rgb[dest:dest + width * 3] = frame[start:start + width * 3]
-    png(path, width * 2, height, rgb)
+    jpeg(path, width * 2, height, rgb, tool, log)
 
 
 def green(r, g, b):
@@ -181,7 +192,7 @@ def prepare(args):
     bg = raw_frame(tools["ffmpeg"], background, None, log, True)
     for i, frame in enumerate(originals):
         png(output / ("source_%d.png" % i), SAMPLE_WIDTH, SAMPLE_HEIGHT, frame)
-    sheet(output / "source-sheet.png", originals + [bg], 2)
+    sheet(output / "source-sheet.jpg", originals + [bg], tools["ffmpeg"], log, 2)
     color = sample_color(originals)
     candidates, frames, masks = [], [], []
     for number, similarity in enumerate((.06, .08, .10, .12, .14, .16), 1):
@@ -192,8 +203,8 @@ def prepare(args):
         frames.append(frame)
         masks.append(mask)
         event("candidate", **row)
-    sheet(output / "candidates.png", frames)
-    sheet(output / "masks.png", masks)
+    sheet(output / "candidates.jpg", frames, tools["ffmpeg"], log)
+    sheet(output / "masks.jpg", masks, tools["ffmpeg"], log)
     eligible = [row for row in candidates if row["central_foreground_opaque"] >= .995 and row["foreground_samples"] > 100]
     recommendation = max(eligible, key=lambda row: row["green_background_removed"], default=None)
     manifest = {"skill": "greenscreen-preview", "version": VERSION, "source": str(source), "background": str(background),
@@ -206,7 +217,7 @@ def prepare(args):
     if Path(__file__).resolve() != output / "reproduce.py":
         shutil.copyfile(__file__, output / "reproduce.py")
     event("prepared", key_color=color, recommended_candidate=manifest["recommended_candidate"],
-          manifest=str(output / "manifest.json"), source_sheet=str(output / "source-sheet.png"), candidates=str(output / "candidates.png"))
+          manifest=str(output / "manifest.json"), source_sheet=str(output / "source-sheet.jpg"), candidates=str(output / "candidates.jpg"))
 
 
 def render(args):
@@ -280,10 +291,10 @@ def render(args):
     originals = [raw_frame(ffmpeg, source, t, log) for t in manifest["sample_times"]]
     for index, frame in enumerate(frames):
         png(output / (args.name + "-frame-%d.png" % index), SAMPLE_WIDTH, SAMPLE_HEIGHT, frame)
-    sheet_path = output / ("result-sheet.png" if args.name == "preview" else "result-sheet-v2.png")
-    sheet(sheet_path, originals + frames)
-    detail_path = output / ("detail-sheet.png" if args.name == "preview" else "detail-sheet-v2.png")
-    detail_sheet(detail_path, originals[1], frames[1])
+    sheet_path = output / ("result-sheet.jpg" if args.name == "preview" else "result-sheet-v2.jpg")
+    sheet(sheet_path, originals + frames, ffmpeg, log)
+    detail_path = output / ("detail-sheet.jpg" if args.name == "preview" else "detail-sheet-v2.jpg")
+    detail_sheet(detail_path, originals[1], frames[1], ffmpeg, log)
     report = {"skill": "greenscreen-preview", "version": VERSION, "output": str(target), "exit_code": code,
               "render_seconds": render_seconds, "total_helper_seconds": round(time.monotonic() - started, 3),
               "parameters": {"key_color": manifest["key_color"], "similarity": similarity, "blend": blend, "despill": "green"},

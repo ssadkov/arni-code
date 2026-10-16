@@ -45,7 +45,10 @@ class GreenScreenTest(unittest.TestCase):
             self.assertTrue(all(report["checks"].values()), report)
             self.assertEqual(report["status"], "technical_pass_visual_review_required")
             self.assertEqual(before, source.read_bytes(), "Source must remain unchanged")
-            self.assertTrue((output / "result-sheet.png").stat().st_size > 100)
+            self.assertTrue((output / "result-sheet.jpg").stat().st_size > 100)
+            review_files = ["source-sheet.jpg", "candidates.jpg", "result-sheet.jpg", "detail-sheet.jpg"]
+            self.assertLess(sum((output / name).stat().st_size for name in review_files), 750_000,
+                            "Review images must fit comfortably in a conversation's API body")
             with self.assertRaisesRegex(ValueError, "already exists"):
                 skill.render(render_args)
             with self.assertRaisesRegex(ValueError, "not empty"):
