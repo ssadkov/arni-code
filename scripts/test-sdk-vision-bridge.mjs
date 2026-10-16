@@ -85,7 +85,7 @@ try {
 			configDirectory: runDir, workingDirectory: runDir, enableConfigDiscovery: false, enableSessionTelemetry: false, onPermissionRequest: approveAll });
 		const answer = await selected.sendAndWait({ prompt: 'Reply done without tools.' }, 30000);
 		assert.equal(answer?.data.content, 'Кадр просмотрен.');
-		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split('\n')[0]), 'The selected profession instructions must reach the model');
+		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split(/\r?\n/)[0]), 'The selected profession instructions must reach the model');
 	}
 	console.log('SDK vision/professions passed: tool image retained, hooks completed, both Russian profession names selected and instructions delivered; local HTTP only.');
 } finally {
