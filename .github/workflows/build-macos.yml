@@ -141,6 +141,7 @@ jobs:
           npm run transpile-client
           node scripts/test-sdk-vision-bridge.mjs
           node test/unit/node/index.js --run src/vs/sessions/contrib/chat/test/browser/arniSkillLibrary.test.ts
+          node test/unit/node/index.js --run src/vs/sessions/contrib/providers/agentHost/test/browser/agentHostAgents.test.ts
 
       - name: Test media skill with native macOS FFmpeg
         if: ${{ !inputs.recover_signed_run }}

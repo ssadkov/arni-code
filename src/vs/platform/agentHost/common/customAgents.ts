@@ -5,6 +5,7 @@
 
 import { isEqualOrParent } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
+import { SYNCED_CUSTOMIZATION_SCHEME } from './agentHostFileSystemService.js';
 import { isCustomizationEnabled } from './customizationEnablement.js';
 import { CustomizationType, type AgentCustomization, type ClientPluginCustomization, type Customization } from './state/protocol/state.js';
 
@@ -51,9 +52,31 @@ export function getEffectiveAgents(
 }
 
 /**
+ * Merges locally discovered draft profiles with their host-materialized versions.
+ * A synced host profile replaces its source alias; project copies override shared
+ * synced profiles. Unrelated plugin agents remain distinct.
+ */
+export function mergeDraftCustomAgents(customizations: readonly Customization[] | undefined, clientAgents: readonly AgentCustomization[], workingDirectories: readonly string[] = []): readonly AgentCustomization[] {
+	const stateAgents = getEffectiveAgents(customizations);
+	const syncedUris = new Set((customizations ?? []).flatMap(container =>
+		container.type === CustomizationType.Plugin && container.uri.startsWith(SYNCED_CUSTOMIZATION_SCHEME + ':')
+			? (container.children ?? []).filter(child => child.type === CustomizationType.Agent).map(child => child.uri) : []));
+	const syncedNames = new Set(stateAgents.filter(agent => syncedUris.has(agent.uri)).map(agent => agent.name));
+	const projectNames = new Set(stateAgents.filter(agent => !syncedUris.has(agent.uri)
+		&& workingDirectories.some(root => isEqualOrParent(URI.parse(agent.uri), URI.parse(root)))).map(agent => agent.name));
+	const byUri = new Map(stateAgents.filter(agent => !syncedUris.has(agent.uri) || !projectNames.has(agent.name)).map(agent => [agent.uri, agent]));
+	for (const agent of clientAgents) {
+		// The host has materialized this client profile at a different URI. Keep its
+		// authoritative selection id rather than offering the source file a second time.
+		// Agents from unrelated plugins with the same name remain distinct.
+		if (!syncedNames.has(agent.name)) { byUri.set(agent.uri, agent); }
+	}
+	return [...byUri.values()].sort((a, b) => a.name.localeCompare(b.name) || a.uri.localeCompare(b.uri));
+}
+
+/**
  * Filters draft agents by their published plugin container enablement.
- * Unmatched agents remain selectable because they may be loose agents or precede
- * their plugin ref during a client update.
+ * Unmatched agents may be loose agents or precede their plugin ref during an update.
  */
 export function getEffectiveClientAgents(
 	clientCustomizations: readonly ClientPluginCustomization[] | undefined,

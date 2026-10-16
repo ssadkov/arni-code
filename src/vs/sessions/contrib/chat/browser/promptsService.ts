@@ -131,6 +131,19 @@ export class AgenticPromptsService extends PromptsService {
 	 */
 	protected override async getBuiltinPromptFiles(type: PromptsType, token: CancellationToken): Promise<readonly IBuiltinPromptPath[]> {
 		if (type === PromptsType.agent) {
+			// Harness synchronization lists each storage separately, bypassing getCustomAgents.
+			// Suppress overridden built-ins here too so the picker and SDK receive one profile.
+			const customized = new Set<string>();
+			const overrides = await Promise.all([PromptsStorage.local, PromptsStorage.user, PromptsStorage.plugin, PromptsStorage.extension]
+				.map(storage => this.listPromptFilesForStorage(type, storage, token)));
+			for (const file of overrides.flat()) {
+				try {
+					const parsed = await this.parseNew(file.uri, token);
+					customized.add(sanitizeSkillText(parsed.header?.name ?? file.name ?? basename(file.uri).replace(/\.agent\.md$/, ''), 64));
+				} catch (error) {
+					this.logger.debug('[AgenticPromptsService] Could not read profession override', error);
+				}
+			}
 			const managed = await this.library.getCurrent();
 			const roots = [FileAccess.asFileUri('vs/sessions/agents'), ...(managed ? [joinPath(managed.root, 'agents')] : [])];
 			const agents = new Map<string, IBuiltinPromptPath>();
@@ -150,7 +163,7 @@ export class AgenticPromptsService extends PromptsService {
 					}
 				}
 			}
-			return [...agents.values()];
+			return [...agents.values()].filter(agent => !customized.has(agent.name ?? ''));
 		}
 		if (type !== PromptsType.skill) {
 			return [];
