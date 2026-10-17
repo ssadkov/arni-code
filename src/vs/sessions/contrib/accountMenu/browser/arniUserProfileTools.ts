@@ -65,7 +65,7 @@ export class ArniReadUserProfileTool implements IToolImpl {
 			const account = await this.profiles.getAccount();
 			const profile = await this.profiles.read(account);
 			const selected = selectArniProfileEntries(profile, fields);
-			if (!selected.entries.some(field => field.value)) { return this.result({ status: 'missing', missingFields: selected.missingFields, instruction: 'Ask the user for missing values; use arniEditUserProfile to save user-supplied updates or open My Data. Do not guess values.' }); }
+			if (!selected.entries.some(field => field.value || field.id.startsWith('custom_'))) { return this.result({ status: 'missing', missingFields: selected.missingFields, instruction: 'Ask the user for missing values; use arniEditUserProfile to save user-supplied updates or open My Data. Do not guess values.' }); }
 			const cancellation = resources.add(new CancellationTokenSource(token));
 			resources.add(this.authentication.onDidChangeSessions(() => cancellation.cancel()));
 			const lines = selected.entries.map(field => `${field.label}: ${field.value || localize('arni.profile.missing', 'не заполнено')}`);

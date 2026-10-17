@@ -259,6 +259,16 @@ suite('Arni personal card', () => {
 		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).customFields, []);
 	});
 
+	test('AI can discover an empty custom field ID after review and fill it without creating a duplicate', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), {}, [{ id: 'custom_from_form', label: 'Telegram', value: '' }]);
+		const dialogs = new class extends mock<IDialogService>() { override async confirm() { return { confirmed: true }; } };
+		const response = await new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication).invoke({ ...invocation(), parameters: { purpose: 'Fill my existing Telegram field', fields: ['Telegram'] } }, async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual(JSON.parse(resultText(response)), { status: 'approved', values: {}, fieldLabels: { custom_from_form: 'Telegram' }, missingFields: ['Telegram'] });
+		await new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication).invoke({ ...editInvocation(), parameters: { purpose: 'Fill the existing field', updates: [{ field: 'custom_from_form', value: '@example' }] } }, async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).customFields, [{ id: 'custom_from_form', label: 'Telegram', value: '@example' }]);
+	});
+
 	test('AI edit refusal, cancellation and sign-out do not modify storage or disclose previous values', async () => {
 		for (const mode of ['deny', 'cancel', 'account'] as const) {
 			const h = setup();
