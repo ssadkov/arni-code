@@ -5,6 +5,10 @@
 
 import * as dom from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
+import { isWeb } from '../../../../../../base/common/platform.js';
+import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
+import { renderChatMediaPreviews } from '../chatMediaPreview.js';
+import { openChatTurnFile } from '../chatTurnPills.js';
 import { getDefaultHoverDelegate } from '../../../../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { Lazy } from '../../../../../../base/common/lazy.js';
@@ -98,6 +102,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 		@IChatMarkdownAnchorService private readonly chatMarkdownAnchorService: IChatMarkdownAnchorService,
 		@ILinkPresentationService linkPresentationService: ILinkPresentationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IOpenerService private readonly openerService: IOpenerService,
 		@ISessionSummaryHoverService sessionSummaryHoverService: ISessionSummaryHoverService,
 	) {
 		super();
@@ -137,6 +142,12 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 
 	walkTreeAndAnnotateReferenceLinks(content: IChatMarkdownContent, element: HTMLElement): IDisposable {
 		const store = new DisposableStore();
+		if (!isWeb) {
+			store.add(renderChatMediaPreviews(element, this.hoverService, resource => {
+				void openChatTurnFile({ uri: resource, kind: 'media', created: false }, this.openerService, this.configurationService)
+					.catch(error => this.logService.error('Failed to open media preview', error));
+			}));
+		}
 		const richLinksEnabled = this.configurationService.getValue<boolean>(ChatConfiguration.RichLinks);
 		// eslint-disable-next-line no-restricted-syntax
 		element.querySelectorAll('a').forEach(a => {

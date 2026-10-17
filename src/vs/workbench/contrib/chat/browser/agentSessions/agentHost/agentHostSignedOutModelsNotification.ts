@@ -11,6 +11,7 @@ import { AgentHostAllowSignedOutWhenUsableSettingId, IAgentHostService } from '.
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { IDefaultAccountService } from '../../../../../../platform/defaultAccount/common/defaultAccount.js';
+import { IProductService } from '../../../../../../platform/product/common/productService.js';
 import { IWorkbenchContribution } from '../../../../../common/contributions.js';
 import { ChatEntitlement, ChatEntitlementContextKeys, IChatEntitlementService } from '../../../../../services/chat/common/chatEntitlementService.js';
 import { IExtensionService } from '../../../../../services/extensions/common/extensions.js';
@@ -93,6 +94,7 @@ export class AgentHostSignedOutModelsNotificationContribution extends Disposable
 		@IChatEntitlementService private readonly _chatEntitlementService: IChatEntitlementService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 		@IExtensionService extensionService: IExtensionService,
+		@IProductService private readonly _productService: IProductService,
 	) {
 		super();
 
@@ -145,6 +147,12 @@ export class AgentHostSignedOutModelsNotificationContribution extends Disposable
 	}
 
 	private _update(): void {
+		// Arni authenticates against its own backend. A missing model catalog is
+		// never a reason to ask its users to subscribe or sign in to Copilot.
+		if (this._productService.applicationName === 'arni-code') {
+			this._setNotification(false);
+			return;
+		}
 		// Local BYOK readiness is shared by both harnesses; the Agent Host's own bridged catalog is covered by the grace period.
 		const allowSignedOutWhenUsable = this._configurationService.getValue<boolean>(AgentHostAllowSignedOutWhenUsableSettingId) === true;
 		const entitlement = this._chatEntitlementService.entitlement;

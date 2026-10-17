@@ -21,6 +21,7 @@ import { getEditorOverrideForChatResource } from './chatEditorAssociations.js';
 import { ChatPillsWidget, getChatPillEntries, IChatPill, type IChatPillSection } from '../../../../browser/chatPills.js';
 import { ChatChangesPillActionViewItem } from '../../../../browser/chatChangesPill.js';
 import { ChatPillSingleEntry, createChatSectionPill, type IChatDropdownPillOptions } from '../../../../browser/chatDropdownPill.js';
+import { isChatMediaResource } from './chatMediaPreview.js';
 
 /**
  * Presentation of the artifacts pill. Only a file artifact is worth showing in
@@ -56,13 +57,16 @@ export const EMPTY_DIFF_STATS: IDiffStats = { files: 0, insertions: 0, deletions
 /** A file outside the workspace that the artifact pill can open. */
 export interface IPreviewFile {
 	readonly uri: URI;
-	readonly kind: 'markdown' | 'html';
+	readonly kind: 'markdown' | 'html' | 'media';
 	/** Whether the file was created (vs. edited) during the turn. */
 	readonly created: boolean;
 }
 
 /** Classify a resource as a previewable file, if applicable. */
 export function previewKind(uri: URI, htmlPreviewAvailable = !isWeb): IPreviewFile['kind'] | undefined {
+	if (htmlPreviewAvailable && isChatMediaResource(uri)) {
+		return 'media';
+	}
 	const path = uri.path.toLowerCase();
 	if (path.endsWith('.md') || path.endsWith('.markdown')) {
 		return 'markdown';

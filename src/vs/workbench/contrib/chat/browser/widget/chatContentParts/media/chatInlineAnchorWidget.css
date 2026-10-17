@@ -15,6 +15,22 @@
 	font-size: var(--vscode-chat-font-size-body-s);
 }
 
+.chat-media-preview {
+	display: inline-flex;
+	max-width: 100%;
+	vertical-align: middle;
+}
+
+.chat-media-preview .monaco-button {
+	width: auto;
+	min-width: 0;
+	padding: var(--vscode-spacing-size20) var(--vscode-spacing-size80);
+	border-radius: var(--vscode-cornerRadius-small);
+	font-size: inherit;
+	white-space: normal;
+	word-break: break-word;
+}
+
 .chat-inline-anchor-widget .icon-label {
 	padding: 0 3px;
 
