@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { Codicon } from '../../../../../base/common/codicons.js';
 import { $, Dimension } from '../../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../../base/browser/window.js';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -12,18 +13,22 @@ import { mock } from '../../../../../base/test/common/mock.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
+import { ContextKeyExpression } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IEncryptionService, KnownStorageProvider } from '../../../../../platform/encryption/common/encryptionService.js';
+import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
 import { InMemoryStorageService } from '../../../../../platform/storage/common/storage.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { AuthenticationSession, AuthenticationSessionsChangeEvent, IAuthenticationService } from '../../../../../workbench/services/authentication/common/authentication.js';
-import { IToolInvocation } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { ILanguageModelToolsService, IToolData, IToolInvocation, ToolSet } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { parseArniProfile, selectArniProfileFields, validateArniProfile } from '../../common/arniUserProfile.js';
-import { ArniUserProfileService } from '../../browser/arniUserProfileService.js';
-import { ArniReadUserProfileTool } from '../../browser/arniUserProfileTools.js';
+import { ArniUserProfileService, IArniUserProfileService } from '../../browser/arniUserProfileService.js';
+import { ArniReadUserProfileTool, ArniUserProfileTools } from '../../browser/arniUserProfileTools.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ArniUserProfileEditor, ArniUserProfileEditorInput } from '../../browser/arniUserProfileEditor.js';
 
 suite('Arni personal card', () => {
@@ -118,6 +123,40 @@ suite('Arni personal card', () => {
 		return { callId: 'profile-test', toolId: 'arni_read_user_profile', context: undefined,
 			parameters: { fields, purpose: 'Prepare approved registration draft', destination: 'https://forms.cloud.microsoft/example' } };
 	}
+
+	test('exposes both card tools through a non-deprecated tool set available to the agent', () => {
+		const h = setup();
+		const registered = new Map<string, IToolData>();
+		const sets = new Set<ToolSet>();
+		const tools = new class extends mock<ILanguageModelToolsService>() {
+			override registerTool(data: IToolData) {
+				registered.set(data.id, data);
+				return toDisposable(() => registered.delete(data.id));
+			}
+			override createToolSet(...[source, id, referenceName, options = {}]: Parameters<ILanguageModelToolsService['createToolSet']>) {
+				const context = new class extends MockContextKeyService {
+					override contextMatchesRules(rules: ContextKeyExpression | undefined): boolean { return !rules; }
+				};
+				const set = new ToolSet(id, referenceName, options.icon ?? Codicon.tools, source, options.description, options.detail, options.legacyFullNames, options.deprecated, options.hiddenInToolsPicker, context);
+				sets.add(set);
+				return Object.assign(set, { dispose: () => { sets.delete(set); } });
+			}
+		};
+		const instantiation = store.add(new TestInstantiationService());
+		instantiation.stub(IArniUserProfileService, h.profiles);
+		instantiation.stub(IAuthenticationService, h.authentication);
+		instantiation.stub(IDialogService, {});
+		instantiation.stub(ICommandService, {});
+		const contribution = store.add(new ArniUserProfileTools(tools, instantiation));
+		const activeSets = [...sets].filter(set => !set.deprecated);
+		const available = activeSets.flatMap(set => [...set.getTools()]);
+		assert.deepStrictEqual(available.map(tool => ({ id: tool.id, name: tool.toolReferenceName, registered: registered.get(tool.id) === tool })), [
+			{ id: 'arni_read_user_profile', name: 'arniReadUserProfile', registered: true },
+			{ id: 'arni_edit_user_profile', name: 'arniEditUserProfile', registered: true },
+		]);
+		contribution.dispose();
+		assert.deepStrictEqual({ registrations: registered.size, toolSets: sets.size, members: activeSets.flatMap(set => [...set.getTools()]).length }, { registrations: 0, toolSets: 0, members: 0 });
+	});
 
 	test('requires user review even for auto-approved invocation and releases only selected values', async () => {
 		const h = setup();

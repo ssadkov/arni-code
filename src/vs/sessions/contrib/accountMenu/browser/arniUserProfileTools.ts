@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { Codicon } from '../../../../base/common/codicons.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -88,12 +89,19 @@ class ArniEditUserProfileTool implements IToolImpl {
 	}
 }
 
-class ArniUserProfileTools extends Disposable {
+export class ArniUserProfileTools extends Disposable {
 	static readonly ID = 'arni.personalCard.tools';
 	constructor(@ILanguageModelToolsService tools: ILanguageModelToolsService, @IInstantiationService instantiation: IInstantiationService) {
 		super();
+		const toolSet = this._register(tools.createToolSet(ToolDataSource.Internal, 'arni-personal-card', 'arniPersonalCard', {
+			icon: Codicon.account,
+			description: localize('arni.profile.toolSet', 'Мои данные'),
+			detail: localize('arni.profile.toolSetDetail', 'Открыть карточку или запросить выбранные поля с отдельным подтверждением.'),
+		}));
 		this._register(tools.registerTool(readTool, instantiation.createInstance(ArniReadUserProfileTool)));
 		this._register(tools.registerTool(editTool, instantiation.createInstance(ArniEditUserProfileTool)));
+		this._register(toolSet.addTool(readTool));
+		this._register(toolSet.addTool(editTool));
 	}
 }
 registerWorkbenchContribution2(ArniUserProfileTools.ID, ArniUserProfileTools, WorkbenchPhase.AfterRestored);
