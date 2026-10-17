@@ -14,6 +14,7 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { MockContextKeyService } from '../../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { IDefaultAccountService } from '../../../../../../platform/defaultAccount/common/defaultAccount.js';
+import { IProductService } from '../../../../../../platform/product/common/productService.js';
 import { TestInstantiationService } from '../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { ChatEntitlement, IChatEntitlementService } from '../../../../../services/chat/common/chatEntitlementService.js';
 import { IExtensionService } from '../../../../../services/extensions/common/extensions.js';
@@ -31,6 +32,15 @@ suite('AgentHostSignedOutModelsNotification', () => {
 
 	teardown(() => {
 		sinon.restore();
+	});
+
+	test('never asks Arni users to sign in to Copilot, even when the catalog is empty', async () => {
+		const fixture = await createFixture({ applicationName: 'arni-code', configuredVendors: ['openrouter'], resolvedVendors: [] });
+		await fixture.clock.tickAsync(GRACE_PERIOD_MS * 2);
+		assert.strictEqual(fixture.notifications.isShown(), false);
+		fixture.addAgentHostByokModel();
+		assert.strictEqual(fixture.notifications.isShown(), false);
+		fixture.clock.restore();
 	});
 
 	test('shows as soon as local model readiness settles, without waiting out the grace period', async () => {
@@ -139,7 +149,7 @@ suite('AgentHostSignedOutModelsNotification', () => {
 		fixture.clock.restore();
 	});
 
-	async function createFixture(options: { configuredVendors?: string[]; resolvedVendors?: string[]; entitlement?: ChatEntitlement } = {}) {
+	async function createFixture(options: { applicationName?: string; configuredVendors?: string[]; resolvedVendors?: string[]; entitlement?: ChatEntitlement } = {}) {
 		const clock = sinon.useFakeTimers({ shouldAdvanceTime: false });
 		const notifications = new TestChatInputNotificationService();
 		const languageModels = new TestLanguageModelsService(options.resolvedVendors ?? ['anthropic']);
@@ -152,6 +162,7 @@ suite('AgentHostSignedOutModelsNotification', () => {
 		const instantiationService = store.add(new TestInstantiationService());
 		instantiationService.stub(IChatInputNotificationService, notifications);
 		instantiationService.stub(IDefaultAccountService, account);
+		instantiationService.stub(IProductService, { applicationName: options.applicationName ?? 'code-oss' });
 		instantiationService.stub(ILanguageModelsService, languageModels);
 		instantiationService.stub(ILanguageModelsConfigurationService, languageModelsConfiguration);
 		instantiationService.stub(IAgentHostService, {

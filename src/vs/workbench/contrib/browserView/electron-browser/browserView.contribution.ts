@@ -108,7 +108,7 @@ class BrowserEditorResolverContribution implements IWorkbenchContribution {
 			}
 		);
 
-		for (const extension of ['html', 'htm', 'mhtml', 'mht']) {
+		for (const extension of ['html', 'htm', 'mhtml', 'mht', 'mp4', 'webm', 'm4v', 'mp3', 'wav', 'ogg', 'oga', 'm4a', 'flac']) {
 			editorResolverService.registerEditor(
 				`${Schemas.file}:/**/*.${extension}`,
 				{

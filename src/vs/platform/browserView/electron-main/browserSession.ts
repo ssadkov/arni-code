@@ -5,6 +5,9 @@
 
 import { session } from 'electron';
 import { createHash } from 'crypto';
+import { stat } from 'fs/promises';
+import { getMediaMime } from '../../../base/common/mime.js';
+import { browserMediaRange } from '../common/browserMediaRange.js';
 import { normalize } from '../../../base/common/path.js';
 import { isLinux } from '../../../base/common/platform.js';
 import { joinPath } from '../../../base/common/resources.js';
@@ -338,10 +341,25 @@ export class BrowserSession {
 			type: 'frame',
 			filePath: FileAccess.asFileUri('vs/platform/browserView/electron-browser/preload-browserView.js').fsPath
 		});
-		this.electronSession.protocol.handle(Schemas.file, request => {
+		this.electronSession.protocol.handle(Schemas.file, async request => {
 			const filePath = normalize(URI.parse(request.url).fsPath);
 			if (!BrowserSession._trustAllFiles && !BrowserSession._trustedFileRoots.findSubstr(filePath)) {
 				return new Response(localize('browserSession.untrustedFile', 'Forbidden. File does not reside within a trusted folder.'), { status: 403 });
+			}
+			const mime = getMediaMime(filePath);
+			if (mime?.startsWith('video/') || mime?.startsWith('audio/')) {
+				const size = (await stat(filePath)).size;
+				const { status, headers } = browserMediaRange(request.headers.get('Range'), size);
+				if (status === 416) {
+					return new Response(null, { status, headers });
+				}
+				const response = await this.electronSession.fetch(request, { bypassCustomProtocolHandlers: true });
+				if (!response.ok) {
+					return response;
+				}
+				// Electron's file fetch returns partial bytes with status 200 and no
+				// range metadata. Chromium needs 206/Content-Range to decode and seek.
+				return new Response(response.body, { status, headers: { ...headers, 'Content-Type': mime } });
 			}
 			return this.electronSession.fetch(request, { bypassCustomProtocolHandlers: true });
 		});

@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from '../../../../../base/common/uri.js';
+import { isWeb } from '../../../../../base/common/platform.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { globMatchesResource } from '../../../../services/editor/common/editorResolverService.js';
 import { ChatConfiguration } from '../../common/constants.js';
+import { isChatMediaResource } from './chatMediaPreview.js';
+import { BrowserViewEditorId } from '../../../browserView/common/browserView.js';
 
 /**
  * Returns the editor configured for a resource opened from chat, if one matches.
@@ -19,5 +22,5 @@ export function getEditorOverrideForChatResource(resource: URI, configurationSer
 			return associations[pattern];
 		}
 	}
-	return undefined;
+	return !isWeb && isChatMediaResource(resource) ? BrowserViewEditorId : undefined;
 }
