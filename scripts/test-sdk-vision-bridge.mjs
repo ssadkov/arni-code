@@ -76,10 +76,10 @@ try {
 	assert.equal(calls, 2, 'Expected a tool call and one completion');
 	assert.equal(receivedImages, 1, 'The SDK must retain the tool image with the actual launcher token limits');
 	assert.equal(reply?.data.content, 'Кадр просмотрен.', 'Hooks must not stall final reply and session.idle notifications');
-	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor'].map(name => ({
+	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor', 'secretary'].map(name => ({
 		name, uri: URI.file(path.join(root, 'src/vs/sessions/agents', name + '.agent.md')),
 	})), { readFile: async uri => ({ value: await fs.readFile(uri.fsPath, 'utf8') }) });
-	assert.equal(customAgents.length, 2);
+	assert.equal(customAgents.length, 3);
 	for (const agent of customAgents) {
 		const selected = await client.createSession({ ...config, model: 'audit/vision', customAgents, agent: agent.name,
 			configDirectory: runDir, workingDirectory: runDir, enableConfigDiscovery: false, enableSessionTelemetry: false, onPermissionRequest: approveAll });
@@ -87,7 +87,7 @@ try {
 		assert.equal(answer?.data.content, 'Кадр просмотрен.');
 		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split(/\r?\n/)[0]), 'The selected profession instructions must reach the model');
 	}
-	console.log('SDK vision/professions passed: tool image retained, hooks completed, both Russian profession names selected and instructions delivered; local HTTP only.');
+	console.log('SDK vision/professions passed: tool image retained, hooks completed, all three Russian profession names selected and instructions delivered; local HTTP only.');
 } finally {
 	await client.stop();
 	await new Promise(resolve => server.close(resolve));
