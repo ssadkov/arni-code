@@ -74,6 +74,7 @@ interface IArniAccountSummary {
 }
 
 const PERSONALIZE_ACTION_IDS: readonly string[] = [
+	'arni.openUserProfile',
 	'workbench.action.openSettings',
 ];
 const SIGN_OUT_ACTION_ID = 'workbench.action.agenticSignOut';
