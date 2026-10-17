@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { $, Dimension } from '../../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../../base/browser/window.js';
@@ -24,10 +24,10 @@ import { NullTelemetryService } from '../../../../../platform/telemetry/common/t
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { AuthenticationSession, AuthenticationSessionsChangeEvent, IAuthenticationService } from '../../../../../workbench/services/authentication/common/authentication.js';
-import { ILanguageModelToolsService, IToolData, IToolInvocation, ToolSet } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { parseArniProfile, selectArniProfileFields, validateArniProfile } from '../../common/arniUserProfile.js';
+import { ILanguageModelToolsService, IToolData, IToolInvocation, IToolResult, ToolSet } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { applyArniProfileUpdates, parseArniProfile, selectArniProfileEntries, selectArniProfileFields, validateArniCustomFields, validateArniProfile } from '../../common/arniUserProfile.js';
 import { ArniUserProfileService, IArniUserProfileService } from '../../browser/arniUserProfileService.js';
-import { ArniReadUserProfileTool, ArniUserProfileTools } from '../../browser/arniUserProfileTools.js';
+import { ArniEditUserProfileTool, ArniReadUserProfileTool, ArniUserProfileTools } from '../../browser/arniUserProfileTools.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ArniUserProfileEditor, ArniUserProfileEditorInput } from '../../browser/arniUserProfileEditor.js';
 
@@ -65,10 +65,37 @@ suite('Arni personal card', () => {
 
 	test('keeps leading zeros and rejects unsupported fields, malformed values and schema versions', () => {
 		assert.deepStrictEqual(validateArniProfile({ companyBin: '001234567890', phone: '+7 000 000 00 00', firstName: ' Test ' }), { companyBin: '001234567890', phone: '+7 000 000 00 00', firstName: 'Test' });
-		for (const value of ['{"schemaVersion":2,"values":{}}', '{"schemaVersion":1,"values":{"password":"secret"}}', '{"schemaVersion":1,"values":{"companyBin":123}}', '{"schemaVersion":1,"values":{"email":"invalid"}}', '{"schemaVersion":1,"values":null}']) {
+		for (const value of ['{"schemaVersion":3,"values":{}}', '{"schemaVersion":1,"values":{"password":"secret"}}', '{"schemaVersion":1,"values":{"companyBin":123}}', '{"schemaVersion":1,"values":{"email":"invalid"}}', '{"schemaVersion":1,"values":null}']) {
 			assert.throws(() => parseArniProfile(value));
 		}
 		assert.throws(() => selectArniProfileFields({}, []));
+	});
+
+	test('migrates legacy cards and validates custom field IDs, labels and bounded values', () => {
+		const legacy = parseArniProfile('{"schemaVersion":1,"values":{"firstName":"Alice","companyBin":"001234567890"}}');
+		const updated = applyArniProfileUpdates(legacy, [{ field: 'custom_telegram', label: 'Telegram', value: '@example' }]);
+		assert.deepStrictEqual(parseArniProfile(JSON.stringify(updated)), {
+			schemaVersion: 2, values: legacy.values, customFields: [{ id: 'custom_telegram', label: 'Telegram', value: '@example' }],
+		});
+		for (const fields of [
+			[{ id: '__proto__', label: 'Unsafe', value: 'x' }],
+			[{ id: 'custom_x', label: 'Имя', value: 'x' }],
+			[{ id: 'custom_x', label: 'Telegram', value: 'x' }, { id: 'custom_y', label: 'telegram', value: 'y' }],
+			[{ id: 'custom_x', label: 'Telegram', value: 'x'.repeat(2001) }],
+		]) { assert.throws(() => validateArniCustomFields(fields)); }
+		assert.throws(() => applyArniProfileUpdates(updated, [{ field: 'custom_no_label', value: 'x' }]));
+		assert.deepStrictEqual(selectArniProfileEntries(updated, ['Telegram']).entries, updated.customFields);
+		assert.deepStrictEqual(applyArniProfileUpdates(updated, [{ field: 'custom_telegram', value: null }]).customFields, []);
+	});
+
+	test('preserves custom fields on base-only saves and refuses stale concurrent writes', async () => {
+		const h = setup();
+		const account = await h.profiles.getAccount();
+		await h.profiles.save(account, { firstName: 'Alice' }, [{ id: 'custom_x', label: 'Extra', value: 'kept' }]);
+		const previous = await h.profiles.read(account);
+		await h.profiles.save(account, { firstName: 'New name' });
+		await assert.rejects(h.profiles.save(account, { firstName: 'Stale' }, [], previous));
+		assert.deepStrictEqual(await h.profiles.read(account), { schemaVersion: 2, values: { firstName: 'New name' }, customFields: previous.customFields });
 	});
 
 	test('isolates accounts with the same label, persists across service reads, and clears only current card', async () => {
@@ -109,11 +136,38 @@ suite('Arni personal card', () => {
 		const name = root.querySelector<HTMLInputElement>('#arni-profile-firstName')!;
 		name.value = 'Alice';
 		name.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+		const add = [...root.querySelectorAll<HTMLElement>('.monaco-button')].find(button => button.textContent === 'Добавить поле')!;
+		add.click();
+		const label = root.querySelector<HTMLInputElement>('.arni-profile-custom-row input[id$="-label"]')!;
+		const customValue = root.querySelector<HTMLInputElement>('.arni-profile-custom-row input[id$="-value"]')!;
+		label.value = 'Telegram';
+		customValue.value = '@example';
+		customValue.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
 		assert.strictEqual(input.isDirty(), true);
 		assert.strictEqual(await input.save(), input);
 		editor.clearInput();
 		await editor.setInput(input, undefined, {}, CancellationToken.None);
 		assert.strictEqual(name.value, 'Alice');
+		assert.strictEqual(root.querySelector<HTMLInputElement>('.arni-profile-custom-row input[id$="-value"]')!.value, '@example');
+		const renamed = root.querySelector<HTMLInputElement>('.arni-profile-custom-row input[id$="-label"]')!;
+		const stableId = renamed.id;
+		renamed.value = 'Рабочий Telegram';
+		renamed.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+		assert.strictEqual(await input.save(), input);
+		assert.strictEqual(await input.save(), input); // Saving an unchanged form must not reload it mid-save.
+		editor.clearInput();
+		await editor.setInput(input, undefined, {}, CancellationToken.None);
+		assert.deepStrictEqual({ id: root.querySelector<HTMLInputElement>('.arni-profile-custom-row input[id$="-label"]')!.id, label: root.querySelector<HTMLInputElement>('.arni-profile-custom-row input[id$="-label"]')!.value }, { id: stableId, label: 'Рабочий Telegram' });
+		name.value = 'Unsaved';
+		name.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'AI update' });
+		assert.strictEqual(await input.save(), undefined);
+		assert.strictEqual((await h.profiles.read(await h.profiles.getAccount())).values.firstName, 'AI update');
+		editor.clearInput();
+		await editor.setInput(input, undefined, {}, CancellationToken.None);
+		[...root.querySelectorAll<HTMLElement>('.arni-profile-custom-row .monaco-button')][0].click();
+		await input.save();
+		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).customFields, []);
 		h.switchUser(undefined);
 		assert.deepStrictEqual({ value: name.value, disabled: name.disabled }, { value: '', disabled: true });
 		editor.clearInput();
@@ -172,9 +226,67 @@ suite('Arni personal card', () => {
 		approve = true;
 		const approved = await tool.invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
 		assert.deepStrictEqual(JSON.parse(approved.content[0].kind === 'text' ? approved.content[0].value : '{}'), {
-			status: 'approved', destination: 'https://forms.cloud.microsoft/example', values: { firstName: 'Alice' }, missingFields: [],
+			status: 'approved', destination: 'https://forms.cloud.microsoft/example', values: { firstName: 'Alice' }, fieldLabels: { firstName: 'Имя' }, missingFields: [],
 		});
 		assert.strictEqual(reviews, 2);
+	});
+
+	function resultText(result: IToolResult): string { return result.content[0].kind === 'text' ? result.content[0].value : '{}'; }
+	function editInvocation(): IToolInvocation {
+		return { callId: 'edit-test', toolId: 'arni_edit_user_profile', context: undefined, parameters: {
+			purpose: 'Save user-supplied contact', updates: [{ field: 'custom_telegram', label: 'Telegram', value: '@example' }],
+		} };
+	}
+
+	test('AI can save partial updates and read custom fields or the whole card in chat without a website', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Alice', phone: '+70000000000' });
+		const dialogs = new class extends mock<IDialogService>() { override async confirm() { return { confirmed: true }; } };
+		const edited = await new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication).invoke(editInvocation(), async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual(JSON.parse(resultText(edited)), { status: 'saved', updatedFields: ['custom_telegram'] });
+		const reader = new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication);
+		const chatRequest = { ...invocation(), parameters: { purpose: 'Show my Telegram', fields: ['Telegram'] } };
+		assert.deepStrictEqual(JSON.parse(resultText(await reader.invoke(chatRequest, async () => 0, { report() { } }, CancellationToken.None))), {
+			status: 'approved', values: { custom_telegram: '@example' }, fieldLabels: { custom_telegram: 'Telegram' }, missingFields: [],
+		});
+		const all = JSON.parse(resultText(await reader.invoke({ ...invocation(), parameters: { purpose: 'Show my card' } }, async () => 0, { report() { } }, CancellationToken.None)));
+		assert.deepStrictEqual(all.values, { firstName: 'Alice', phone: '+70000000000', custom_telegram: '@example' });
+		const editor = new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication);
+		await editor.invoke({ ...editInvocation(), parameters: { purpose: 'Correct my contacts', updates: [{ field: 'custom_telegram', label: 'Рабочий Telegram', value: '@changed' }, { field: 'phone', value: null }] } }, async () => 0, { report() { } }, CancellationToken.None);
+		const changed = await h.profiles.read(await h.profiles.getAccount());
+		assert.deepStrictEqual({ values: changed.values, customFields: changed.customFields }, { values: { firstName: 'Alice' }, customFields: [{ id: 'custom_telegram', label: 'Рабочий Telegram', value: '@changed' }] });
+		await editor.invoke({ ...editInvocation(), parameters: { purpose: 'Remove my custom contact', updates: [{ field: 'custom_telegram', value: null }] } }, async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).customFields, []);
+	});
+
+	test('AI edit refusal, cancellation and sign-out do not modify storage or disclose previous values', async () => {
+		for (const mode of ['deny', 'cancel', 'account'] as const) {
+			const h = setup();
+			await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Private previous value' });
+			const previous = [...h.values];
+			const cancellation = store.add(new CancellationTokenSource());
+			const dialogs = new class extends mock<IDialogService>() {
+				override async confirm() {
+					if (mode === 'cancel') { cancellation.cancel(); }
+					if (mode === 'account') { h.switchUser('bob'); }
+					return { confirmed: mode !== 'deny' };
+				}
+			};
+			const result = await new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication).invoke(editInvocation(), async () => 0, { report() { } }, cancellation.token);
+			assert.deepStrictEqual({ response: JSON.parse(resultText(result)), storage: [...h.values] }, { response: { status: 'denied' }, storage: previous });
+		}
+	});
+
+	test('AI edit does not overwrite a card changed while the review was open', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Alice' });
+		const dialogs = new class extends mock<IDialogService>() {
+			override async confirm() { await h.profiles.save(await h.profiles.getAccount(), { firstName: 'User correction' }); return { confirmed: true }; }
+		};
+		const response = await new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication).invoke(editInvocation(), async () => 0, { report() { } }, CancellationToken.None);
+		assert.strictEqual(JSON.parse(resultText(response)).status, 'unavailable');
+		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).values, { firstName: 'User correction' });
+		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).customFields, []);
 	});
 
 	test('withholds results if account changes during approval or cancellation is requested', async () => {

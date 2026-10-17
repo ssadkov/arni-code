@@ -2,7 +2,7 @@
 name: fill-form
 description: "Read a web form, map its fields to user-approved information, fill and verify it with browser tools, then stop at the agreed review/submission boundary."
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Fill a form
@@ -10,6 +10,8 @@ metadata:
 Use the integrated browser tools to open the supplied URL and read questions, required markers, validation and consent text. If an existing page must be shared with the agent, explain the normal sharing control. If browser tools are absent/disabled, explain the setting rather than claiming success or installing an unrelated automation stack.
 
 List the required fields and unresolved choices. Use user-profile for the account-bound personal card. Obtain permission naming the actual destination and values before typing private data: typing may transmit them even without submission. The profile tool's review discloses values to the model; it does not itself grant website agreements or submit the form. Preserve existing page entries; clarify conflicts. Never fabricate missing tax IDs, company names or eligibility answers.
+
+Inspect the current questions before calling the card tool; do not run first page inspection and card reading in parallel. Map every required question, including organization/registration identifiers. Request the complete needed subset once, using custom field IDs or visible labels if applicable. For a Latin name, request firstNameLatin/lastNameLatin rather than also requesting duplicate generic name fields. If data needs correcting, use the card's reviewed AI edit tool or normal form before continuing.
 
 Fill only the approved entries, then read them back and check each against the source. Do not print the full personal card into an output file. Avoid sending unrelated data in screenshots; show the user a useful review in the application. Report what is filled and missing, whether any consent is selected and whether anything was submitted. Do not interpret a screenshot or HTTP 200 alone as successful registration.
 

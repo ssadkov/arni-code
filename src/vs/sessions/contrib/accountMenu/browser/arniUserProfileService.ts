@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Sequencer } from '../../../../base/common/async.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { localize } from '../../../../nls.js';
 import { IDefaultAccountService } from '../../../../platform/defaultAccount/common/defaultAccount.js';
 import { IEncryptionService, KnownStorageProvider } from '../../../../platform/encryption/common/encryptionService.js';
@@ -11,7 +14,7 @@ import { createDecorator } from '../../../../platform/instantiation/common/insta
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { AuthenticationSession, IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
 import { ARNI_PRODUCT_AUTH_PROVIDERS } from '../../../../workbench/services/authentication/common/arniProductAuth.js';
-import { ArniProfileValues, IArniUserProfile, parseArniProfile, validateArniProfile } from '../common/arniUserProfile.js';
+import { ArniProfileValues, IArniCustomProfileField, IArniUserProfile, parseArniProfile, validateArniCustomFields, validateArniProfile } from '../common/arniUserProfile.js';
 
 export interface IArniProfileAccount {
 	readonly key: string;
@@ -22,10 +25,11 @@ export interface IArniProfileAccount {
 export const IArniUserProfileService = createDecorator<IArniUserProfileService>('arniUserProfileService');
 export interface IArniUserProfileService {
 	readonly _serviceBrand: undefined;
+	readonly onDidChange: Event<string>;
 	getAccount(): Promise<IArniProfileAccount>;
 	assertAccount(account: IArniProfileAccount): Promise<void>;
 	read(account: IArniProfileAccount): Promise<IArniUserProfile>;
-	save(account: IArniProfileAccount, values: ArniProfileValues): Promise<void>;
+	save(account: IArniProfileAccount, values: ArniProfileValues, customFields?: readonly IArniCustomProfileField[], expected?: IArniUserProfile, token?: CancellationToken): Promise<void>;
 	clear(account: IArniProfileAccount): Promise<void>;
 }
 
@@ -33,6 +37,9 @@ export interface IArniUserProfileService {
 export class ArniUserProfileService extends Disposable implements IArniUserProfileService {
 	declare readonly _serviceBrand: undefined;
 	private generation = 0;
+	private readonly changes = this._register(new Emitter<string>());
+	readonly onDidChange = this.changes.event;
+	private readonly writes = new Sequencer();
 
 	constructor(
 		@IAuthenticationService private readonly authentication: IAuthenticationService,
@@ -84,22 +91,36 @@ export class ArniUserProfileService extends Disposable implements IArniUserProfi
 		return parseArniProfile(text);
 	}
 
-	async save(account: IArniProfileAccount, values: ArniProfileValues): Promise<void> {
+	async save(account: IArniProfileAccount, values: ArniProfileValues, customFields?: readonly IArniCustomProfileField[], expected?: IArniUserProfile, token = CancellationToken.None): Promise<void> {
 		const validated = validateArniProfile(values);
-		if (!await this.encryption.isEncryptionAvailable() || await this.encryption.getKeyStorageProvider() === KnownStorageProvider.basicText) {
-			throw new Error(localize('arni.profile.encryption', 'Защищённое хранилище недоступно. Карточка не сохранена.'));
-		}
-		await this.assertAccount(account);
-		const key = await this.storageKey(account);
-		await this.assertAccount(account);
-		await this.secrets.set(key, JSON.stringify({ schemaVersion: 1, values: validated }));
-		await this.assertAccount(account);
+		const custom = customFields === undefined ? undefined : validateArniCustomFields(customFields);
+		return this.writes.queue(async () => {
+			if (!await this.encryption.isEncryptionAvailable() || await this.encryption.getKeyStorageProvider() === KnownStorageProvider.basicText) {
+				throw new Error(localize('arni.profile.encryption', 'Защищённое хранилище недоступно. Карточка не сохранена.'));
+			}
+			await this.assertAccount(account);
+			const current = await this.read(account);
+			if (expected && JSON.stringify(current) !== JSON.stringify(expected)) {
+				throw new Error(localize('arni.profile.changed', 'Карточка уже изменена. Откройте её заново и повторите нужное изменение.'));
+			}
+			const key = await this.storageKey(account);
+			await this.assertAccount(account);
+			if (token.isCancellationRequested) { throw new Error('Cancelled profile update'); }
+			const text = JSON.stringify({ schemaVersion: 2, values: validated, customFields: custom ?? current.customFields });
+			parseArniProfile(text); // Enforce the same total size limit on write and read, including JSON escaping.
+			await this.secrets.set(key, text);
+			await this.assertAccount(account);
+			this.changes.fire(account.key);
+		});
 	}
 
 	async clear(account: IArniProfileAccount): Promise<void> {
-		const key = await this.storageKey(account);
-		await this.assertAccount(account);
-		await this.secrets.delete(key);
-		await this.assertAccount(account);
+		return this.writes.queue(async () => {
+			const key = await this.storageKey(account);
+			await this.assertAccount(account);
+			await this.secrets.delete(key);
+			await this.assertAccount(account);
+			this.changes.fire(account.key);
+		});
 	}
 }

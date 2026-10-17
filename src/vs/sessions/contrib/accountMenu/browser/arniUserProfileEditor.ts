@@ -8,7 +8,8 @@ import { $, append, Dimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputBox.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -21,7 +22,7 @@ import { EditorInputCapabilities, IEditorOpenContext, IUntypedEditorInput } from
 import { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
-import { arniProfileFields, ArniProfileField, ArniProfileValues, validateArniProfile } from '../common/arniUserProfile.js';
+import { arniCustomProfileFieldLimit, arniProfileFields, ArniProfileField, ArniProfileValues, IArniCustomProfileField, IArniUserProfile, validateArniCustomFields, validateArniProfile } from '../common/arniUserProfile.js';
 import { IArniProfileAccount, IArniUserProfileService } from './arniUserProfileService.js';
 
 export class ArniUserProfileEditorInput extends EditorInput {
@@ -50,11 +51,17 @@ export class ArniUserProfileEditor extends EditorPane {
 	private status: HTMLElement | undefined;
 	private readonly fields = new Map<ArniProfileField, InputBox>();
 	private readonly formResources = this._register(new DisposableStore());
+	private readonly customResources = this._register(new DisposableStore());
+	private readonly customFields = new Map<string, { label: InputBox; value: InputBox; remove: Button; resources: DisposableStore }>();
+	private customContainer: HTMLElement | undefined;
+	private addButton: Button | undefined;
+	private loadedProfile: IArniUserProfile | undefined;
 	private saveButton: Button | undefined;
 	private clearButton: Button | undefined;
 	private account: IArniProfileAccount | undefined;
 	private request = 0;
 	private loading = false;
+	private saving = false;
 
 	constructor(group: IEditorGroup,
 		@ITelemetryService telemetry: ITelemetryService,
@@ -66,6 +73,13 @@ export class ArniUserProfileEditor extends EditorPane {
 	) {
 		super(ArniUserProfileEditor.ID, group, telemetry, theme, storage);
 		this._register(authentication.onDidChangeSessions(() => { void this.load(); }));
+		this._register(profiles.onDidChange(key => {
+			if (key !== this.account?.key) { return; }
+			if (this.saving) { return; }
+			if (this.profileInput?.isDirty()) {
+				this.showStatus(localize('arni.profile.externalChange', 'Карточка обновлена. В форме есть несохранённые правки; откройте карточку заново перед сохранением.'));
+			} else { void this.load(); }
+		}));
 	}
 
 	protected override createEditor(parent: HTMLElement): void {
@@ -94,6 +108,16 @@ export class ArniUserProfileEditor extends EditorPane {
 				this.formResources.add(input.onDidChange(() => { if (!this.loading) { this.profileInput?.setDirty(true); } }));
 			}
 		}
+		const custom = append(this.container, $('fieldset'));
+		append(custom, $('legend')).textContent = localize('arni.profile.customFields', 'Свои поля');
+		this.customContainer = append(custom, $('div.arni-profile-custom-fields'));
+		this.addButton = this.formResources.add(new Button(custom, { ...defaultButtonStyles, secondary: true }));
+		this.addButton.label = localize('arni.profile.addField', 'Добавить поле');
+		this.formResources.add(this.addButton.onDidClick(() => {
+			this.addCustomField({ id: 'custom_' + generateUuid(), label: '', value: '' });
+			this.profileInput?.setDirty(true);
+			if (this.addButton) { this.addButton.enabled = this.customFields.size < arniCustomProfileFieldLimit; }
+		}));
 		this.status = append(this.container, $('p.arni-profile-status', { role: 'status', 'aria-live': 'polite' }));
 		const buttons = append(this.container, $('.arni-profile-buttons'));
 		this.saveButton = this.formResources.add(new Button(buttons, { ...defaultButtonStyles }));
@@ -118,18 +142,55 @@ export class ArniUserProfileEditor extends EditorPane {
 		if (this.profileInput) { this.profileInput.saveHandler = undefined; this.profileInput.revertHandler = undefined; }
 		this.request++;
 		this.account = undefined;
+		this.loadedProfile = undefined;
 		this.writeValues({});
 		super.clearInput();
 	}
 
 	private enable(enabled: boolean): void {
 		for (const input of this.fields.values()) { input.setEnabled(enabled); }
+		for (const field of this.customFields.values()) { field.label.setEnabled(enabled); field.value.setEnabled(enabled); field.remove.enabled = enabled; }
+		if (this.addButton) { this.addButton.enabled = enabled && this.customFields.size < arniCustomProfileFieldLimit; }
 		if (this.saveButton) { this.saveButton.enabled = enabled; }
 		if (this.clearButton) { this.clearButton.enabled = enabled; }
 	}
-	private writeValues(values: ArniProfileValues): void {
+	private addCustomField(field: IArniCustomProfileField): void {
+		if (!this.customContainer || this.customFields.size >= arniCustomProfileFieldLimit) { return; }
+		const resources = this.customResources.add(new DisposableStore());
+		const row = append(this.customContainer, $('.arni-profile-custom-row'));
+		resources.add(toDisposable(() => row.remove()));
+		const labelCaption = append(row, $('label'));
+		labelCaption.textContent = localize('arni.profile.customLabel', 'Название поля');
+		const label = resources.add(new InputBox(row, undefined, { inputBoxStyles: defaultInputBoxStyles, ariaLabel: localize('arni.profile.customLabel', 'Название поля') }));
+		label.inputElement.id = `arni-profile-${field.id}-label`;
+		labelCaption.setAttribute('for', label.inputElement.id);
+		label.inputElement.maxLength = 80;
+		label.value = field.label;
+		const valueCaption = append(row, $('label'));
+		valueCaption.textContent = localize('arni.profile.customValue', 'Значение');
+		const value = resources.add(new InputBox(row, undefined, { inputBoxStyles: defaultInputBoxStyles, ariaLabel: localize('arni.profile.customValue', 'Значение') }));
+		value.inputElement.id = `arni-profile-${field.id}-value`;
+		valueCaption.setAttribute('for', value.inputElement.id);
+		value.inputElement.maxLength = 2000;
+		value.value = field.value;
+		for (const input of [label, value]) { resources.add(input.onDidChange(() => { if (!this.loading) { this.profileInput?.setDirty(true); } })); }
+		const remove = resources.add(new Button(row, { ...defaultButtonStyles, secondary: true }));
+		remove.label = localize('arni.profile.removeField', 'Удалить поле');
+		resources.add(remove.onDidClick(() => {
+			this.customFields.delete(field.id);
+			this.customResources.delete(resources);
+			this.profileInput?.setDirty(true);
+			if (this.addButton) { this.addButton.enabled = true; }
+		}));
+		this.customFields.set(field.id, { label, value, remove, resources });
+	}
+
+	private writeValues(values: ArniProfileValues, customFields: readonly IArniCustomProfileField[] = []): void {
 		this.loading = true;
 		for (const [key, input] of this.fields) { input.value = values[key] ?? ''; }
+		this.customResources.clear();
+		this.customFields.clear();
+		for (const field of customFields) { this.addCustomField(field); }
 		this.loading = false;
 	}
 	private showStatus(message: string): void { if (this.status) { this.status.textContent = message; } }
@@ -137,6 +198,7 @@ export class ArniUserProfileEditor extends EditorPane {
 	private async load(): Promise<void> {
 		const request = ++this.request;
 		this.account = undefined;
+		this.loadedProfile = undefined;
 		this.enable(false);
 		this.writeValues({});
 		this.profileInput?.setDirty(false);
@@ -147,7 +209,8 @@ export class ArniUserProfileEditor extends EditorPane {
 			const profile = await this.profiles.read(account);
 			if (request !== this.request) { return; }
 			this.account = account;
-			this.writeValues(profile.values);
+			this.loadedProfile = profile;
+			this.writeValues(profile.values, profile.customFields);
 			if (this.heading) { this.heading.textContent = localize('arni.profile.account', 'Аккаунт: {0}', account.label); }
 			this.showStatus(localize('arni.profile.optional', 'Все поля необязательны. Указывайте только сведения, которые хотите использовать в задачах.'));
 			this.enable(true);
@@ -158,20 +221,24 @@ export class ArniUserProfileEditor extends EditorPane {
 
 	private async saveProfile(): Promise<boolean> {
 		const account = this.account;
-		if (!account) { return false; }
+		if (!account || this.saving) { return false; }
+		this.saving = true;
 		this.enable(false);
 		try {
 			const values: ArniProfileValues = {};
 			for (const [key, input] of this.fields) { values[key] = input.value; }
-			await this.profiles.save(account, validateArniProfile(values));
+			const validated = validateArniProfile(values);
+			const custom = validateArniCustomFields([...this.customFields].map(([id, field]) => ({ id, label: field.label.value, value: field.value.value })));
+			await this.profiles.save(account, validated, custom, this.loadedProfile);
 			if (account !== this.account) { return false; }
+			this.loadedProfile = { schemaVersion: 2, values: validated, customFields: custom };
 			this.profileInput?.setDirty(false);
 			this.showStatus(localize('arni.profile.saved', 'Сохранено на этом компьютере. Данные не отправлены модели или в форму.'));
 			return true;
 		} catch (error) {
 			if (account === this.account) { this.showStatus(error instanceof Error ? error.message : localize('arni.profile.saveFailed', 'Не удалось сохранить карточку.')); }
 			return false;
-		} finally { if (account === this.account) { this.enable(true); } }
+		} finally { this.saving = false; if (account === this.account) { this.enable(true); } }
 	}
 
 	private async clearProfile(): Promise<void> {
