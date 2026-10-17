@@ -34,4 +34,3 @@ registerAction2(class extends Action2 {
 		await accessor.get(IEditorService).openEditor(accessor.get(IInstantiationService).createInstance(ArniUserProfileEditorInput), { pinned: true });
 	}
 });
-
