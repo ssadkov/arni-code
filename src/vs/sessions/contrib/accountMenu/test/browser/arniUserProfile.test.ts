@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { $, Dimension } from '../../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../../base/browser/window.js';
@@ -12,6 +13,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { mock } from '../../../../../base/test/common/mock.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { runWithFakedTimers } from '../../../../../base/test/common/virtualScheduling/index.js';
 import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { ContextKeyExpression } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -174,7 +176,7 @@ suite('Arni personal card', () => {
 	});
 
 	function invocation(fields = ['firstName']): IToolInvocation {
-		return { callId: 'profile-test', toolId: 'arni_read_user_profile', context: undefined,
+		return { callId: 'profile-test', toolId: 'arni_read_user_profile', chatRequestId: 'request-1', context: undefined,
 			parameters: { fields, purpose: 'Prepare approved registration draft', destination: 'https://forms.cloud.microsoft/example' } };
 	}
 
@@ -224,7 +226,9 @@ suite('Arni personal card', () => {
 		const denied = await tool.invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
 		assert.strictEqual(JSON.stringify(denied).includes('Alice'), false);
 		approve = true;
-		const approved = await tool.invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
+		const blocked = await tool.invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual({ status: JSON.parse(resultText(blocked)).status, stop: blocked.stopCurrentTurn, reviews }, { status: 'retry_blocked', stop: true, reviews: 1 });
+		const approved = await tool.invoke({ ...invocation(), chatRequestId: 'new-user-request' }, async () => 0, { report() { } }, CancellationToken.None);
 		assert.deepStrictEqual(JSON.parse(approved.content[0].kind === 'text' ? approved.content[0].value : '{}'), {
 			status: 'approved', destination: 'https://forms.cloud.microsoft/example', values: { firstName: 'Alice' }, fieldLabels: { firstName: 'Имя' }, missingFields: [],
 		});
@@ -233,7 +237,7 @@ suite('Arni personal card', () => {
 
 	function resultText(result: IToolResult): string { return result.content[0].kind === 'text' ? result.content[0].value : '{}'; }
 	function editInvocation(): IToolInvocation {
-		return { callId: 'edit-test', toolId: 'arni_edit_user_profile', context: undefined, parameters: {
+		return { callId: 'edit-test', toolId: 'arni_edit_user_profile', chatRequestId: 'request-1', context: undefined, parameters: {
 			purpose: 'Save user-supplied contact', updates: [{ field: 'custom_telegram', label: 'Telegram', value: '@example' }],
 		} };
 	}
@@ -308,4 +312,54 @@ suite('Arni personal card', () => {
 		const result = await new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication).invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
 		assert.strictEqual(JSON.stringify(result).includes('Alice'), false);
 	});
+
+	test('does not queue another read review while the first one awaits the user', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Alice' });
+		const opened = new DeferredPromise<void>();
+		const answer = new DeferredPromise<{ confirmed: boolean }>();
+		let reviews = 0;
+		const dialogs = new class extends mock<IDialogService>() {
+			override async confirm() { reviews++; void opened.complete(); return answer.p; }
+		};
+		const tool = new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication);
+		const first = tool.invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
+		await opened.p;
+		const duplicate = await tool.invoke({ ...invocation(), callId: 'another-call' }, async () => 0, { report() { } }, CancellationToken.None);
+		await answer.complete({ confirmed: false });
+		const denied = await first;
+		assert.deepStrictEqual({ status: JSON.parse(resultText(duplicate)).status, stopped: duplicate.stopCurrentTurn, reviews, denied: JSON.parse(resultText(denied)).status }, {
+			status: 'awaiting_user', stopped: true, reviews: 1, denied: 'denied',
+		});
+	});
+
+	test('read and edit reviews expire before SDK timeout, block retries and ignore late approval', () => runWithFakedTimers({ useFakeTimers: true }, async () => {
+		for (const mode of ['read', 'edit'] as const) {
+			const h = setup();
+			await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Private original' });
+			const before = [...h.values];
+			const answer = new DeferredPromise<{ confirmed: boolean }>();
+			let reviews = 0;
+			let dismissed = false;
+			const dialogs = new class extends mock<IDialogService>() {
+				override async confirm(confirmation: Parameters<IDialogService['confirm']>[0]) {
+					reviews++;
+					store.add(confirmation.token!.onCancellationRequested(() => { dismissed = true; }));
+					return answer.p;
+				}
+			};
+			const tool = mode === 'read' ? new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication)
+				: new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication);
+			const request = mode === 'read' ? invocation() : editInvocation();
+			const start = Date.now();
+			const expired = await tool.invoke(request, async () => 0, { report() { } }, CancellationToken.None);
+			const elapsed = Date.now() - start;
+			await answer.complete({ confirmed: true });
+			const blocked = await tool.invoke({ ...request, callId: 'automatic-retry' }, async () => 0, { report() { } }, CancellationToken.None);
+			assert.deepStrictEqual({ expired: JSON.parse(resultText(expired)).status, stopped: expired.stopCurrentTurn, blocked: JSON.parse(resultText(blocked)).status, reviews, dismissed, elapsed, storage: [...h.values] }, {
+				expired: 'approval_timeout', stopped: true, blocked: 'retry_blocked', reviews: 1, dismissed: true, elapsed: 120_000, storage: before,
+			});
+			assert.strictEqual(resultText(expired).includes('Private original'), false);
+		}
+	}));
 });

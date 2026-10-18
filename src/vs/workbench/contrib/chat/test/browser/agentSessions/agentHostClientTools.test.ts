@@ -1013,6 +1013,28 @@ suite('AgentHostClientTools', () => {
 			await timeout(0);
 		}
 
+		test('native stop results complete the tool then cancel its owning turn; external tools cannot cancel turns', async () => {
+			for (const internal of [true, false]) {
+				const result = new DeferredPromise<IToolResult>();
+				await result.complete({ content: [{ kind: 'text', value: 'Waiting for a new user action.' }], stopCurrentTurn: true });
+				const tool: IToolData = { ...testRunTaskTool, source: internal ? ToolDataSource.Internal : ToolDataSource.External };
+				const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [tool], { invokeResult: result });
+				await provideSessionWithReadyRunTaskTool(handler, connection);
+				const actions = connection.dispatchedActions.flatMap(entry => {
+					const action = entry.action;
+					return action.type === ActionType.ChatToolCallComplete || action.type === ActionType.ChatTurnCancelled
+						? [{ type: action.type, turnId: action.turnId, channel: entry.channel.toString() }] : [];
+				});
+				assert.deepStrictEqual({
+					requestId: toolsService.invokedToolCalls[0]?.chatRequestId,
+					actions,
+				}, {
+					requestId: 'turn-1',
+					actions: (internal ? [ActionType.ChatToolCallComplete, ActionType.ChatTurnCancelled] : [ActionType.ChatToolCallComplete]).map(type => ({ type, turnId: 'turn-1', channel: buildDefaultChatUri(AgentSession.uri('copilot', 'session-1').toString()) })),
+				});
+			}
+		});
+
 		function getToolCallConfirmationAndCompletionActions(connection: MockAgentHostConnection) {
 			return connection.dispatchedActions
 				.filter(entry => isChatAction(entry.action)

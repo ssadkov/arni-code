@@ -4,11 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { disposableTimeout, raceCancellation } from '../../../../base/common/async.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { LRUCache } from '../../../../base/common/map.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IConfirmation, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
@@ -44,8 +46,47 @@ const editTool: IToolData = {
 	}, additionalProperties: false },
 };
 
+type ReviewStatus = 'approved' | 'denied' | 'approval_timeout' | 'awaiting_user' | 'retry_blocked';
+
+/** Bound review waits below the SDK timeout and prevent automated re-prompts in one user turn. */
+class ProfileReviewGuard {
+	private readonly states = new LRUCache<string, ReviewStatus>(100);
+
+	async confirm(invocation: IToolInvocation, dialogs: IDialogService, confirmation: IConfirmation, token: CancellationToken, progress: ToolProgress): Promise<ReviewStatus> {
+		const scope = JSON.stringify([invocation.context?.sessionResource.toString(), invocation.chatRequestId ?? invocation.callId]);
+		const previous = this.states.get(scope);
+		if (previous) {
+			return previous === 'awaiting_user' ? 'awaiting_user' : 'retry_blocked';
+		}
+		this.states.set(scope, 'awaiting_user');
+		const resources = new DisposableStore();
+		const cancellation = resources.add(new CancellationTokenSource(token));
+		let expired = false;
+		resources.add(disposableTimeout(() => { expired = true; cancellation.cancel(); }, 120_000));
+		try {
+			progress.report({ message: localize('arni.profile.waitingForReview', 'Ожидается ваше подтверждение в окне карточки данных. Через две минуты запрос остановится без передачи или сохранения данных.') });
+			const answer = await raceCancellation(dialogs.confirm({ ...confirmation, custom: true, token: cancellation.token }), cancellation.token);
+			const status = expired ? 'approval_timeout' : answer?.confirmed && !cancellation.token.isCancellationRequested ? 'approved' : 'denied';
+			if (status === 'approved') { this.states.delete(scope); } else { this.states.set(scope, status); }
+			return status;
+		} catch (error) {
+			this.states.set(scope, 'denied');
+			throw error;
+		} finally { resources.dispose(); }
+	}
+}
+
+function reviewStopped(status: ReviewStatus): IToolResult {
+	const response = status === 'denied' ? { status } : { status, instruction: 'Stop. No values were disclosed or saved. Explain that the card review is pending, was declined or expired. Wait for a new user message before requesting it again; do not repeat this call or guess the missing data.' };
+	return { content: [{ kind: 'text', value: JSON.stringify(response) }], stopCurrentTurn: true,
+		toolResultMessage: status === 'approval_timeout'
+			? localize('arni.profile.reviewExpired', 'Остановлено: время подтверждения истекло, данные не переданы и не изменены')
+			: localize('arni.profile.reviewStopped', 'Остановлено без передачи или изменения данных. Для продолжения нужно новое сообщение.') };
+}
+
 /** The review is inside invocation, so chat-wide tool auto-approval cannot bypass it. */
 export class ArniReadUserProfileTool implements IToolImpl {
+	private readonly review = new ProfileReviewGuard();
 	constructor(
 		@IArniUserProfileService private readonly profiles: IArniUserProfileService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -69,14 +110,15 @@ export class ArniReadUserProfileTool implements IToolImpl {
 			const cancellation = resources.add(new CancellationTokenSource(token));
 			resources.add(this.authentication.onDidChangeSessions(() => cancellation.cancel()));
 			const lines = selected.entries.map(field => `${field.label}: ${field.value || localize('arni.profile.missing', 'не заполнено')}`);
-			const confirmation = await this.dialogs.confirm({
+			const confirmation = await this.review.confirm(invocation, this.dialogs, {
 				custom: true, token: cancellation.token,
 				message: localize('arni.profile.reviewTitle', 'Передать выбранные поля карточки модели?'),
 				detail: localize('arni.profile.reviewDetail', 'Аккаунт: {0}\nЗадача: {1}\nПолучатель формы: {2}\nМодель: {3}\n\n{4}\n\nЭти сведения попадут в контекст чата и могут сохраниться в его истории. Разрешение не отправляет форму и не принимает условия сайта.', account.label, purpose, url?.href ?? localize('arni.profile.chatOnly', 'нет — просмотр в текущем чате'), invocation.modelId ?? localize('arni.profile.currentModel', 'выбранная в чате'), lines.join('\n')),
 				primaryButton: localize('arni.profile.share', 'Передать эти поля'),
 				cancelButton: localize('arni.profile.doNotShare', 'Не передавать'),
-			});
-			if (!confirmation.confirmed || cancellation.token.isCancellationRequested) { return this.result({ status: 'denied' }); }
+			}, cancellation.token, _progress);
+			if (confirmation !== 'approved') { return reviewStopped(confirmation); }
+			if (cancellation.token.isCancellationRequested) { return this.result({ status: 'denied' }); }
 			const latest = selectArniProfileEntries(await this.profiles.read(account), fields);
 			if (JSON.stringify(latest) !== JSON.stringify(selected)) { return this.result({ status: 'changed', instruction: 'Card changed during review. Ask the user before making a new request.' }); }
 			if (cancellation.token.isCancellationRequested) { return this.result({ status: 'denied' }); }
@@ -92,6 +134,7 @@ export class ArniReadUserProfileTool implements IToolImpl {
 }
 
 export class ArniEditUserProfileTool implements IToolImpl {
+	private readonly review = new ProfileReviewGuard();
 	constructor(
 		@ICommandService private readonly commands: ICommandService,
 		@IArniUserProfileService private readonly profiles: IArniUserProfileService,
@@ -123,12 +166,13 @@ export class ArniEditUserProfileTool implements IToolImpl {
 				const changed = after.find(field => field.id === update.field);
 				return `${old?.label ?? changed?.label ?? update.field}: ${old?.value || empty} → ${changed ? `${changed.label}: ${changed.value || empty}` : localize('arni.profile.removed', 'поле удалено')}`;
 			});
-			const review = await this.dialogs.confirm({ custom: true, token: cancellation.token,
+			const review = await this.review.confirm(invocation, this.dialogs, { custom: true, token: cancellation.token,
 				message: localize('arni.profile.editReview', 'Сохранить изменения карточки от AI?'),
 				detail: localize('arni.profile.editReviewDetail', 'Аккаунт: {0}\nЗадача: {1}\nМодель: {2}\n\n{3}\n\nБудут изменены только перечисленные поля. Прежние значения не возвращаются модели. Это не отправка анкеты.', account.label, purpose, invocation.modelId ?? localize('arni.profile.currentModel', 'выбранная в чате'), lines.join('\n')),
 				primaryButton: localize('arni.profile.applyChanges', 'Сохранить изменения'), cancelButton: localize('arni.profile.cancelChanges', 'Не менять'),
-			});
-			if (!review.confirmed || cancellation.token.isCancellationRequested) { return result({ status: 'denied' }); }
+			}, cancellation.token, _progress);
+			if (review !== 'approved') { return reviewStopped(review); }
+			if (cancellation.token.isCancellationRequested) { return result({ status: 'denied' }); }
 			await this.profiles.save(account, next.values, next.customFields, previous, cancellation.token);
 			return result({ status: 'saved', updatedFields: updates.map(update => update.field) });
 		} catch {
