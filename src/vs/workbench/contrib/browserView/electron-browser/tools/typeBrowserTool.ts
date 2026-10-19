@@ -6,7 +6,6 @@
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { hash } from '../../../../../base/common/hash.js';
-import { LRUCache } from '../../../../../base/common/map.js';
 import {
 	escapeMarkdownSyntaxTokens,
 	MarkdownString
@@ -17,6 +16,7 @@ import { ToolDataSource, type CountTokensCallback, type IPreparedToolInvocation,
 import { createBrowserPageLink, errorResult, getSessionId, invokeFunctionResultToToolResult, playwrightInvoke, playwrightInvokeRaw } from './browserToolHelpers.js';
 import { BrowserChatToolReferenceName } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 import { OpenPageToolId } from './openBrowserTool.js';
+import { IBrowserToolProgress } from './browserToolProgress.js';
 
 export const TypeBrowserToolData: IToolData = {
 	id: 'type_in_page',
@@ -73,11 +73,9 @@ interface ITypeBrowserToolParams {
 }
 
 export class TypeBrowserTool implements IToolImpl {
-	// Keep only bounded, in-memory request counters; never retain typed values.
-	private readonly attempts = new LRUCache<string, { signature: number; count: number }>(100);
-
 	constructor(
 		@IPlaywrightService private readonly playwrightService: IPlaywrightService,
+		@IBrowserToolProgress private readonly browserProgress: IBrowserToolProgress,
 	) { }
 
 	async prepareToolInvocation(context: IToolInvocationPreparationContext, _token: CancellationToken): Promise<IPreparedToolInvocation | undefined> {
@@ -149,16 +147,9 @@ export class TypeBrowserTool implements IToolImpl {
 			return playwrightInvoke(this.playwrightService, sessionId, params.pageId, (page, key) => page.keyboard.press(key), params.key);
 		}
 
-		const scope = JSON.stringify([sessionId, invocation.chatRequestId ?? invocation.callId]);
 		const signature = hash([params.pageId, params.ref, params.selector, params.text, params.submit]);
-		const previous = this.attempts.get(scope);
-		const attempt = previous?.signature === signature ? previous : { signature, count: 0 };
-		if (attempt.count >= 2) {
-			return { ...errorResult('Repeated browser input without verified progress is blocked. Stop this attempt, explain the failure and ask the user before trying it again.'),
-				stopCurrentTurn: true, toolResultMessage: localize('browser.repeatedInputStopped', 'Остановлено: повторный ввод без подтверждённого результата') };
-		}
-		attempt.count++;
-		this.attempts.set(scope, attempt);
+		const stopped = this.browserProgress.begin(invocation, 'type', params.pageId, signature);
+		if (stopped) { return stopped; }
 		if (!selector || (params.ref !== undefined && !/^e\d+$/.test(params.ref))) {
 			return errorResult('Text input requires an exact ref from the current snapshot (e.g. ref:"e46") or a Playwright selector. The element description does not select a field. Read the page and locate the field; no text was typed.');
 		}
@@ -187,7 +178,7 @@ export class TypeBrowserTool implements IToolImpl {
 				return { verified: true, changed: before !== after };
 			}, selector, params.text!, params.submit ?? false);
 			if (result.changed) {
-				this.attempts.delete(scope);
+				this.browserProgress.changed(invocation, 'type', params.pageId, signature);
 			}
 			return invokeFunctionResultToToolResult({ result, summary: await this.playwrightService.getSummary(sessionId, params.pageId) });
 		} catch (error) {

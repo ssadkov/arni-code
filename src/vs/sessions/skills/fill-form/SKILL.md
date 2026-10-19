@@ -2,12 +2,14 @@
 name: fill-form
 description: "Read a web form, map its fields to user-approved information, fill and verify it with browser tools, then stop at the agreed review/submission boundary."
 metadata:
-  version: 1.0.2
+  version: 1.0.3
 ---
 
 # Fill a form
 
 Use the integrated browser tools to open the supplied URL and read questions, required markers, validation and consent text. If an existing page must be shared with the agent, explain the normal sharing control. If browser tools are absent/disabled, explain the setting rather than claiming success or installing an unrelated automation stack.
+
+If the initial page only shows Start/Начать/Next, read its current ref and click it once to reveal the questions. Do not infer field names or claim a field mapping until the actual questions are visible. clickElement needs ref:"e33" or a selector: element:"Начать" alone never selects a button. After a stale-ref error, get one fresh snapshot and resolve the current element. Repeated unchanged reads, failed/unchanged clicks and text input are bounded by the application and can stop the turn. Do not retry a blocked action through another tool.
 
 List the required fields and unresolved choices. Use user-profile for the account-bound personal card. Obtain permission naming the actual destination and values before typing private data: typing may transmit them even without submission. The profile tool's review discloses values to the model; it does not itself grant website agreements or submit the form. Preserve existing page entries; clarify conflicts. Never fabricate missing tax IDs, company names or eligibility answers.
 

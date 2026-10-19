@@ -17,10 +17,22 @@ import { InMemoryFileSystemProvider } from '../../../../../platform/files/common
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { IRequestService } from '../../../../../platform/request/common/request.js';
 import { ArniSkillLibraryService } from '../../browser/arniSkillLibraryService.js';
+import { shouldReplaceBuiltinPrompt } from '../../browser/promptsService.js';
 import { arniLibraryHash, IArniSkillLibrary, parseArniSkillLibrary } from '../../common/arniSkillLibrary.js';
 
 suite('Arni skill library', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+	test('older downloaded instructions cannot hide newer bundled skills or professions', () => {
+		assert.deepStrictEqual([
+			shouldReplaceBuiltinPrompt('1.1.2', '1.1.1'),
+			shouldReplaceBuiltinPrompt('1.1.2', undefined),
+			shouldReplaceBuiltinPrompt('1.1.2', 'invalid'),
+			shouldReplaceBuiltinPrompt('1.9.0', '1.10.0'),
+			shouldReplaceBuiltinPrompt('1.1.2', '1.1.2'),
+			shouldReplaceBuiltinPrompt(undefined, '1.0.0'),
+			shouldReplaceBuiltinPrompt(undefined, undefined),
+		], [false, false, false, true, true, true, true]);
+	});
 	async function library(text = 'A useful skill', path = 'skills/media-toolkit/SKILL.md'): Promise<IArniSkillLibrary> {
 		const files = [{ path, text, sha256: await arniLibraryHash(text) }];
 		return { schemaVersion: 1, revision: await arniLibraryHash(JSON.stringify(files.map(file => [file.path, file.sha256]))), files };

@@ -81,13 +81,24 @@ try {
 	})), { readFile: async uri => ({ value: await fs.readFile(uri.fsPath, 'utf8') }) });
 	assert.equal(customAgents.length, 3);
 	for (const agent of customAgents) {
+		const skillDirectories = (agent.skills ?? []).map(name => path.join(root, 'src/vs/sessions/skills', name));
 		const selected = await client.createSession({ ...config, model: 'audit/vision', customAgents, agent: agent.name,
+			skillDirectories, enableSkills: true,
 			configDirectory: runDir, workingDirectory: runDir, enableConfigDiscovery: false, enableSessionTelemetry: false, onPermissionRequest: approveAll });
 		const answer = await selected.sendAndWait({ prompt: 'Reply done without tools.' }, 30000);
 		assert.equal(answer?.data.content, 'Кадр просмотрен.');
 		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split(/\r?\n/)[0]), 'The selected profession instructions must reach the model');
+		if (agent.name === 'Секретарь') {
+			assert.deepEqual(agent.skills, ['user-profile', 'fill-form']);
+			const request = JSON.stringify(JSON.parse(receivedRequests.at(-1))).replace(/\\r/g, '');
+			for (const directory of skillDirectories) {
+				const source = await fs.readFile(path.join(directory, 'SKILL.md'), 'utf8');
+				const body = source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim();
+				assert.ok(request.includes(JSON.stringify(body).slice(1, -1).replace(/\\r/g, '')), `Skill body must be preloaded without a model tool call: ${path.basename(directory)}`);
+			}
+		}
 	}
-	console.log('SDK vision/professions passed: tool image retained, hooks completed, all three Russian profession names selected and instructions delivered; local HTTP only.');
+	console.log('SDK vision/professions passed: tool image retained, hooks completed, three profiles delivered and Secretary skills eagerly loaded without model tool calls; local HTTP only.');
 } finally {
 	await client.stop();
 	await new Promise(resolve => server.close(resolve));

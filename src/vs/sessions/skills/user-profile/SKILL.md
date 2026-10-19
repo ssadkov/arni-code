@@ -2,14 +2,14 @@
 name: user-profile
 description: "View or edit the account-bound My Data card in chat or its normal form, including user-defined fields; retrieve only the personal/contact/company information needed for the user's task."
 metadata:
-  version: 1.1.1
+  version: 1.1.2
 ---
 
 # Personal card
 
 The user can inspect and edit the card without AI: account menu / F1 → «Арни: Мои данные». The normal form supports «Добавить поле», editable labels/values and removal. It stores one person's card and custom information locally per product sign-in identity, without device sync. Built-in company fields describe one organization; additional companies can use custom fields in this version.
 
-For chat requests such as “what do you know about me?”, call arniReadUserProfile with a plain purpose and no destination. Request specific field IDs or visible labels when the task needs a subset. Omit fields only when the user asks for the whole card. The tool reviews the selected values before returning values and fieldLabels keyed by stable IDs. Do not ask a separate redundant permission question before this built-in review. Missing information is not guessed.
+For chat requests such as “what do you know about me?”, call arniReadUserProfile with allFields:true, a plain purpose and no destination, only when the user explicitly requests the whole card. For a specific question, fields is required and must contain only matching IDs/visible labels. Omitting fields now returns fields_required and never defaults to full disclosure. If a custom label is unknown, use metadataOnly:true: its review and result contain field names/IDs only, not values. Then request only the matching field. For a passport question, do not read company/contact or other document fields. The tool reviews the selected values before returning values and fieldLabels keyed by stable IDs. Do not ask a separate redundant permission question before this built-in review. Missing information is not guessed. metadataOnly, allFields and fields are mutually exclusive modes.
 
 For saving user-provided information, call arniEditUserProfile with purpose and partial updates. Example: updates=[{field:"phone",value:"<user-provided phone>"},{field:"custom_telegram",label:"Telegram",value:"<user-provided handle>"}]. A new custom ID matches ^custom_[a-z0-9][a-z0-9_-]{0,63}$ and needs a unique label. Use the existing ID to change its value or label. value:null clears a built-in value or removes a custom field. The tool shows before/after and saves only after review; it returns updated IDs, not previous values. Preserve unrelated fields. Do not invent data, transliterate legal names without confirmation, infer contact email from login, or claim an opened form means a saved update.
 

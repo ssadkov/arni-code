@@ -253,7 +253,7 @@ suite('Arni personal card', () => {
 		assert.deepStrictEqual(JSON.parse(resultText(await reader.invoke(chatRequest, async () => 0, { report() { } }, CancellationToken.None))), {
 			status: 'approved', values: { custom_telegram: '@example' }, fieldLabels: { custom_telegram: 'Telegram' }, missingFields: [],
 		});
-		const all = JSON.parse(resultText(await reader.invoke({ ...invocation(), parameters: { purpose: 'Show my card' } }, async () => 0, { report() { } }, CancellationToken.None)));
+		const all = JSON.parse(resultText(await reader.invoke({ ...invocation(), parameters: { purpose: 'Show my card', allFields: true } }, async () => 0, { report() { } }, CancellationToken.None)));
 		assert.deepStrictEqual(all.values, { firstName: 'Alice', phone: '+70000000000', custom_telegram: '@example' });
 		const editor = new ArniEditUserProfileTool(new class extends mock<ICommandService>() { }, h.profiles, dialogs, h.authentication);
 		await editor.invoke({ ...editInvocation(), parameters: { purpose: 'Correct my contacts', updates: [{ field: 'custom_telegram', label: 'Рабочий Telegram', value: '@changed' }, { field: 'phone', value: null }] } }, async () => 0, { report() { } }, CancellationToken.None);
@@ -261,6 +261,46 @@ suite('Arni personal card', () => {
 		assert.deepStrictEqual({ values: changed.values, customFields: changed.customFields }, { values: { firstName: 'Alice' }, customFields: [{ id: 'custom_telegram', label: 'Рабочий Telegram', value: '@changed' }] });
 		await editor.invoke({ ...editInvocation(), parameters: { purpose: 'Remove my custom contact', updates: [{ field: 'custom_telegram', value: null }] } }, async () => 0, { report() { } }, CancellationToken.None);
 		assert.deepStrictEqual((await h.profiles.read(await h.profiles.getAccount())).customFields, []);
+	});
+
+	test('omitted or conflicting field modes disclose nothing and never read protected storage', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Private sentinel' });
+		let reads = 0;
+		let reviews = 0;
+		h.duringRead(() => reads++);
+		const dialogs = new class extends mock<IDialogService>() { override async confirm() { reviews++; return { confirmed: true }; } };
+		const reader = new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication);
+		for (const mode of [{}, { fields: ['firstName'], metadataOnly: true }, { allFields: true, metadataOnly: true }, { allFields: 'true' }]) {
+			const result = await reader.invoke({ ...invocation(), parameters: { purpose: 'Read requested data', ...mode } }, async () => 0, { report() { } }, CancellationToken.None);
+			assert.ok(!resultText(result).includes('Private sentinel'));
+			assert.notStrictEqual(JSON.parse(resultText(result)).status, 'approved');
+		}
+		assert.deepStrictEqual({ reads, reviews }, { reads: 0, reviews: 0 });
+	});
+
+	test('field discovery reviews names only and a passport query releases only that field', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { email: 'private@example.test', companyName: 'Private company' }, [
+			{ id: 'custom_passport', label: 'Passport', value: 'PASSPORT-SENTINEL' },
+			{ id: 'custom_other_document', label: 'Other document', value: 'OTHER-SENTINEL' },
+		]);
+		const reviews: string[] = [];
+		const dialogs = new class extends mock<IDialogService>() {
+			override async confirm(options: Parameters<IDialogService['confirm']>[0]) { reviews.push(JSON.stringify(options)); return { confirmed: true }; }
+		};
+		const reader = new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication);
+		const names = await reader.invoke({ ...invocation(), parameters: { purpose: 'Find requested document field', metadataOnly: true } }, async () => 0, { report() { } }, CancellationToken.None);
+		const disclosure = resultText(names) + reviews[0];
+		for (const value of ['private@example.test', 'Private company', 'PASSPORT-SENTINEL', 'OTHER-SENTINEL']) { assert.ok(!disclosure.includes(value)); }
+		const discovered = JSON.parse(resultText(names));
+		assert.ok(discovered.fields.some((field: { id: string; label: string }) => field.id === 'custom_passport' && field.label === 'Passport'));
+		assert.deepStrictEqual(Object.keys(discovered).sort(), ['fields', 'status']);
+		const passport = await reader.invoke({ ...invocation(), parameters: { purpose: 'Show my passport', fields: ['Passport'] } }, async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual(JSON.parse(resultText(passport)), {
+			status: 'approved', values: { custom_passport: 'PASSPORT-SENTINEL' }, fieldLabels: { custom_passport: 'Passport' }, missingFields: [],
+		});
+		for (const value of ['private@example.test', 'Private company', 'OTHER-SENTINEL']) { assert.ok(!reviews[1].includes(value)); }
 	});
 
 	test('AI can discover an empty custom field ID after review and fill it without creating a duplicate', async () => {

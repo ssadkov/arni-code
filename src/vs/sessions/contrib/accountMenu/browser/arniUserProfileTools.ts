@@ -21,10 +21,12 @@ import { IArniUserProfileService } from './arniUserProfileService.js';
 const readTool: IToolData = {
 	id: 'arni_read_user_profile', toolReferenceName: 'arniReadUserProfile',
 	displayName: localize('arni.profile.readTool', 'Получить выбранные поля карточки'),
-	modelDescription: 'Read My Data in chat or for an authorized website. Request field IDs or visible field labels (including custom fields); omit fields only when the user asks to see their whole card. Built-in IDs: ' + arniProfileFields.map(field => field.key).join(', ') + '. Optional destination is an exact HTTPS page URL. Shows user review before releasing values to the model. Returns values and fieldLabels keyed by stable IDs. Missing values are not guessed. Never submit a form or accept terms based on this approval.',
+	modelDescription: 'Read selected My Data fields after user review. Specify fields by IDs or exact visible labels. If the custom field name is unknown, use metadataOnly:true to review/discover field names without any values, then request only the matching field. Omitting fields does NOT read the whole card. Use allFields:true only when the user explicitly asks for the entire card; the review warns about full disclosure. Built-in IDs: ' + arniProfileFields.map(field => field.key).join(', ') + '. Optional destination is the exact HTTPS form URL. Never submit a form or accept terms based on this review.',
 	source: ToolDataSource.Internal,
 	inputSchema: { type: 'object', properties: {
-		fields: { type: 'array', description: 'Field IDs or unique visible labels. Omit to show the whole card when requested by the user.', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: arniProfileFields.length + arniCustomProfileFieldLimit, uniqueItems: true },
+		fields: { type: 'array', description: 'Only the requested field IDs or exact visible labels. For a passport query, request only its field, never the whole card.', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: arniProfileFields.length + arniCustomProfileFieldLimit, uniqueItems: true },
+		metadataOnly: { type: 'boolean', description: 'Review and return field IDs/labels only, without values. Use to discover a custom field name. Cannot be combined with fields/allFields.' },
+		allFields: { type: 'boolean', description: 'Explicit full-card request, only when the user asked to see their entire card. Cannot be combined with fields/metadataOnly.' },
 		purpose: { type: 'string', minLength: 1, maxLength: 500 },
 		destination: { type: 'string', description: 'Exact HTTPS form/page URL that the user asked to use. No credentials in the URL.' },
 	}, required: ['purpose'], additionalProperties: false },
@@ -100,19 +102,27 @@ export class ArniReadUserProfileTool implements IToolImpl {
 			const fields = invocation.parameters.fields as string[] | undefined;
 			const purpose = invocation.parameters.purpose;
 			const destination = invocation.parameters.destination;
+			const metadataOnly = invocation.parameters.metadataOnly === true;
+			const allFields = invocation.parameters.allFields === true;
+			if ((invocation.parameters.metadataOnly !== undefined && typeof invocation.parameters.metadataOnly !== 'boolean') || (invocation.parameters.allFields !== undefined && typeof invocation.parameters.allFields !== 'boolean') || (Number(fields !== undefined) + Number(metadataOnly) + Number(allFields) > 1)) { throw new Error('Choose exactly one card read mode'); }
+			if (fields === undefined && !metadataOnly && !allFields) {
+				return this.result({ status: 'fields_required', instruction: 'No card values were read or disclosed. Specify only the requested fields. If a custom field name is unknown, use metadataOnly:true to discover names without values. Use allFields:true only for an explicit user request for the entire card.' });
+			}
 			if (typeof purpose !== 'string' || !purpose.trim() || purpose.length > 500 || (destination !== undefined && (typeof destination !== 'string' || destination.length > 2000))) { throw new Error('Invalid profile request'); }
 			const url = destination === undefined ? undefined : new URL(destination);
 			if (url && (url.protocol !== 'https:' || url.username || url.password)) { throw new Error('Expected an HTTPS destination without credentials'); }
 			const account = await this.profiles.getAccount();
 			const profile = await this.profiles.read(account);
 			const selected = selectArniProfileEntries(profile, fields);
-			if (!selected.entries.some(field => field.value || field.id.startsWith('custom_'))) { return this.result({ status: 'missing', missingFields: selected.missingFields, instruction: 'Ask the user for missing values; use arniEditUserProfile to save user-supplied updates or open My Data. Do not guess values.' }); }
+			if (!metadataOnly && !selected.entries.some(field => field.value || field.id.startsWith('custom_'))) { return this.result({ status: 'missing', missingFields: selected.missingFields, instruction: 'Ask the user for missing values; use arniEditUserProfile to save user-supplied updates or open My Data. Do not guess values.' }); }
 			const cancellation = resources.add(new CancellationTokenSource(token));
 			resources.add(this.authentication.onDidChangeSessions(() => cancellation.cancel()));
-			const lines = selected.entries.map(field => `${field.label}: ${field.value || localize('arni.profile.missing', 'не заполнено')}`);
+			const lines = selected.entries.map(field => metadataOnly ? field.label : `${field.label}: ${field.value || localize('arni.profile.missing', 'не заполнено')}`);
 			const confirmation = await this.review.confirm(invocation, this.dialogs, {
 				custom: true, token: cancellation.token,
-				message: localize('arni.profile.reviewTitle', 'Передать выбранные поля карточки модели?'),
+				message: metadataOnly ? localize('arni.profile.namesReviewTitle', 'Передать модели названия полей без значений?')
+					: allFields ? localize('arni.profile.allReviewTitle', 'Передать модели ВСЮ карточку, включая все заполненные свои поля?')
+						: localize('arni.profile.reviewTitle', 'Передать выбранные поля карточки модели?'),
 				detail: localize('arni.profile.reviewDetail', 'Аккаунт: {0}\nЗадача: {1}\nПолучатель формы: {2}\nМодель: {3}\n\n{4}\n\nЭти сведения попадут в контекст чата и могут сохраниться в его истории. Разрешение не отправляет форму и не принимает условия сайта.', account.label, purpose, url?.href ?? localize('arni.profile.chatOnly', 'нет — просмотр в текущем чате'), invocation.modelId ?? localize('arni.profile.currentModel', 'выбранная в чате'), lines.join('\n')),
 				primaryButton: localize('arni.profile.share', 'Передать эти поля'),
 				cancelButton: localize('arni.profile.doNotShare', 'Не передавать'),
@@ -120,8 +130,10 @@ export class ArniReadUserProfileTool implements IToolImpl {
 			if (confirmation !== 'approved') { return reviewStopped(confirmation); }
 			if (cancellation.token.isCancellationRequested) { return this.result({ status: 'denied' }); }
 			const latest = selectArniProfileEntries(await this.profiles.read(account), fields);
-			if (JSON.stringify(latest) !== JSON.stringify(selected)) { return this.result({ status: 'changed', instruction: 'Card changed during review. Ask the user before making a new request.' }); }
+			const names = (entries: typeof selected.entries) => entries.map(field => ({ id: field.id, label: field.label }));
+			if (JSON.stringify(metadataOnly ? names(latest.entries) : latest) !== JSON.stringify(metadataOnly ? names(selected.entries) : selected)) { return this.result({ status: 'changed', instruction: 'Card changed during review. Ask the user before making a new request.' }); }
 			if (cancellation.token.isCancellationRequested) { return this.result({ status: 'denied' }); }
+			if (metadataOnly) { return this.result({ status: 'approved', fields: names(selected.entries) }); }
 			return this.result({ status: 'approved', ...(url ? { destination: url.href } : {}),
 				values: Object.fromEntries(selected.entries.filter(field => field.value).map(field => [field.id, field.value])),
 				fieldLabels: Object.fromEntries(selected.entries.map(field => [field.id, field.label])), missingFields: selected.missingFields });

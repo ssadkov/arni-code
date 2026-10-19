@@ -85,6 +85,24 @@ export function shouldShowAccountPanelSummary(state: Pick<IAccountTitleBarState,
 	return !hasCopilotDashboard && !isAccountLoading && !(state.source === 'copilot' && state.kind === 'prominent');
 }
 
+/** Render personal actions as visible text entries, alongside the remaining account menu commands. */
+export function renderAccountPanelActions(panel: HTMLElement, personalize: readonly IAction[], other: readonly IAction[], store: Pick<DisposableStore, 'add'>, onWillRun: () => void): void {
+	const actions = [...personalize, ...other];
+	if (!actions.some(action => !(action instanceof Separator))) { return; }
+	const section = append(panel, $('.sessions-account-titlebar-panel-actions'));
+	const actionBar = store.add(new ActionBar(section, { orientation: ActionsOrientation.VERTICAL }));
+	store.add(actionBar.onWillRun(onWillRun));
+	let lastWasSeparator = true;
+	for (const action of actions) {
+		if (action instanceof Separator) {
+			if (!lastWasSeparator) { actionBar.push(action); lastWasSeparator = true; }
+			continue;
+		}
+		lastWasSeparator = false;
+		actionBar.push(action, { icon: false, label: true });
+	}
+}
+
 // Register the shared VS Code update entry in the Agents left titlebar actions.
 registerUpdateTitleBarMenuPlacement(Menus.TitleBarLeftLayout, {
 	group: 'navigation',
@@ -817,29 +835,10 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			append(footer, this.createCopilotHoverContent({ compactQuotaLayout: true }));
 		}
 
-		// Other panel actions (sign-in, etc.) — only render if there's at least one non-separator action.
-		if (partitioned.other.some(a => !(a instanceof Separator))) {
-			const actionsSection = append(panel, $('.sessions-account-titlebar-panel-actions'));
-			const actionsActionBar = panelStore.add(new ActionBar(actionsSection, {
-				orientation: ActionsOrientation.VERTICAL,
-			}));
-			panelStore.add(actionsActionBar.onWillRun(() => {
-				this.hoverService.hideHover(true);
-				this.clickPanelDisposable.clear();
-			}));
-			let lastWasSeparator = true;
-			for (const action of partitioned.other) {
-				if (action instanceof Separator) {
-					if (!lastWasSeparator) {
-						actionsActionBar.push(action);
-						lastWasSeparator = true;
-					}
-					continue;
-				}
-				lastWasSeparator = false;
-				actionsActionBar.push(action, { icon: false, label: true });
-			}
-		}
+		renderAccountPanelActions(panel, partitioned.personalize, partitioned.other, panelStore, () => {
+			this.hoverService.hideHover(true);
+			this.clickPanelDisposable.clear();
+		});
 
 		if (shouldShowAccountPanelSummary(this.lastState, this.shouldShowCopilotDashboardHover(), this.isAccountLoading)) {
 			const contentSection = append(panel, $('.sessions-account-titlebar-panel-content'));
