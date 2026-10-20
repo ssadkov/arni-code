@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "src/vs/sessions/skills/computer-check/scripts/computer_check.py"
+sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("computer_check", HELPER)
 skill = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(skill)
