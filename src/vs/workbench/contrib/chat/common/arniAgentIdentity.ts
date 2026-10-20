@@ -15,6 +15,12 @@ export interface IArniAgentIdentity {
 }
 
 const professions: readonly IArniAgentIdentity[] = [
+	{ id: 'programmer', name: 'Программист', icon: Codicon.code },
+	{ id: 'researcher', name: 'Исследователь', icon: Codicon.search },
+	{ id: 'data-analyst', name: 'Аналитик', icon: Codicon.table },
+	{ id: 'presentation-designer', name: 'Дизайнер презентаций', icon: Codicon.preview },
+	{ id: 'file-organizer', name: 'Архивариус', icon: Codicon.folderOpened },
+	{ id: 'instructional-designer', name: 'Методист', icon: Codicon.book },
 	{ id: 'sysadmin', name: 'Сисадмин', icon: Codicon.tools },
 	{ id: 'video-editor', name: 'Монтажёр', icon: Codicon.deviceCameraVideo },
 	{ id: 'secretary', name: 'Секретарь', icon: Codicon.notebook },
@@ -26,6 +32,14 @@ export function getArniAgentIdentity(name: string | undefined, uri?: string): IA
 	let file: string | undefined;
 	try { file = uri ? URI.parse(uri).path.split('/').at(-1)?.replace(/\.agent\.md$/, '') : undefined; } catch { /* Unknown URI: keep the explicit name lookup. */ }
 	return professions.find(agent => agent.id === file) ?? professions.find(agent => agent.name === name || agent.id === name);
+}
+
+/** A host may materialize the bundled profile at a new URI and use its filename as name. */
+export function resolveArniAgentAlias<T extends { readonly name: string; readonly uri: string }>(agents: readonly T[], selectedUri: string): T | undefined {
+	const profession = getArniAgentIdentity(undefined, selectedUri);
+	if (!profession) { return undefined; }
+	const candidates = agents.filter(agent => getArniAgentIdentity(agent.name, agent.uri)?.id === profession.id);
+	return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 /** Never consults the current picker: a response belongs to its frozen request. */

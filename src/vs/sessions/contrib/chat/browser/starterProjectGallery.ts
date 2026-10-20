@@ -17,11 +17,13 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { getArniAgentIdentity } from '../../../../workbench/contrib/chat/common/arniAgentIdentity.js';
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 
 const STARTER_PROJECT_PARENT_KEY = 'sessions.starterProjects.parentFolder';
 
 interface IStarterProjectIdea {
+	readonly professionId: string;
 	readonly title: string;
 	readonly description: string;
 	readonly tooltip: string;
@@ -33,59 +35,146 @@ interface IStarterProjectIdea {
 function getStarterProjectIdeas(): readonly IStarterProjectIdea[] {
 	return [
 		{
-			title: localize('starterProjects.game.title', "Игра"),
-			description: localize('starterProjects.game.description', "Браузерная «Змейка»"),
-			tooltip: localize('starterProjects.game.tooltip', "Игра со счётом, управлением с клавиатуры и телефона и кнопкой перезапуска. Работает прямо в браузере."),
-			folderName: 'snake-game',
-			icon: Codicon.game,
-			prompt: localize('starterProjects.game.prompt', "Создай с нуля браузерную игру «Змейка» в этой пустой папке. Используй HTML, CSS и JavaScript без внешних зависимостей. Добавь счёт, управление с клавиатуры и телефона, экран проигрыша и перезапуск. Создай необходимые файлы. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически. В конце объясни, как открыть игру и что можно улучшить дальше."),
-		},
-		{
+			professionId: 'programmer',
 			title: localize('starterProjects.landing.title', "Лендинг"),
 			description: localize('starterProjects.landing.description', "Страница для вашей идеи"),
 			tooltip: localize('starterProjects.landing.tooltip', "Адаптивная страница с первым экраном, преимуществами и кнопкой действия. Текст и оформление можно изменить позже."),
 			folderName: 'landing-page',
 			icon: Codicon.layout,
-			prompt: localize('starterProjects.landing.prompt', "Создай с нуля адаптивный лендинг в этой пустой папке. Если тема проекта неизвестна, возьми понятный пример и явно обозначь заменяемый текст. Сделай выразительный первый экран, преимущества, примеры и кнопку действия. Используй HTML, CSS и JavaScript без внешних зависимостей. Создай необходимые файлы. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически. В конце объясни, какие тексты мне заменить."),
+			prompt: localize('starterProjects.landing.prompt', "Создай с нуля адаптивный лендинг в этой пустой папке. Если тема проекта неизвестна, возьми понятный пример и явно обозначь заменяемый текст. Сделай выразительный первый экран, преимущества, примеры и кнопку действия. Используй HTML, CSS и JavaScript без внешних зависимостей. Создай необходимые файлы. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок. В конце объясни, какие тексты мне заменить."),
 		},
 		{
+			professionId: 'researcher',
+			title: localize('starterProjects.research.title', "Сравнить источники"),
+			description: localize('starterProjects.research.description', "Факты, расхождения и ссылки"),
+			tooltip: localize('starterProjects.research.tooltip', "Факты, расхождения и ссылки"),
+			folderName: 'source-comparison',
+			icon: Codicon.search,
+			prompt: localize('starterProjects.research.prompt', "Используй навык source-research. Помоги сравнить источники по моей теме. Сначала запроси тему, критерии и ссылки или документы; до этого ничего не ищи. Затем подготовь comparison.md с таблицей, ссылками и датой проверки, отдели подтвержденные факты от выводов и неизвестного."),
+		},
+		{
+			professionId: 'data-analyst',
+			title: localize('starterProjects.tables.title', "Сверить таблицы"),
+			description: localize('starterProjects.tables.description', "Excel и CSV без потери дублей"),
+			tooltip: localize('starterProjects.tables.tooltip', "Excel и CSV без потери дублей"),
+			folderName: 'table-reconciliation',
+			icon: Codicon.table,
+			prompt: localize('starterProjects.tables.prompt', "Используй навык spreadsheet-analysis и его готовый помощник. Сначала запроси две таблицы, названия ключевой колонки и суммы. Без файлов не создавай вымышленные результаты. Сохрани отдельную сверку: совпадения, расхождения, отсутствующие записи и неоднозначные дубли. Исходники не меняй."),
+		},
+		{
+			professionId: 'presentation-designer',
+			title: localize('starterProjects.slides.title', "Сделать презентацию"),
+			description: localize('starterProjects.slides.description', "Структура и редактируемый PPTX"),
+			tooltip: localize('starterProjects.slides.tooltip', "Структура и редактируемый PPTX"),
+			folderName: 'presentation',
+			icon: Codicon.preview,
+			prompt: localize('starterProjects.slides.prompt', "Используй навык presentation-design. Сначала запроси материал, аудиторию и цель. Подготовь план из шести слайдов и редактируемый PPTX в новом файле. Не выдумывай факты. Проверь структуру и, если доступен рендер, внешний вид; явно сообщи, если визуальная проверка недоступна."),
+		},
+		{
+			professionId: 'file-organizer',
+			title: localize('starterProjects.files.title', "Разобрать файлы"),
+			description: localize('starterProjects.files.description', "Сначала план, затем перемещения"),
+			tooltip: localize('starterProjects.files.tooltip', "Сначала план, затем перемещения"),
+			folderName: 'file-organization',
+			icon: Codicon.folderOpened,
+			prompt: localize('starterProjects.files.prompt', "Используй навык file-organizing и готовый помощник. Сначала спроси, какую отдельную папку разобрать. Подготовь только план сортировки и покажи, что и куда будет перемещено. Не удаляй файлы и не применяй план до моего отдельного подтверждения. Объясни отмену через журнал."),
+		},
+		{
+			professionId: 'instructional-designer',
+			title: localize('starterProjects.lesson.title', "Создать мини-урок"),
+			description: localize('starterProjects.lesson.description', "Объяснение и проверка знаний"),
+			tooltip: localize('starterProjects.lesson.tooltip', "Объяснение и проверка знаний"),
+			folderName: 'mini-lesson',
+			icon: Codicon.book,
+			prompt: localize('starterProjects.lesson.prompt', "Используй навык lesson-design и готовый помощник. Сначала запроси исходный материал и аудиторию. Создай автономный HTML-урок с четырьмя вопросами, обратной связью и опорой на источник. Проверь правильный и неправильный ответ, клавиатуру и узкий экран. Не добавляй факты без источника."),
+		},
+		{
+			professionId: 'sysadmin',
+			title: localize('starterProjects.computer.title', "Проверить компьютер"),
+			description: localize('starterProjects.computer.description', "Характеристики, место и автозагрузка"),
+			tooltip: localize('starterProjects.computer.tooltip', "Характеристики, место и автозагрузка"),
+			folderName: 'computer-report',
+			icon: Codicon.tools,
+			prompt: localize('starterProjects.computer.prompt', "Используй навык computer-check. Проверь характеристики компьютера, свободное место и доступные сведения об автозагрузке. Только диагностика: ничего не удаляй и не отключай. Отдели измерения от предположений и назови ограничения отчета."),
+		},
+		{
+			professionId: 'video-editor',
+			title: localize('starterProjects.video.title', "Заменить зелёный фон"),
+			description: localize('starterProjects.video.description', "Пятисекундный предпросмотр"),
+			tooltip: localize('starterProjects.video.tooltip', "Пятисекундный предпросмотр"),
+			folderName: 'video-preview',
+			icon: Codicon.deviceCameraVideo,
+			prompt: localize('starterProjects.video.prompt', "Используй навык greenscreen-preview и готовый Python-помощник. Сначала попроси видео и фон. Сделай только пятисекундный предпросмотр, сохрани исходные пропорции, человека и звук. Проверь кадры и края, допускается одна коррекция. Полный ролик пока не рендери."),
+		},
+		{
+			professionId: 'secretary',
+			title: localize('starterProjects.form.title', "Заполнить анкету"),
+			description: localize('starterProjects.form.description', "Черновик с данными вашей карточки"),
+			tooltip: localize('starterProjects.form.tooltip', "Черновик с данными вашей карточки"),
+			folderName: 'form-draft',
+			icon: Codicon.notebook,
+			prompt: localize('starterProjects.form.prompt', "Используй навыки user-profile и fill-form. Сначала запроси ссылку на анкету, прочитай ее поля и запроси только необходимые данные из карточки через предусмотренное подтверждение. Не угадывай значения. Заполни проверяемый черновик, согласия не отмечай и анкету не отправляй."),
+		},
+		{
+			professionId: 'content-editor',
+			title: localize('starterProjects.content.title', "Подготовить публикацию"),
+			description: localize('starterProjects.content.description', "Текст для вашей площадки"),
+			tooltip: localize('starterProjects.content.tooltip', "Текст для вашей площадки"),
+			folderName: 'content-draft',
+			icon: Codicon.edit,
+			prompt: localize('starterProjects.content.prompt', "Используй навык content-editor. Сначала запроси исходный материал, площадку и цель. Подготовь черновик публикации без вымышленных фактов и отдельный список того, что нужно уточнить. Ничего не публикуй."),
+		},
+		{
+			professionId: 'programmer',
+			title: localize('starterProjects.game.title', "Игра"),
+			description: localize('starterProjects.game.description', "Браузерная «Змейка»"),
+			tooltip: localize('starterProjects.game.tooltip', "Игра со счётом, управлением с клавиатуры и телефона и кнопкой перезапуска. Работает прямо в браузере."),
+			folderName: 'snake-game',
+			icon: Codicon.game,
+			prompt: localize('starterProjects.game.prompt', "Создай с нуля браузерную игру «Змейка» в этой пустой папке. Используй HTML, CSS и JavaScript без внешних зависимостей. Добавь счёт, управление с клавиатуры и телефона, экран проигрыша и перезапуск. Создай необходимые файлы. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок. В конце объясни, как открыть игру и что можно улучшить дальше."),
+		},
+		{
+			professionId: 'programmer',
 			title: localize('starterProjects.portfolio.title', "Портфолио"),
 			description: localize('starterProjects.portfolio.description', "Личный сайт с проектами"),
 			tooltip: localize('starterProjects.portfolio.tooltip', "Готовый личный сайт: информация о вас, карточки проектов и контакты. Примерные данные легко заменить."),
 			folderName: 'my-portfolio',
 			icon: Codicon.account,
-			prompt: localize('starterProjects.portfolio.prompt', "Создай с нуля адаптивный сайт-портфолио в этой пустой папке. Добавь блок «Обо мне», карточки проектов и контакты. Используй явно обозначенные примерные данные, которые я смогу заменить. Сделай сайт на HTML, CSS и JavaScript без внешних зависимостей. Создай необходимые файлы. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически. В конце объясни, где поменять текст и изображения."),
+			prompt: localize('starterProjects.portfolio.prompt', "Создай с нуля адаптивный сайт-портфолио в этой пустой папке. Добавь блок «Обо мне», карточки проектов и контакты. Используй явно обозначенные примерные данные, которые я смогу заменить. Сделай сайт на HTML, CSS и JavaScript без внешних зависимостей. Создай необходимые файлы. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок. В конце объясни, где поменять текст и изображения."),
 		},
 		{
+			professionId: 'programmer',
 			title: localize('starterProjects.quiz.title', "Квиз"),
 			description: localize('starterProjects.quiz.description', "Вопросы и результат"),
 			tooltip: localize('starterProjects.quiz.tooltip', "Небольшая викторина с несколькими вопросами, подсчётом баллов и возможностью пройти её заново."),
 			folderName: 'my-quiz',
 			icon: Codicon.question,
-			prompt: localize('starterProjects.quiz.prompt', "Создай с нуля браузерный квиз в этой пустой папке. Сделай несколько интересных примерных вопросов, понятный выбор ответов, подсчёт баллов, экран результата и повторное прохождение. Используй HTML, CSS и JavaScript без внешних зависимостей. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически. Объясни, где заменить вопросы."),
+			prompt: localize('starterProjects.quiz.prompt', "Создай с нуля браузерный квиз в этой пустой папке. Сделай несколько интересных примерных вопросов, понятный выбор ответов, подсчёт баллов, экран результата и повторное прохождение. Используй HTML, CSS и JavaScript без внешних зависимостей. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок. Объясни, где заменить вопросы."),
 		},
 		{
+			professionId: 'programmer',
 			title: localize('starterProjects.habits.title', "Трекер привычек"),
 			description: localize('starterProjects.habits.description', "Отмечайте прогресс по дням"),
 			tooltip: localize('starterProjects.habits.tooltip', "Добавляйте привычки и отмечайте выполненные дни. Отметки сохраняются в браузере без регистрации."),
 			folderName: 'habit-tracker',
 			icon: Codicon.calendar,
-			prompt: localize('starterProjects.habits.prompt', "Создай с нуля простой трекер привычек в этой пустой папке. Пользователь должен добавлять привычки, отмечать выполненные дни и видеть прогресс за неделю. Сохраняй данные локально в браузере без аккаунта и сервера. Используй HTML, CSS и JavaScript без внешних зависимостей. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически."),
+			prompt: localize('starterProjects.habits.prompt', "Создай с нуля простой трекер привычек в этой пустой папке. Пользователь должен добавлять привычки, отмечать выполненные дни и видеть прогресс за неделю. Сохраняй данные локально в браузере без аккаунта и сервера. Используй HTML, CSS и JavaScript без внешних зависимостей. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок."),
 		},
 		{
+			professionId: 'programmer',
 			title: localize('starterProjects.catalog.title', "Каталог"),
 			description: localize('starterProjects.catalog.description', "Карточки с поиском"),
 			tooltip: localize('starterProjects.catalog.tooltip', "Небольшой каталог товаров или работ: карточки, поиск и фильтры. Оплата и аккаунт не нужны."),
 			folderName: 'my-catalog',
 			icon: Codicon.listUnordered,
-			prompt: localize('starterProjects.catalog.prompt', "Создай с нуля адаптивный каталог товаров или работ в этой пустой папке. Добавь примерные карточки, поиск и фильтр по категориям. Не подключай оплату или аккаунты. Используй HTML, CSS и JavaScript без внешних зависимостей. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически. Объясни, где заменить данные карточек."),
+			prompt: localize('starterProjects.catalog.prompt', "Создай с нуля адаптивный каталог товаров или работ в этой пустой папке. Добавь примерные карточки, поиск и фильтр по категориям. Не подключай оплату или аккаунты. Используй HTML, CSS и JavaScript без внешних зависимостей. Не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок. Объясни, где заменить данные карточек."),
 		},
 	];
 }
 
 /** Wraps a free-form idea into a task the agent can finish in an empty folder. */
 function getCustomIdeaPrompt(idea: string): string {
-	return localize('starterProjects.custom.prompt', "Создай с нуля в этой пустой папке: {0}\n\nЕсли я не указал технологии, используй HTML, CSS и JavaScript без внешних зависимостей. Создай необходимые файлы. Если получается веб-страница, не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, и закончи работу: не проверяй страницу автоматически. В конце простыми словами объясни, как открыть результат и что можно улучшить дальше.", idea);
+	return localize('starterProjects.custom.prompt', "Создай с нуля в этой пустой папке: {0}\n\nЕсли я не указал технологии, используй HTML, CSS и JavaScript без внешних зависимостей. Создай необходимые файлы. Если получается веб-страница, не используй Python и не запускай серверы: всё должно работать, если просто открыть index.html в браузере. Когда файлы готовы, открой index.html во встроенном браузере, чтобы я увидел результат, проверь основное действие и вид на широком и узком экране, сохрани скриншоты. Не делай циклических проверок. В конце простыми словами объясни, как открыть результат и что можно улучшить дальше.", idea);
 }
 
 const CUSTOM_PROJECT_FOLDER_NAME = 'my-project';
@@ -109,12 +198,12 @@ export class StarterProjectGallery extends Disposable {
 	private readonly _status: HTMLElement;
 	private _parentUri: URI;
 	/** A folder this gallery created whose task has not started yet, reused on retry. */
-	private _pendingFolder: { readonly uri: URI; readonly prompt: string } | undefined;
+	private _pendingFolder: { readonly uri: URI; readonly prompt: string; readonly professionId: string } | undefined;
 	private _busy = false;
 
 	constructor(
 		container: HTMLElement,
-		private readonly _startProject: (folderUri: URI, prompt: string) => Promise<void>,
+		private readonly _startProject: (folderUri: URI, prompt: string, professionId: string) => Promise<void>,
 		private readonly _useExistingFolder: () => void,
 		@IFileDialogService private readonly _fileDialogService: IFileDialogService,
 		@IFileService private readonly _fileService: IFileService,
@@ -130,15 +219,15 @@ export class StarterProjectGallery extends Disposable {
 
 		this.element = dom.append(container, dom.$('section.starter-project-gallery'));
 		this._register(toDisposable(() => this.element.remove()));
-		this.element.setAttribute('aria-label', localize('starterProjects.heading', "Что создадим?"));
-		dom.append(this.element, dom.$('h2.starter-project-gallery-title')).textContent = localize('starterProjects.heading', "Что создадим?");
-		dom.append(this.element, dom.$('p.starter-project-gallery-description')).textContent = localize('starterProjects.intro', "Опишите идею своими словами — Arni создаст для неё папку и начнёт работу.");
+		this.element.setAttribute('aria-label', localize('starterProjects.heading', "С чем помочь?"));
+		dom.append(this.element, dom.$('h2.starter-project-gallery-title')).textContent = localize('starterProjects.heading', "С чем помочь?");
+		dom.append(this.element, dom.$('p.starter-project-gallery-description')).textContent = localize('starterProjects.intro', "Выберите задачу и специалиста. Arni создаст для результата отдельную папку.");
 
 		const ideaRow = dom.append(this.element, dom.$('.starter-project-idea'));
 		this._ideaInput = dom.append(ideaRow, dom.$('textarea.starter-project-idea-input')) as HTMLTextAreaElement;
 		this._ideaInput.rows = 3;
 		this._ideaInput.placeholder = localize('starterProjects.ideaPlaceholder', "Например: сайт для моей кофейни с меню и картой");
-		this._ideaInput.setAttribute('aria-label', localize('starterProjects.ideaLabel', "Опишите идею проекта"));
+		this._ideaInput.setAttribute('aria-label', localize('starterProjects.ideaLabel', "Опишите приложение для Программиста"));
 		const actions = dom.append(ideaRow, dom.$('.starter-project-actions'));
 		this.modelPickerButton = dom.append(actions, dom.$('button.starter-project-link.starter-project-model')) as HTMLButtonElement;
 		this.modelPickerButton.type = 'button';
@@ -146,7 +235,7 @@ export class StarterProjectGallery extends Disposable {
 		this.modelPickerButton.textContent = localize('starterProjects.chooseModel', "Выбрать модель");
 		this._ideaButton = dom.append(actions, dom.$('button.starter-project-create')) as HTMLButtonElement;
 		this._ideaButton.type = 'button';
-		this._ideaButton.textContent = localize('starterProjects.create', "Создать");
+		this._ideaButton.textContent = localize('starterProjects.create', "Создать с Программистом");
 		this._register(dom.addDisposableListener(this._ideaButton, dom.EventType.CLICK, () => void this._createFromIdea()));
 		this._register(dom.addDisposableListener(this._ideaInput, dom.EventType.KEY_DOWN, event => {
 			if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
@@ -161,17 +250,21 @@ export class StarterProjectGallery extends Disposable {
 		for (const [index, idea] of getStarterProjectIdeas().entries()) {
 			const button = dom.append(this._cards, dom.$('button.starter-project-card')) as HTMLButtonElement;
 			button.type = 'button';
-			if (index >= 3) {
+			if (index >= 6) {
 				button.hidden = true;
 				extraCards.push(button);
 			}
-			button.setAttribute('aria-label', `${idea.title}. ${idea.description}`);
+			const profession = getArniAgentIdentity(idea.professionId)!;
+			button.dataset.agentId = profession.id;
+			button.setAttribute('aria-label', `${idea.title}. ${idea.description}. ${profession.name}`);
 			const icon = dom.append(button, renderIcon(idea.icon));
 			icon.setAttribute('aria-hidden', 'true');
 			dom.append(button, dom.$('span.starter-project-card-title')).textContent = idea.title;
 			dom.append(button, dom.$('span.starter-project-card-description')).textContent = idea.description;
+const author = dom.append(button, dom.$('span.starter-project-card-profession'));
+			author.textContent = localize('starterProjects.profession', "Исполнитель: {0}", profession.name);
 			this._register(this._hoverService.setupDelayedHover(button, { content: idea.tooltip }));
-			this._register(dom.addDisposableListener(button, dom.EventType.CLICK, () => void this._createProject(idea.folderName, idea.prompt)));
+			this._register(dom.addDisposableListener(button, dom.EventType.CLICK, () => void this._createProject(idea.folderName, idea.prompt, idea.professionId)));
 		}
 		this._moreButton = dom.append(this.element, dom.$('button.starter-project-link.starter-project-more')) as HTMLButtonElement;
 		this._moreButton.type = 'button';
@@ -251,10 +344,10 @@ export class StarterProjectGallery extends Disposable {
 			this._ideaInput.focus();
 			return;
 		}
-		await this._createProject(CUSTOM_PROJECT_FOLDER_NAME, getCustomIdeaPrompt(idea));
+		await this._createProject(CUSTOM_PROJECT_FOLDER_NAME, getCustomIdeaPrompt(idea), 'programmer');
 	}
 
-	private async _createProject(baseName: string, prompt: string): Promise<void> {
+	private async _createProject(baseName: string, prompt: string, professionId: string): Promise<void> {
 		if (this._busy) {
 			return;
 		}
@@ -265,15 +358,15 @@ export class StarterProjectGallery extends Disposable {
 		let folderUri: URI | undefined;
 		try {
 			const pending = this._pendingFolder;
-			if (pending && pending.prompt === prompt && dirname(pending.uri).toString() === this._parentUri.toString()) {
+			if (pending && pending.prompt === prompt && pending.professionId === professionId && dirname(pending.uri).toString() === this._parentUri.toString()) {
 				folderUri = pending.uri;
 			} else {
 				folderUri = await this._findFreeFolder(baseName);
 				await this._fileService.createFolder(folderUri);
-				this._pendingFolder = { uri: folderUri, prompt };
+				this._pendingFolder = { uri: folderUri, prompt, professionId };
 			}
 			this._status.textContent = localize('starterProjects.starting', "Папка {0} создана. Запускаем агента…", folderUri.fsPath);
-			await this._startProject(folderUri, prompt);
+			await this._startProject(folderUri, prompt, professionId);
 			this._pendingFolder = undefined;
 			this._ideaInput.value = '';
 			this._status.textContent = '';

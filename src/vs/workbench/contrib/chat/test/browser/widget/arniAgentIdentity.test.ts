@@ -9,7 +9,7 @@ import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { upcastPartial } from '../../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { getArniAgentIdentity, getArniConversationParticipants, getArniResponseAuthor, getArniResponseParticipants } from '../../../common/arniAgentIdentity.js';
+import { getArniAgentIdentity, getArniConversationParticipants, getArniResponseAuthor, getArniResponseParticipants, resolveArniAgentAlias } from '../../../common/arniAgentIdentity.js';
 import { renderArniAgentIdentity } from '../../../browser/widget/arniAgentIdentityWidget.js';
 import { IChatToolInvocationSerialized } from '../../../common/chatService/chatService.js';
 import { IChatProgressResponseContent, IChatRequestModel, IChatResponseModel, IResponse } from '../../../common/model/chatModel.js';
@@ -17,6 +17,13 @@ import { ChatModeKind } from '../../../common/constants.js';
 
 suite('Arni agent identity', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('materialized profession aliases resolve only when unique; unrelated profiles are not guessed', () => {
+		const source = 'file:///bundled/agents/researcher.agent.md';
+		const hosted = { uri: 'file:///synced-plugin/agents/researcher.agent.md', name: 'researcher' };
+		assert.strictEqual(resolveArniAgentAlias([hosted], source), hosted);
+		assert.strictEqual(resolveArniAgentAlias([hosted, { ...hosted, uri: 'file:///project/agents/researcher.agent.md' }], source), undefined);
+		assert.strictEqual(resolveArniAgentAlias([hosted], 'file:///other/agents/custom.agent.md'), undefined);
+	});
 	function response(name: string, parts: IChatProgressResponseContent[] = [{ kind: 'markdownContent', content: new MarkdownString('Done') }]): Pick<IChatResponseModel, 'request' | 'response'> {
 		return {
 			request: upcastPartial<IChatRequestModel>({ modeInfo: { kind: ChatModeKind.Agent, isBuiltin: false, modeInstructions: { name, content: '', toolReferences: [] }, telemetryModeId: 'custom', applyCodeBlockSuggestionId: undefined } }),
