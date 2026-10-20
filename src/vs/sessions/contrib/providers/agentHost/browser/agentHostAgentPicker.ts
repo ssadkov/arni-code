@@ -10,6 +10,7 @@ import * as nls from '../../../../../nls.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { agentHostAgentPickerStorageKey, resolveAgentHostAgent } from '../../../../../platform/agentHost/common/customAgents.js';
+import { resolveArniAgentAlias } from '../../../../../workbench/contrib/chat/common/arniAgentIdentity.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
@@ -227,6 +228,18 @@ class AgentHostAgentPickerContribution extends Disposable implements IWorkbenchC
 			? this.storageService.get(agentHostAgentPickerStorageKey(session.resource.scheme), StorageScope.PROFILE)
 			: undefined;
 		const resolved = resolveAgentHostAgent(agents, selectedAgentUri, storedUri);
+		// The first turn can replace a client source URI with a host materialized
+		// profile URI. Keep the known profession only if the mapping is unique.
+		const materialized = selectedAgentUri && !agents.some(agent => agent.uri === selectedAgentUri) ? resolveArniAgentAlias(agents, selectedAgentUri) : undefined;
+		if (materialized) {
+			beginInternalSet();
+			try {
+				this._setAgent(session, provider, materialized);
+			} finally {
+				endInternalSet();
+			}
+			return;
+		}
 
 		if (!selectedAgentUri && isUntitled && resolved) {
 			beginInternalSet();

@@ -227,3 +227,10 @@
 	gap: 0 6px;
 	color: var(--vscode-descriptionForeground);
 }
+
+.starter-project-card-profession {
+	margin-top: auto;
+	padding-top: var(--vscode-spacing-size40, 4px);
+	font-size: var(--vscode-bodyFontSize-small, 12px);
+	color: var(--vscode-descriptionForeground);
+}

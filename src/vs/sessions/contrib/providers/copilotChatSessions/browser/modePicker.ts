@@ -362,7 +362,7 @@ export class ModePicker extends Disposable {
 				const profession = getArniAgentIdentity(mode.name.get(), mode.id);
 				items.push({
 					kind: ActionListItemKind.Action,
-					label: mode.label.get(),
+					label: profession?.name ?? mode.label.get(),
 					group: { title: '', icon: profession?.icon ?? (selectedModeId === mode.id ? Codicon.check : Codicon.blank) },
 					description: profession && selectedModeId === mode.id ? localize('modePicker.selectedProfession', 'Выбран') : undefined,
 					item: { kind: 'mode', mode },
@@ -396,14 +396,15 @@ export class ModePicker extends Disposable {
 		dom.clearNode(this._triggerElement);
 
 		const selectedMode = this._modePickerModel.selectedMode;
-		const icon = getArniAgentIdentity(selectedMode.name.get(), selectedMode.id)?.icon ?? selectedMode.icon.get();
+		const profession = getArniAgentIdentity(selectedMode.name.get(), selectedMode.id);
+		const icon = profession?.icon ?? selectedMode.icon.get();
 		if (icon) {
 			dom.append(this._triggerElement, renderIcon(icon));
 		}
 
 		const labelSpan = dom.append(this._triggerElement, dom.$('span.sessions-chat-dropdown-label'));
-		labelSpan.textContent = selectedMode.label.get();
+		labelSpan.textContent = profession?.name ?? selectedMode.label.get();
 
-		this._triggerElement.ariaLabel = localize('modePicker.triggerAriaLabel', "Pick Mode, {0}", selectedMode.label.get());
+		this._triggerElement.ariaLabel = localize('modePicker.triggerAriaLabel', "Pick Mode, {0}", profession?.name ?? selectedMode.label.get());
 	}
 }
