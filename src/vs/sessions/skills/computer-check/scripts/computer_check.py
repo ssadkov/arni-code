@@ -17,7 +17,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 LIMIT = 150
 
 
@@ -82,8 +82,53 @@ Section 'disks' { @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Se
 Section 'processes' { @(Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 8 ProcessName,WorkingSet64) }
 Section 'startup' { @(Get-CimInstance Win32_StartupCommand | Select-Object -First 150 Name,Location) }
 Section 'tasks' { @(Get-ScheduledTask | Where-Object { @($_.Triggers | Where-Object { $_.CimClass.CimClassName -in @('MSFT_TaskBootTrigger','MSFT_TaskLogonTrigger') }).Count -gt 0 } | Select-Object -First 150 TaskName,@{Name='State';Expression={$_.State.ToString()}}) }
+Section 'approvals' {
+    @(foreach ($scope in @('HKCU','HKLM')) {
+        foreach ($kind in @('Run','Run32','StartupFolder')) {
+            $source = $scope + ':' + $kind
+            $path = $scope + ':\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\' + $kind
+            try {
+                $key = Get-Item -LiteralPath $path -ErrorAction Stop
+                $names = @($key.GetValueNames() | Select-Object -First 151)
+                $records = @(foreach ($name in ($names | Select-Object -First 150)) {
+                    $value = $key.GetValue($name)
+                    $code = $null
+                    if ($value -is [byte[]] -and $value.Length -gt 0) { $code = [int]$value[0] }
+                    @{name=$name;code=$code}
+                })
+                @{source=$source;status='ok';truncated=($names.Count -gt 150);records=$records}
+            } catch [System.Management.Automation.ItemNotFoundException] {
+                @{source=$source;status='absent';records=@()}
+            } catch {
+                @{source=$source;status='unavailable';records=@()}
+            }
+        }
+    })
+}
 $result | ConvertTo-Json -Depth 8 -Compress
 """
+
+
+def windows_approvals(section):
+    # These registry flags are hints, not proof of execution or an OS API contract.
+    allowed = {scope + ':' + kind for scope in ('HKCU', 'HKLM') for kind in ('Run', 'Run32', 'StartupFolder')}
+    coverage = {source: 'unavailable' for source in sorted(allowed)}
+    records = []
+    if section.get('status') != 'ok':
+        return records, coverage
+    for group in rows(section.get('data')):
+        source = group.get('source')
+        if source not in allowed:
+            continue
+        status = group.get('status')
+        coverage[source] = 'bounded' if status == 'ok' and group.get('truncated') else status if status in ('ok', 'absent') else 'unavailable'
+        if status != 'ok':
+            continue
+        for item in rows(group.get('records'))[:LIMIT]:
+            code = number(item.get('code'))
+            hint = 'enabled_hint' if code in (2, 6) else 'disabled_hint' if code in (3, 7) else 'unknown'
+            records.append({'name': text(item.get('name')), 'source': source, 'code': code, 'state_hint': hint})
+    return records, coverage
 
 
 def windows(run_command=run):
@@ -125,9 +170,11 @@ def windows(run_command=run):
     if tasks.get("status") == "ok":
         items += [{"name": text(item.get("TaskName")), "source": "boot_logon_task", "state": text(item.get("State"))} for item in rows(tasks.get("data"))[:LIMIT]]
     coverage = {"Win32_StartupCommand": startup.get("status", "unavailable"), "boot_logon_tasks": tasks.get("status", "unavailable")}
+    approvals, approval_coverage = windows_approvals(raw.get('approvals') or {})
     return {"hardware": hardware, "disks": disks, "processes": processes,
             "startup": {"status": "partial", "data": items, "coverage": coverage,
-                        "limit_per_source": LIMIT, "not_checked": ["modern_startup_registrations", "all_users_and_services", "startup_approval_enabled_state"]}}
+                        "approval_records": approvals, "approval_coverage": approval_coverage,
+                        "limit_per_source": LIMIT, "not_checked": ["modern_startup_registrations", "all_users_and_services", "effective_startup_execution", "other_users_startup_approval"]}}
 
 
 def mac_hardware(run_command):
@@ -226,6 +273,7 @@ def redact(value, home=None):
     value = re.sub(re.escape(home), "<home>", value, flags=re.I) if home else value
     value = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "<email>", value)
     value = re.sub(r"\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b", "<id>", value, flags=re.I)
+    value = re.sub(r"\bS-\d+-\d+(?:-\d+)+\b", "<sid>", value, flags=re.I)
     return re.sub(r"[\x00-\x1f\x7f]", " ", value)[:200]
 
 
@@ -257,7 +305,8 @@ def main():
                   "not_supported": ["cleanup", "startup_changes", "installation", "malware_or_ssd_health_scan", "document_scan"]}
     else:
         report = check()
-    output = json.dumps(report, ensure_ascii=True, indent=2) + "\n"
+    # Compact ASCII JSON avoids code-page failures and unnecessary tool-output paging.
+    output = json.dumps(report, ensure_ascii=True, separators=(",", ":")) + "\n"
     if args.output:
         with args.output.open("x", encoding="utf-8") as handle:
             handle.write(output)

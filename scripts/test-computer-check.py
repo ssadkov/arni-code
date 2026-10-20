@@ -55,6 +55,37 @@ class ComputerCheckTest(unittest.TestCase):
         self.assertNotIn("SENTINEL", json.dumps(report))
         self.assertTrue(all(section["status"] == "unavailable" for section in report["sections"].values()))
 
+    def test_windows_startup_hints_keep_scope_unknown_codes_and_coverage(self):
+        fixture = {'approvals': {'status': 'ok', 'data': [
+            {'source': 'HKCU:Run', 'status': 'ok', 'records': [
+                {'name': 'Same app', 'code': 3, 'Command': 'PRIVATE-SENTINEL'},
+                {'name': 'Unspecified', 'code': 1}, {'name': 'Other', 'code': None}]},
+            {'source': 'HKLM:Run', 'status': 'ok', 'records': [{'name': 'Same app', 'code': 2}]},
+            {'source': 'HKCU:Run32', 'status': 'absent', 'records': []},
+            {'source': 'HKLM:Run32', 'status': 'unavailable', 'records': []},
+            {'source': 'OTHER-PRIVATE-SENTINEL', 'status': 'ok', 'records': [{'name': 'PRIVATE-SENTINEL', 'code': 2}]},
+        ]}}
+        report = skill.check('Windows', lambda argv, **kwargs: json.dumps(fixture))
+        startup = report['sections']['startup']
+        self.assertEqual([(row['source'], row['state_hint']) for row in startup['approval_records']], [
+            ('HKCU:Run', 'disabled_hint'), ('HKCU:Run', 'unknown'), ('HKCU:Run', 'unknown'), ('HKLM:Run', 'enabled_hint')])
+        self.assertEqual(startup['approval_coverage']['HKCU:Run32'], 'absent')
+        self.assertEqual(startup['approval_coverage']['HKLM:Run32'], 'unavailable')
+        self.assertEqual(startup['approval_coverage']['HKCU:StartupFolder'], 'unavailable')
+        self.assertIn('effective_startup_execution', startup['not_checked'])
+        self.assertNotIn('SENTINEL', json.dumps(report))
+
+    def test_windows_startup_hints_are_bounded_and_unavailable_is_not_empty_success(self):
+        records, coverage = skill.windows_approvals({'status': 'ok', 'data': [
+            {'source': 'HKCU:StartupFolder', 'status': 'ok', 'truncated': True,
+             'records': [{'name': str(i), 'code': 6} for i in range(skill.LIMIT + 1)]}]})
+        self.assertEqual(len(records), skill.LIMIT)
+        self.assertEqual(coverage['HKCU:StartupFolder'], 'bounded')
+        self.assertTrue(all(row['state_hint'] == 'enabled_hint' for row in records))
+        records, coverage = skill.windows_approvals({'status': 'unavailable'})
+        self.assertEqual(records, [])
+        self.assertTrue(all(status == 'unavailable' for status in coverage.values()))
+
     def test_macos_hardware_df_and_process_fixture(self):
         fixtures = {
             "/usr/sbin/system_profiler": json.dumps({"SPHardwareDataType": [{"machine_name": "MacBook Air", "machine_model": "Mac16,1", "chip_type": "Apple M4", "serial_number": "SERIAL-SENTINEL", "platform_UUID": "UUID-SENTINEL"}], "SPDisplaysDataType": [{"sppci_model": "Apple M4", "displays": [{"serial": "DISPLAY-SENTINEL"}]}]}),
@@ -97,9 +128,9 @@ class ComputerCheckTest(unittest.TestCase):
             self.assertIn("enabled_state", report["not_checked"])
 
     def test_redaction_and_invalid_disk_values(self):
-        sample = {"items": [r"C:\Users\Example\secret", "person@example.test", "00112233-4455-6677-8899-aabbccddeeff", "line\nlabel"]}
+        sample = {"items": [r"C:\Users\Example\secret", "person@example.test", "00112233-4455-6677-8899-aabbccddeeff", "line\nlabel", "Task-S-1-5-21-111111-222222-333333-1001", "s-1-5-18"]}
         redacted = skill.redact(sample, r"C:\Users\Example")
-        self.assertEqual(redacted["items"], [r"<home>\secret", "<email>", "<id>", "line label"])
+        self.assertEqual(redacted["items"], [r"<home>\secret", "<email>", "<id>", "line label", "Task-<sid>", "<sid>"])
         self.assertIsNone(skill.disk("bad", 0, 5)["low_space"])
         self.assertIsNone(skill.disk("bad", 10, 11)["free_percent"])
         self.assertFalse(skill.disk("small_volume", 8 * 1024**3, 2 * 1024**3)["low_space"])
@@ -117,6 +148,16 @@ class ComputerCheckTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(path.read_bytes(), before)
 
+    def test_compact_json_preserves_unicode_and_redacts_task_sids(self):
+        fixture = {'tasks': {'status': 'ok', 'data': [{'TaskName': 'Задача-S-1-5-21-111-222-333-1001', 'State': 'Ready'}]}}
+        report = skill.check('Windows', lambda argv, **kwargs: json.dumps(fixture))
+        with patch.object(sys, 'argv', [str(HELPER), 'check']), patch.object(skill, 'check', return_value=report), patch('builtins.print') as output:
+            skill.main()
+        emitted = output.call_args.args[0]
+        self.assertEqual(len(emitted.splitlines()), 1)
+        self.assertEqual(json.loads(emitted), report)
+        self.assertEqual(report['sections']['startup']['data'][0]['name'], 'Задача-<sid>')
+
     @unittest.skipUnless(os.environ.get("ARNI_TEST_NATIVE") == "1", "Native system inventory is explicitly opted in")
     def test_native_inventory(self):
         report = skill.check()
@@ -125,6 +166,9 @@ class ComputerCheckTest(unittest.TestCase):
         self.assertEqual(report["sections"]["disks"]["status"], "ok")
         self.assertGreater(report["sections"]["hardware"]["data"]["memory_total_bytes"], 0)
         self.assertTrue(report["sections"]["hardware"]["data"]["cpu"])
+        if platform.system() == 'Windows':
+            self.assertEqual(len(report['sections']['startup']['approval_coverage']), 6)
+            self.assertTrue(any(state in ('ok', 'absent', 'bounded') for state in report['sections']['startup']['approval_coverage'].values()))
         print("Native computer-check passed for " + platform.system() + "; private inventory omitted from test output.")
 
 
