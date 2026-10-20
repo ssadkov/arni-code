@@ -2853,6 +2853,7 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 				toolId: toolData.id,
 				parameters,
 				context: contextSessionResource ? { sessionResource: contextSessionResource } : undefined,
+				chatRequestId: request.turnId,
 				chatStreamToolCallId: toolCall.toolCallId,
 				preApproved: toolCall.status === ToolCallStatus.PendingConfirmation ? undefined : getClientToolPreApproval(toolCall),
 			}, async () => 0, token);
@@ -2877,6 +2878,13 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			result: toolResultToProtocol(result ?? { content: [] }, toolName),
 			...completionMeta,
 		});
+		if (toolData.source.type === 'internal' && result?.stopCurrentTurn) {
+			this._config.connection.dispatch(chatURI, {
+				type: ActionType.ChatTurnCancelled,
+				turnId: request.turnId,
+				duration: this._turnDuration(chatURI, request.turnId),
+			});
+		}
 	}
 
 	/**

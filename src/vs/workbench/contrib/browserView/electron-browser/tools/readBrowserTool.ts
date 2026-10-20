@@ -12,13 +12,14 @@ import { ToolDataSource, type CountTokensCallback, type IPreparedToolInvocation,
 import { createBrowserPageLink, errorResult, getSessionId } from './browserToolHelpers.js';
 import { BrowserChatToolReferenceName } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 import { OpenPageToolId } from './openBrowserTool.js';
+import { IBrowserToolProgress } from './browserToolProgress.js';
 
 export const ReadBrowserToolData: IToolData = {
 	id: 'read_page',
 	toolReferenceName: BrowserChatToolReferenceName.ReadPage,
 	displayName: localize('readBrowserTool.displayName', 'Read Page'),
 	userDescription: localize('readBrowserTool.userDescription', 'Read the content of a browser page'),
-	modelDescription: 'Get a snapshot of the current browser page state. This is better than screenshot.',
+	modelDescription: 'Get a snapshot of the current browser page state. Use its ref values for clicks and text input. Do not keep reading the same unchanged page: repeated reads stop the turn. If a Start/Next button is visible, inspect it and use its current ref to open the questions.',
 	icon: Codicon.fileText,
 	source: ToolDataSource.Internal,
 	inputSchema: {
@@ -40,6 +41,7 @@ interface IReadBrowserToolParams {
 export class ReadBrowserTool implements IToolImpl {
 	constructor(
 		@IPlaywrightService private readonly playwrightService: IPlaywrightService,
+		@IBrowserToolProgress private readonly browserProgress: IBrowserToolProgress,
 	) { }
 
 	async prepareToolInvocation(_context: IToolInvocationPreparationContext, _token: CancellationToken): Promise<IPreparedToolInvocation | undefined> {
@@ -51,6 +53,7 @@ export class ReadBrowserTool implements IToolImpl {
 	}
 
 	async invoke(invocation: IToolInvocation, _countTokens: CountTokensCallback, _progress: ToolProgress, _token: CancellationToken): Promise<IToolResult> {
+		if (_token.isCancellationRequested) { return errorResult('Browser read cancelled.'); }
 		const params = invocation.parameters as IReadBrowserToolParams;
 		const sessionId = getSessionId(invocation);
 
@@ -62,6 +65,8 @@ export class ReadBrowserTool implements IToolImpl {
 		if (!summary) {
 			return errorResult('No page summary available.');
 		}
+		const stopped = this.browserProgress.read(invocation, params.pageId, summary);
+		if (stopped) { return stopped; }
 
 		return {
 			content: [{

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import { Action } from '../../../../../base/common/actions.js';
 import { IManagedHover } from '../../../../../base/browser/ui/hover/hover.js';
 import { mainWindow } from '../../../../../base/browser/window.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -19,12 +20,25 @@ import { TestThemeService } from '../../../../../platform/theme/test/common/test
 import { ChatPetAccessoryId, ChatPetAccessoryIds, ChatPetAchievementId, ChatPetAchievementIds } from '../../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
 import { ChatPetVariant, IChatPetService } from '../../../../../workbench/contrib/chat/browser/chatPetService.js';
 import { Menus } from '../../../../browser/menus.js';
-import { shouldShowAccountPanelSummary } from '../../browser/account.contribution.js';
+import { renderAccountPanelActions, shouldShowAccountPanelSummary } from '../../browser/account.contribution.js';
 import { getSessionsChatPetAchievementBadges, SessionsChatPetAchievementBadges } from '../../browser/chatPetAchievementBadges.js';
 
 suite('Sessions - Account Menu', () => {
 
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('renders personal card as a visible clickable account menu action', async () => {
+		const panel = mainWindow.document.createElement('div');
+		let opened = false;
+		let closed = false;
+		const action = store.add(new Action('arni.openUserProfile', 'Мои данные', undefined, true, async () => { opened = true; }));
+		renderAccountPanelActions(panel, [action], [], store, () => { closed = true; });
+		const link = panel.querySelector<HTMLElement>('.action-label');
+		assert.strictEqual(link?.textContent, 'Мои данные');
+		link!.click();
+		await Promise.resolve();
+		assert.deepStrictEqual({ opened, closed }, { opened: true, closed: true });
+	});
 
 	test('labels the signed-out Yandex account action', () => {
 		const signIn = MenuRegistry.getMenuItems(Menus.AccountMenu)
