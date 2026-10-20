@@ -29,6 +29,7 @@ import type { IActiveSession } from '../../../../services/sessions/common/sessio
 import { reportNewChatPickerClosed } from '../../../chat/browser/newChatPickerTelemetry.js';
 import { CopilotCLISessionType } from '../../agentHost/browser/baseAgentHostSessionsProvider.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { getArniAgentIdentity } from '../../../../../workbench/contrib/chat/common/arniAgentIdentity.js';
 
 interface IModePickerItem {
 	readonly kind: 'mode';
@@ -358,10 +359,12 @@ export class ModePicker extends Disposable {
 		if (customModes.length > 0) {
 			items.push({ kind: ActionListItemKind.Separator, label: '' });
 			for (const mode of customModes) {
+				const profession = getArniAgentIdentity(mode.name.get(), mode.id);
 				items.push({
 					kind: ActionListItemKind.Action,
 					label: mode.label.get(),
-					group: { title: '', icon: selectedModeId === mode.id ? Codicon.check : Codicon.blank },
+					group: { title: '', icon: profession?.icon ?? (selectedModeId === mode.id ? Codicon.check : Codicon.blank) },
+					description: profession && selectedModeId === mode.id ? localize('modePicker.selectedProfession', 'Выбран') : undefined,
 					item: { kind: 'mode', mode },
 				});
 			}
@@ -393,7 +396,7 @@ export class ModePicker extends Disposable {
 		dom.clearNode(this._triggerElement);
 
 		const selectedMode = this._modePickerModel.selectedMode;
-		const icon = selectedMode.icon.get();
+		const icon = getArniAgentIdentity(selectedMode.name.get(), selectedMode.id)?.icon ?? selectedMode.icon.get();
 		if (icon) {
 			dom.append(this._triggerElement, renderIcon(icon));
 		}

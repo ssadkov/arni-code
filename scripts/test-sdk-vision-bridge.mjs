@@ -76,10 +76,10 @@ try {
 	assert.equal(calls, 2, 'Expected a tool call and one completion');
 	assert.equal(receivedImages, 1, 'The SDK must retain the tool image with the actual launcher token limits');
 	assert.equal(reply?.data.content, 'Кадр просмотрен.', 'Hooks must not stall final reply and session.idle notifications');
-	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor', 'secretary'].map(name => ({
+	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor', 'secretary', 'sysadmin'].map(name => ({
 		name, uri: URI.file(path.join(root, 'src/vs/sessions/agents', name + '.agent.md')),
 	})), { readFile: async uri => ({ value: await fs.readFile(uri.fsPath, 'utf8') }) });
-	assert.equal(customAgents.length, 3);
+	assert.equal(customAgents.length, 4);
 	for (const agent of customAgents) {
 		const skillDirectories = (agent.skills ?? []).map(name => path.join(root, 'src/vs/sessions/skills', name));
 		const selected = await client.createSession({ ...config, model: 'audit/vision', customAgents, agent: agent.name,
@@ -88,8 +88,8 @@ try {
 		const answer = await selected.sendAndWait({ prompt: 'Reply done without tools.' }, 30000);
 		assert.equal(answer?.data.content, 'Кадр просмотрен.');
 		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split(/\r?\n/)[0]), 'The selected profession instructions must reach the model');
-		if (agent.name === 'Секретарь') {
-			assert.deepEqual(agent.skills, ['user-profile', 'fill-form']);
+		if (agent.name === 'Секретарь' || agent.name === 'Сисадмин') {
+			assert.deepEqual(agent.skills, agent.name === 'Секретарь' ? ['user-profile', 'fill-form'] : ['computer-check']);
 			const request = JSON.stringify(JSON.parse(receivedRequests.at(-1))).replace(/\\r/g, '');
 			for (const directory of skillDirectories) {
 				const source = await fs.readFile(path.join(directory, 'SKILL.md'), 'utf8');
@@ -98,7 +98,7 @@ try {
 			}
 		}
 	}
-	console.log('SDK vision/professions passed: tool image retained, hooks completed, three profiles delivered and Secretary skills eagerly loaded without model tool calls; local HTTP only.');
+	console.log('SDK vision/professions passed: tool image retained, hooks completed, four profiles delivered and Secretary/Sysadmin skills eagerly loaded without model tool calls; local HTTP only.');
 } finally {
 	await client.stop();
 	await new Promise(resolve => server.close(resolve));

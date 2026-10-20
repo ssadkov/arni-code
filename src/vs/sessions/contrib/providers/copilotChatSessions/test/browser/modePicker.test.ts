@@ -169,6 +169,30 @@ suite('ScopedModePickerModelCache', () => {
 suite('ModePicker', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('shows the Sysadmin icon in both the trigger and the selected menu row', () => {
+		const mode = new CustomChatMode({ id: 'sysadmin', uri: URI.parse('file:///workspace/sysadmin.agent.md'), name: 'Сисадмин', agentInstructions: { content: '', toolReferences: [] }, source: { storage: PromptsStorage.local }, target: Target.Undefined, visibility: { userInvocable: true, agentInvocable: true }, enabled: true });
+		let row: IActionListItem<unknown> | undefined;
+		const picker = store.add(new ModePicker(
+			new class extends mock<ModePickerModel>() {
+				override readonly onDidChange = Event.None;
+				override get selectedMode() { return mode; }
+				override getAvailableModes() { return [ChatMode.Agent, mode]; }
+			}(),
+			observableValue<IActiveSession | undefined>('scope', undefined),
+			new class extends mock<IActionWidgetService>() {
+				override readonly isVisible = false;
+				override show<T>(_user: string, _supportsPreview: boolean, items: readonly IActionListItem<T>[]): void { row = items.find(item => item.label === 'Сисадмин'); }
+			}(),
+			new class extends mock<ICommandService>() { }(),
+			new TestTelemetryService(),
+			new class extends mock<IChatService>() { }(),
+		));
+		const container = document.createElement('div');
+		picker.render(container);
+		container.querySelector<HTMLElement>('a.action-label')!.click();
+		assert.deepStrictEqual({ icon: container.querySelector('.codicon-tools') !== null, label: container.textContent, menuIcon: row?.group?.icon?.id, selected: row?.description }, { icon: true, label: 'Сисадмин', menuIcon: 'tools', selected: 'Выбран' });
+	});
+
 	test('reports chat.modeChange for the scoped active chat', () => {
 		const telemetryService = new TestTelemetryService();
 		const sessionResource = URI.parse('agent-host-copilotcli:/session-1');
