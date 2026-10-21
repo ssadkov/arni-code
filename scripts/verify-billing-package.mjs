@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ARNI_LIBRARY_AGENTS, ARNI_LIBRARY_SKILLS } from '../src/vs/sessions/contrib/chat/common/arniSkillLibrary.ts';
+import { verifyPackagedCopilotRuntime } from './lib/packaged-copilot-runtime.mjs';
 
 const [app, output, architecture] = process.argv.slice(2);
 assert.ok(app && output && architecture, 'Pass app resources, manifest output, and architecture');
@@ -16,16 +17,7 @@ assert.equal(product.quality, 'stable', 'Update channel must be included');
 assert.equal(product.updateUrl, 'https://api.arnion.ru', 'The product update feed must be included');
 const extensions = [];
 const skills = [];
-const nativeRuntime = [];
-if (process.platform === 'darwin') {
-	const platform = `darwin-${architecture}`;
-	const runtimeRoot = path.join(app, 'node_modules.asar.unpacked', '@github', `copilot-${platform}`);
-	for (const file of ['index.js', 'app.js', `prebuilds/${platform}/runtime.node`, `prebuilds/${platform}/cli-native.node`, `prebuilds/${platform}/pty.node`, `prebuilds/${platform}/spawn-helper`]) {
-		const data = fs.readFileSync(path.join(runtimeRoot, file));
-		assert.ok(data.length, 'Missing or empty packaged runtime file: ' + file);
-		nativeRuntime.push({ file, sha256: crypto.createHash('sha256').update(data).digest('hex') });
-	}
-}
+const nativeRuntime = process.platform === 'darwin' ? verifyPackagedCopilotRuntime(app, architecture) : [];
 for (const name of ARNI_LIBRARY_SKILLS) {
 	const source = path.join(import.meta.dirname, '../src/vs/sessions/skills', name);
 	const version = fs.readFileSync(path.join(source, 'SKILL.md'), 'utf8').match(/^\s+version:\s*(\S+)/m)?.[1];
