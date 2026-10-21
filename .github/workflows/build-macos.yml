@@ -143,6 +143,10 @@ jobs:
           node test/unit/node/index.js --run src/vs/sessions/contrib/chat/test/browser/arniSkillLibrary.test.ts
           node test/unit/node/index.js --run src/vs/sessions/contrib/providers/agentHost/test/browser/agentHostAgents.test.ts
 
+      - name: Test native runtime packaging filters
+        if: ${{ !inputs.recover_signed_run }}
+        run: node --test build/lib/test/copilot.test.ts
+
       - name: Test media skill with native macOS FFmpeg
         if: ${{ !inputs.recover_signed_run }}
         run: |
@@ -297,6 +301,25 @@ jobs:
           grep -Fx "$(git rev-parse HEAD)" "$RUNNER_TEMP/cli-version.txt"
           grep -Fx "$VSCODE_ARCH" "$RUNNER_TEMP/cli-version.txt"
           cat "$RUNNER_TEMP/cli-version.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare SDK fixture for recovered signed app
+        if: inputs.recover_signed_run != ''
+        run: |
+          npm ci
+          npm run transpile-client
+
+      - name: Verify packaged agent startup, tool images and completion
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/$APP_NAME/Contents/Info.plist")
+          PACKAGED_CLI="$APP_DIR/$APP_NAME/Contents/Resources/app/node_modules.asar.unpacked/@github/copilot-darwin-$VSCODE_ARCH/index.js"
+          # Run with the shipped Electron executable and the shipped CLI/native
+          # payload, not the checkout runtime. The model is a local HTTP fixture.
+          ELECTRON_RUN_AS_NODE=1 "$APP_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE" \
+            "$GITHUB_WORKSPACE/scripts/test-sdk-vision-bridge.mjs" "$PACKAGED_CLI" \
+            | tee "artifacts/macos/agent-smoke-$VSCODE_ARCH.txt"
+          cat "artifacts/macos/agent-smoke-$VSCODE_ARCH.txt" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package zip
         id: package_zip

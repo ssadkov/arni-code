@@ -16,6 +16,16 @@ assert.equal(product.quality, 'stable', 'Update channel must be included');
 assert.equal(product.updateUrl, 'https://api.arnion.ru', 'The product update feed must be included');
 const extensions = [];
 const skills = [];
+const nativeRuntime = [];
+if (process.platform === 'darwin') {
+	const platform = `darwin-${architecture}`;
+	const runtimeRoot = path.join(app, 'node_modules.asar.unpacked', '@github', `copilot-${platform}`);
+	for (const file of ['index.js', 'app.js', `prebuilds/${platform}/runtime.node`, `prebuilds/${platform}/cli-native.node`, `prebuilds/${platform}/pty.node`, `prebuilds/${platform}/spawn-helper`]) {
+		const data = fs.readFileSync(path.join(runtimeRoot, file));
+		assert.ok(data.length, 'Missing or empty packaged runtime file: ' + file);
+		nativeRuntime.push({ file, sha256: crypto.createHash('sha256').update(data).digest('hex') });
+	}
+}
 for (const name of ARNI_LIBRARY_SKILLS) {
 	const source = path.join(import.meta.dirname, '../src/vs/sessions/skills', name);
 	const version = fs.readFileSync(path.join(source, 'SKILL.md'), 'utf8').match(/^\s+version:\s*(\S+)/m)?.[1];
@@ -52,5 +62,5 @@ for (const name of ['copilot', 'arni-agent', 'yandex-authentication', 'vk-authen
 	extensions.push({ name, version: manifest.version, sha256: crypto.createHash('sha256').update(bundle).digest('hex') });
 }
 fs.mkdirSync(path.dirname(output), { recursive: true });
-fs.writeFileSync(output, JSON.stringify({ commit: product.commit, version: product.version, quality: product.quality, updateUrl: product.updateUrl, architecture, builtAt: new Date().toISOString(), extensions, skills, professions }, null, 2) + '\n');
+fs.writeFileSync(output, JSON.stringify({ commit: product.commit, version: product.version, quality: product.quality, updateUrl: product.updateUrl, architecture, builtAt: new Date().toISOString(), extensions, skills, professions, nativeRuntime }, null, 2) + '\n');
 console.log('Verified packaged billing client, authentication extensions and commit: ' + product.commit);

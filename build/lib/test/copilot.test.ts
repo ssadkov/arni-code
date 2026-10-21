@@ -161,12 +161,17 @@ suite('copilot', () => {
 			'sdk/index.js',
 			'sea-loader.js',
 			'prebuilds/darwin-arm64/runtime.node',
+			'prebuilds/darwin-arm64/cli-native.node',
 			'prebuilds/darwin-arm64/pty.node',
 			'prebuilds/darwin-arm64/spawn-helper',
 		]);
 		assertCopilotStandaloneExecutableExcluded(files, 'node_modules/@github/copilot-darwin-arm64');
 		assertCopilotOutOfProcessRuntimeExecutablesExcluded(files, 'node_modules/@github/copilot-darwin-arm64');
 		assertOptionalCopilotNativeDependenciesExcluded(files, 'node_modules/@github/copilot-darwin-arm64');
+		assertCopilotPlatformPackageIncludes(getCopilotRuntimePrebuildFiles('darwin', 'x64'), 'node_modules/@github/copilot-darwin-x64', [
+			'prebuilds/darwin-x64/cli-native.node',
+			'prebuilds/darwin-x64/runtime.node',
+		]);
 	});
 
 	test('materializes missing target platform packages from the lockfile', () => {
@@ -423,7 +428,7 @@ function assertOptionalCopilotNativeDependenciesExcluded(patterns: string[], pac
 	assert(patterns.includes(`!${packageDir}/prebuilds/*/mediaremote-adapter/**`), 'mediaremote-adapter');
 	assert(!matchesGlob(`${packageDir}/prebuilds/darwin-arm64/mediaremote-adapter/MediaRemoteAdapter.framework/MediaRemoteAdapter`, patterns), 'mediaremote-adapter');
 
-	if (!packageDir.includes('win32')) {
+	if (!packageDir.includes('win32') && !packageDir.includes('darwin')) {
 		assert(patterns.includes(`!${packageDir}/prebuilds/*/cli-native.node`), 'cli-native.node');
 		assert(!matchesGlob(`${packageDir}/prebuilds/linux-x64/cli-native.node`, patterns), 'cli-native.node');
 	}
