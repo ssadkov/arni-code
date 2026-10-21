@@ -314,6 +314,9 @@ jobs:
         timeout-minutes: 3
         run: |
           set -euo pipefail
+          # Signing changes native Mach-O bytes: publish hashes of the final
+          # signed payload rather than the earlier fail-fast inspection.
+          GITHUB_SHA="$(git rev-parse HEAD)" node scripts/verify-billing-package.mjs "$APP_DIR/$APP_NAME/Contents/Resources/app" "artifacts/macos/build-manifest-$VSCODE_ARCH.json" "$VSCODE_ARCH"
           EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/$APP_NAME/Contents/Info.plist")
           PACKAGED_CLI="$APP_DIR/$APP_NAME/Contents/Resources/app/node_modules.asar.unpacked/@github/copilot-darwin-$VSCODE_ARCH/index.js"
           # Run with the shipped Electron executable and the shipped CLI/native
