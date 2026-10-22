@@ -321,7 +321,7 @@ jobs:
           PACKAGED_CLI="$APP_DIR/$APP_NAME/Contents/Resources/app/node_modules.asar.unpacked/@github/copilot-darwin-$VSCODE_ARCH/index.js"
           # Run with the shipped Electron executable and the shipped CLI/native
           # payload, not the checkout runtime. The model is a local HTTP fixture.
-          ELECTRON_RUN_AS_NODE=1 "$APP_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE" \
+          ELECTRON_RUN_AS_NODE=1 COPILOT_CLI_RUN_AS_NODE=1 "$APP_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE" \
             "$GITHUB_WORKSPACE/scripts/test-sdk-vision-bridge.mjs" "$PACKAGED_CLI" \
             | tee "artifacts/macos/agent-smoke-$VSCODE_ARCH.txt"
           cat "artifacts/macos/agent-smoke-$VSCODE_ARCH.txt" >> "$GITHUB_STEP_SUMMARY"
