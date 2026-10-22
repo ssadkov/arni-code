@@ -190,7 +190,7 @@ suite('ModePicker', () => {
 		const container = document.createElement('div');
 		picker.render(container);
 		container.querySelector<HTMLElement>('a.action-label')!.click();
-		assert.deepStrictEqual({ icon: container.querySelector('.codicon-tools') !== null, label: container.textContent, menuIcon: row?.group?.icon?.id, selected: row?.description }, { icon: true, label: 'Сисадмин', menuIcon: 'tools', selected: 'Выбран' });
+		assert.deepStrictEqual({ icon: container.querySelector('.codicon-tools') !== null, label: container.textContent, menuIcon: row?.group?.icon?.id, selected: row?.description, detail: row?.detail }, { icon: true, label: 'Сисадмин', menuIcon: 'tools', selected: 'Выбран', detail: 'Когда выбрать: Проверить компьютер, диски и автозагрузку' });
 	});
 
 	test('reports chat.modeChange for the scoped active chat', () => {

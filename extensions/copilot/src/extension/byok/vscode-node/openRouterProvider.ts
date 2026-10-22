@@ -653,8 +653,10 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			...(openRouterModelData.architecture?.input_modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : []),
 			...(openRouterModelData.arni_cache ? [vscode.l10n.t('Кэш')] : []),
 		].join(' · ') : '';
+		const source = openRouterModelData.arni_provider === 'bedrock' ? 'AWS Bedrock' : openRouterModelData.arni_provider === 'openrouter' ? 'OpenRouter' : undefined;
+		const name = source ? vscode.l10n.t('{0} · {1}', source, openRouterModelData.name) : openRouterModelData.name;
 		return {
-			name: openRouterModelData.name + priceLabel + (labels ? ` · ${labels}` : ''),
+			name: name + priceLabel + (labels ? ` · ${labels}` : ''),
 			toolCalling: supportedParameters.includes('tools'),
 			vision: openRouterModelData.architecture?.input_modalities?.includes('image') ?? false,
 			maxInputTokens: contextWindow - maxOutputTokens,

@@ -65,8 +65,16 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'test/vision:free', name: 'Vision', arni_provider: 'openrouter', arni_free: true,
 			architecture: { input_modalities: ['text', 'image'] }, context_length: 131072, supported_parameters: ['tools'],
 			top_provider: { context_length: 131072, max_completion_tokens: 4096 }, pricing: { prompt: '0', completion: '0' } });
-		expect(caps?.name).toBe('Vision · $0/$0 за 1М вх./вых. · Бесплатная · Изображения');
+		expect(caps?.name).toBe('OpenRouter · Vision · $0/$0 за 1М вх./вых. · Бесплатная · Изображения');
 		expect(caps?.vision).toBe(true);
+	});
+	it('labels AWS from backend metadata and does not infer a route from the model name', () => {
+		const data = { id: 'qwen/test', name: 'Qwen', context_length: 131072, top_provider: { context_length: 131072 } };
+		expect([
+			createProvider().resolveCapabilities({ ...data, arni_provider: 'bedrock' })?.name,
+			createProvider().resolveCapabilities({ ...data, arni_provider: 'openrouter' })?.name,
+			createProvider().resolveCapabilities(data)?.name,
+		]).toEqual(['AWS Bedrock · Qwen · Платная', 'OpenRouter · Qwen · Платная', 'Qwen']);
 	});
 	it('shows managed USD prices and preserves Qwen vision and effective limits', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'qwen.qwen3-vl-235b-a22b', name: 'Qwen3 VL', supported_parameters: ['tools'],
