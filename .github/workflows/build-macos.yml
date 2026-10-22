@@ -146,6 +146,9 @@ jobs:
         run: |
           npm run transpile-client
           node scripts/test-sdk-vision-bridge.mjs
+          python scripts/test-xlsx-runtime.py
+          node test/unit/node/index.js --run src/vs/platform/agentHost/test/node/spreadsheetAttachments.test.ts
+          node scripts/test-sdk-xlsx-attachments.mjs
           node test/unit/node/index.js --run src/vs/sessions/contrib/chat/test/browser/arniSkillLibrary.test.ts
           node test/unit/node/index.js --run src/vs/sessions/contrib/providers/agentHost/test/browser/agentHostAgents.test.ts
 

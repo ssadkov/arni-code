@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type Anthropic from '@anthropic-ai/sdk';
-import type { CopilotSession, CurrentToolMetadata, PermissionMode, PermissionRequest, SessionEvent, SessionEventHandler, SessionEventPayload, SessionEventType, Tool, ToolResultObject, TypedSessionEventHandler } from '@github/copilot-sdk';
+import type { CopilotSession, CurrentToolMetadata, MessageOptions, PermissionMode, PermissionRequest, SessionEvent, SessionEventHandler, SessionEventPayload, SessionEventType, Tool, ToolResultObject, TypedSessionEventHandler } from '@github/copilot-sdk';
 import type { CCAModel } from '@vscode/copilot-api';
 import assert from 'assert';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
@@ -2224,6 +2224,49 @@ suite('CopilotAgentSession', () => {
 				displayName: 'file:test.js',
 			}],
 		}]);
+	});
+
+	test('sends XLSX as a local snapshot reference instead of a binary SDK attachment', async () => {
+		const source = URI.file('/Desktop/Продажи за октябрь.xlsx');
+		const { session, mockSession, storedFileContents } = await createAgentSession(disposables, {
+			fileContents: { [source.fsPath]: 'synthetic-workbook' },
+			rootValues: { [AgentHostSandboxConfigKey.Sandbox]: { [AgentHostSandboxKey.Enabled]: AgentSandboxEnabledValue.On } },
+		});
+		await session.send('Analyse sales', [{ type: MessageAttachmentKind.Resource, uri: source.toString(), label: 'Продажи за октябрь.xlsx' }]);
+		const sent = mockSession.sendRequests[0] as MessageOptions;
+		assert.strictEqual(sent.attachments, undefined);
+		assert.match(sent.prompt, /spreadsheet-attachments.*\.xlsx/);
+		assert.ok([...storedFileContents.entries()].some(([key, value]) => key.includes('/spreadsheet-attachments/') && value === 'synthetic-workbook'));
+		const sandbox = mockSession.sandboxConfigUpdates.at(-1) as SandboxConfig;
+		assert.ok(sandbox.userPolicy?.filesystem?.readonlyPaths?.some(path => path.endsWith('spreadsheet-attachments')));
+		mockSession.messages = [{ id: 'xlsx-turn', parentId: null, timestamp: new Date().toISOString(), type: 'user.message',
+			data: { interactionId: 'xlsx-message', content: sent.prompt } }];
+		const restored = (await session.getMessages())[0].message;
+		assert.strictEqual(restored.text, 'Analyse sales');
+		assert.strictEqual(restored.attachments?.[0].label, 'Продажи за октябрь.xlsx');
+		const snapshot = URI.parse([...storedFileContents.keys()].find(key => key.includes('/spreadsheet-attachments/'))!);
+		const directory = snapshot.with({ path: snapshot.path.slice(0, snapshot.path.lastIndexOf('/')) });
+		const resumed = await createAgentSession(disposables, { resume: true, fileContents: { [directory.toString()]: 'snapshot-directory' },
+			rootValues: { [AgentHostSandboxConfigKey.Sandbox]: { [AgentHostSandboxKey.Enabled]: AgentSandboxEnabledValue.On } } });
+		await resumed.session.send('Continue analysis');
+		const resumedSandbox = resumed.mockSession.sandboxConfigUpdates.at(-1) as SandboxConfig;
+		assert.ok(resumedSandbox.userPolicy?.filesystem?.readonlyPaths?.includes(directory.fsPath));
+	});
+
+	test('sends an XLSX reference in steering without an input_file attachment', async () => {
+		const source = URI.file('/Desktop/Продажи.xlsx');
+		const { session, mockSession } = await createAgentSession(disposables, {
+			fileContents: { [source.fsPath]: 'synthetic-workbook' },
+			rootValues: { [AgentHostSandboxConfigKey.Sandbox]: { [AgentHostSandboxKey.Enabled]: AgentSandboxEnabledValue.On } },
+		});
+		session.resetTurnState('original-turn');
+		await session.sendSteering({ id: 'xlsx-steering', message: { text: 'Use this workbook', origin: { kind: MessageKind.User },
+			attachments: [{ type: MessageAttachmentKind.Resource, uri: source.toString(), label: 'Продажи.xlsx' }] } });
+		const sent = mockSession.sendRequests[0] as MessageOptions;
+		assert.deepStrictEqual({ attachments: sent.attachments, mode: sent.mode }, { attachments: undefined, mode: 'immediate' });
+		assert.match(sent.prompt, /spreadsheet-attachments.*\.xlsx/);
+		const sandbox = mockSession.sandboxConfigUpdates.at(-1) as SandboxConfig;
+		assert.ok(sandbox.userPolicy?.filesystem?.readonlyPaths?.some(path => path.endsWith('spreadsheet-attachments')));
 	});
 
 	test('sends an embedded resource without a selection as the full blob', async () => {

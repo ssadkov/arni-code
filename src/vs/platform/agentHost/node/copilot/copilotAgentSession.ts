@@ -59,6 +59,7 @@ import { ActionType, isChatAction, type ChatAction, type SessionAction } from '.
 import { MessageKind, ResponsePartKind, ChatInputAnswerState, ChatInputAnswerValueKind, ChatInputQuestionKind, ChatInputResponseKind, ToolCallConfirmationReason, ToolCallRiskAssessmentKind, ToolCallRiskAssessmentStatus, ToolCallStatus, ToolResultContentType, buildSubagentSessionUri, createErrorResponsePart, isSubagentSession, parseRequiredSessionUriFromChatUri, type Customization, type Message, type PendingMessage, type ChatInputAnswer, type ChatInputOption, type ChatInputQuestion, type ChatInputRequest, type ToolCallResult, type ToolResultContent, type ToolResultTerminalContent, type Turn, type ITurnTokenTotal, type UsageInfo, type UsageInfoMeta, type IContextAttributionData, type ISessionPromptCacheState } from '../../common/state/sessionState.js';
 import { IAgentConfigurationService } from '../agentConfigurationService.js';
 import { CopilotSessionWrapper } from './copilotSessionWrapper.js';
+import { prepareSpreadsheetAttachment } from './spreadsheetAttachments.js';
 import { clientToolNamesFromSnapshot, isMcpServerExplicitlyProjected, type CopilotSessionLaunchPlan, type IActiveClientSnapshot, type ICopilotSessionLauncher, type ICopilotSessionRuntime } from './copilotSessionLauncher.js';
 import { CLIENT_TOOL_SEARCH_REFERENCE_NAME, NON_DEFERRED_CLIENT_TOOL_NAMES, RUNTIME_TOOL_SEARCH_TOOL_NAME } from './toolSearchDeferral.js';
 import { ActiveClientToolSet } from '../activeClientState.js';
@@ -1069,6 +1070,7 @@ export class CopilotAgentSession extends Disposable {
 	/** Streams runtime-executed shell output into output-only (non-pty) terminal channels. */
 	private readonly _nonPtyShellTerminals: NonPtyShellTerminalStreams;
 	private _workingDirectory: URI | undefined;
+	private _hasSpreadsheetAttachments = false;
 	private _customizationDirectory: URI | undefined;
 	private readonly _serverToolHost: IAgentServerToolHost | undefined;
 	/** Bridges SDK-reported MCP server state into AHP customization actions. */
@@ -2760,7 +2762,7 @@ export class CopilotAgentSession extends Disposable {
 			}
 		}
 
-		const sdkAttachments = await this._toSdkAttachments(attachments);
+		const sdkMessage = await this._toSdkMessage(prompt, attachments);
 
 		await this._prepareSdkTurn(mode);
 		const traceContext = this._otelService.getSessionTraceContext(this.sessionId, this.resourceUri.toString());
@@ -2774,7 +2776,7 @@ export class CopilotAgentSession extends Disposable {
 						requestHeaders: { Authorization: '******' },
 					});
 				}
-				return this._wrapper.session.send({ prompt, attachments: sdkAttachments?.length ? sdkAttachments : undefined });
+				return this._wrapper.session.send(sdkMessage);
 			});
 			sendingTurn?.markProviderCallResolved();
 		} catch (error) {
@@ -2990,14 +2992,32 @@ export class CopilotAgentSession extends Disposable {
 
 	}
 
-	private async _toSdkAttachments(attachments: readonly MessageAttachment[] | undefined): Promise<CopilotSdkAttachment[] | undefined> {
-		const sdkAttachments = attachments?.length
-			? (await Promise.all(attachments.map(attachment => this._toSdkAttachment(attachment)))).filter(isDefined)
-			: undefined;
-		if (sdkAttachments?.length) {
+	private async _toSdkMessage(prompt: string, attachments: readonly MessageAttachment[] | undefined): Promise<Pick<MessageOptions, 'prompt' | 'attachments'>> {
+		const sdkAttachments: CopilotSdkAttachment[] = [];
+		const spreadsheetReferences: string[] = [];
+		for (const attachment of attachments ?? []) {
+			const spreadsheet = await prepareSpreadsheetAttachment(attachment, this._sessionDataService.getSessionDataDir(this._storageUri), this._fileService);
+			if (spreadsheet) {
+				this._hasSpreadsheetAttachments = true;
+				spreadsheetReferences.push(spreadsheet.reference);
+			} else {
+				const sdkAttachment = await this._toSdkAttachment(attachment);
+				if (sdkAttachment) {
+					sdkAttachments.push(sdkAttachment);
+				}
+			}
+		}
+		// A resumed chat can already refer to snapshots created by its previous instance.
+		if (!this._hasSpreadsheetAttachments) {
+			this._hasSpreadsheetAttachments = await this._fileService.exists(this._spreadsheetAttachmentDirectory());
+		}
+		if (sdkAttachments.length) {
 			this._logService.trace(`[Copilot:${this.sessionId}] Attachments: ${JSON.stringify(sdkAttachments.map(attachment => ({ type: attachment.type })))}`);
 		}
-		return sdkAttachments;
+		return {
+			prompt: spreadsheetReferences.length ? `${prompt}\n\n<reminder>\n${spreadsheetReferences.join('\n\n')}\n</reminder>` : prompt,
+			attachments: sdkAttachments.length ? sdkAttachments : undefined,
+		};
 	}
 
 	async hasRuntimeSlashCommand(command: string): Promise<boolean> {
@@ -3152,7 +3172,6 @@ export class CopilotAgentSession extends Disposable {
 		try {
 			await this._reconcileMcpServerEnablement();
 			this._pendingSteeringFlips.set(steeringMessage.id, steeringMessage);
-			const sdkAttachments = await this._toSdkAttachments(steeringMessage.message.attachments);
 			// Steering is injected into the active turn and never fires the SDK's `user-prompt-submitted`
 			// hook, so the read-only snapshot signal can't ride `additionalContext` here. Fold it into the
 			// prompt as a `<reminder>` block instead: the runtime forwards it to the model, and the host's
@@ -3161,9 +3180,13 @@ export class CopilotAgentSession extends Disposable {
 			const steeringPrompt = snapshotReminder
 				? `${steeringMessage.message.text}\n\n<reminder>\n${snapshotReminder}\n</reminder>`
 				: steeringMessage.message.text;
+			const hadSpreadsheets = this._hasSpreadsheetAttachments;
+			const sdkMessage = await this._toSdkMessage(steeringPrompt, steeringMessage.message.attachments);
+			if (!hadSpreadsheets && this._hasSpreadsheetAttachments) {
+				await this._applyEffectiveSandboxConfig(true);
+			}
 			await this._wrapper.session.send({
-				prompt: steeringPrompt,
-				attachments: sdkAttachments?.length ? sdkAttachments : undefined,
+				...sdkMessage,
 				mode: 'immediate',
 			});
 		} catch (err) {
@@ -3946,7 +3969,14 @@ export class CopilotAgentSession extends Disposable {
 	 * never configure a script see no policy change.
 	 */
 	private _sandboxExtraReadonlyPaths(): readonly string[] {
-		return this._shellInitScriptMaterialized ? [this._shellInitScriptDirectory().fsPath] : [];
+		return [
+			...(this._shellInitScriptMaterialized ? [this._shellInitScriptDirectory().fsPath] : []),
+			...(this._hasSpreadsheetAttachments ? [this._spreadsheetAttachmentDirectory().fsPath] : []),
+		];
+	}
+
+	private _spreadsheetAttachmentDirectory(): URI {
+		return URI.joinPath(this._sessionDataService.getSessionDataDir(this._storageUri), 'spreadsheet-attachments');
 	}
 
 	/**
