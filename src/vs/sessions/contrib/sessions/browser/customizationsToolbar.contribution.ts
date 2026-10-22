@@ -67,7 +67,7 @@ function customizationSectionVisibleKey(section: string): string {
 
 const CUSTOMIZATION_OVERVIEW_ITEM: ICustomizationItemConfig = {
 	id: OPEN_CUSTOMIZATIONS_COMMAND_ID,
-	label: localize('overview', "Overview"),
+	label: localize('overview', "Обзор"),
 	icon: Codicon.home,
 };
 
@@ -77,49 +77,49 @@ const CUSTOMIZATION_ENTRY_POINTS_DISABLED = ContextKeyExpr.equals(`config.${Chat
 export const CUSTOMIZATION_ITEMS: ICustomizationItemConfig[] = [
 	{
 		id: 'sessions.customization.plugins',
-		label: localize('plugins', "Plugins"),
+		label: localize('plugins', "Подключаемые модули"),
 		icon: pluginIcon,
 		section: AICustomizationManagementSection.Plugins,
 		isPlugins: true,
 	},
 	{
 		id: 'sessions.customization.mcpServers',
-		label: localize('mcpServers', "MCP Servers"),
+		label: localize('mcpServers', "Серверы MCP"),
 		icon: mcpServerIcon,
 		section: AICustomizationManagementSection.McpServers,
 		isMcp: true,
 	},
 	{
 		id: 'sessions.customization.skills',
-		label: localize('skills', "Skills"),
+		label: localize('skills', "Навыки"),
 		icon: skillIcon,
 		section: AICustomizationManagementSection.Skills,
 		modelSection: AICustomizationManagementSection.Skills,
 	},
 	{
 		id: 'sessions.customization.instructions',
-		label: localize('instructions', "Instructions"),
+		label: localize('instructions', "Инструкции"),
 		icon: instructionsIcon,
 		section: AICustomizationManagementSection.Instructions,
 		modelSection: AICustomizationManagementSection.Instructions,
 	},
 	{
 		id: 'sessions.customization.agents',
-		label: localize('agents', "Agents"),
+		label: localize('agents', "Агенты"),
 		icon: agentIcon,
 		section: AICustomizationManagementSection.Agents,
 		modelSection: AICustomizationManagementSection.Agents,
 	},
 	{
 		id: 'sessions.customization.hooks',
-		label: localize('hooks', "Hooks"),
+		label: localize('hooks', "Обработчики"),
 		icon: hookIcon,
 		section: AICustomizationManagementSection.Hooks,
 		modelSection: AICustomizationManagementSection.Hooks,
 	},
 	{
 		id: 'sessions.customization.tools',
-		label: localize('tools', "Tools"),
+		label: localize('tools', "Инструменты"),
 		icon: toolsIcon,
 		section: AICustomizationManagementSection.Tools,
 		isTools: true,

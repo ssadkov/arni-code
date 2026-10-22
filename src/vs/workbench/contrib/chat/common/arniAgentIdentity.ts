@@ -7,24 +7,26 @@ import { Codicon } from '../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { IChatResponseModel } from './model/chatModel.js';
+import { localize } from '../../../../nls.js';
 
 export interface IArniAgentIdentity {
 	readonly id: string;
 	readonly name: string;
 	readonly icon: ThemeIcon;
+	readonly whenToChoose: string;
 }
 
 const professions: readonly IArniAgentIdentity[] = [
-	{ id: 'programmer', name: 'Программист', icon: Codicon.code },
-	{ id: 'researcher', name: 'Исследователь', icon: Codicon.search },
-	{ id: 'data-analyst', name: 'Аналитик', icon: Codicon.table },
-	{ id: 'presentation-designer', name: 'Дизайнер презентаций', icon: Codicon.preview },
-	{ id: 'file-organizer', name: 'Архивариус', icon: Codicon.folderOpened },
-	{ id: 'instructional-designer', name: 'Методист', icon: Codicon.book },
-	{ id: 'sysadmin', name: 'Сисадмин', icon: Codicon.tools },
-	{ id: 'video-editor', name: 'Монтажёр', icon: Codicon.deviceCameraVideo },
-	{ id: 'secretary', name: 'Секретарь', icon: Codicon.notebook },
-	{ id: 'content-editor', name: 'Контент-редактор', icon: Codicon.edit },
+	{ id: 'programmer', name: 'Программист', icon: Codicon.code, whenToChoose: localize('arniAgent.programmer.whenToChoose', "Разобрать репозиторий, сделать или исправить сайт") },
+	{ id: 'researcher', name: 'Исследователь', icon: Codicon.search, whenToChoose: localize('arniAgent.researcher.whenToChoose', "Найти информацию, сравнить источники, разобрать книгу") },
+	{ id: 'data-analyst', name: 'Аналитик', icon: Codicon.table, whenToChoose: localize('arniAgent.dataAnalyst.whenToChoose', "Сверить Excel/CSV, разобрать данные и суммы") },
+	{ id: 'presentation-designer', name: 'Дизайнер презентаций', icon: Codicon.preview, whenToChoose: localize('arniAgent.presentationDesigner.whenToChoose', "Создать или отредактировать презентацию") },
+	{ id: 'file-organizer', name: 'Архивариус', icon: Codicon.folderOpened, whenToChoose: localize('arniAgent.fileOrganizer.whenToChoose', "Разобрать файлы по проверенному плану") },
+	{ id: 'instructional-designer', name: 'Методист', icon: Codicon.book, whenToChoose: localize('arniAgent.instructionalDesigner.whenToChoose', "Создать урок и задания для самопроверки") },
+	{ id: 'sysadmin', name: 'Сисадмин', icon: Codicon.tools, whenToChoose: localize('arniAgent.sysadmin.whenToChoose', "Проверить компьютер, диски и автозагрузку") },
+	{ id: 'video-editor', name: 'Монтажёр', icon: Codicon.deviceCameraVideo, whenToChoose: localize('arniAgent.videoEditor.whenToChoose', "Обрезать видео, заменить фон, добавить субтитры") },
+	{ id: 'secretary', name: 'Секретарь', icon: Codicon.notebook, whenToChoose: localize('arniAgent.secretary.whenToChoose', "Работать с личными данными и заполнять формы") },
+	{ id: 'content-editor', name: 'Контент-редактор', icon: Codicon.edit, whenToChoose: localize('arniAgent.contentEditor.whenToChoose', "Написать или улучшить тексты и посты") },
 ];
 
 /** Stable first-party role identity, shared by the picker and historical response rendering. */

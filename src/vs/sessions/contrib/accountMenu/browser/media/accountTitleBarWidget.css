@@ -84,6 +84,18 @@
 	font-size: var(--vscode-fontSize-label2);
 }
 
+/* The Arni balance belongs to the title bar, not Copilot quota warning colors. */
+.monaco-workbench .part.titlebar .sessions-account-titlebar-widget.arni-account-visible .sessions-account-titlebar-widget-label,
+.monaco-workbench .part.titlebar .sessions-account-titlebar-widget.arni-account-visible .sessions-account-titlebar-widget-icon {
+	color: var(--vscode-titleBar-activeForeground, var(--vscode-foreground));
+}
+
+.monaco-workbench .part.titlebar.inactive .sessions-account-titlebar-widget.arni-account-visible .sessions-account-titlebar-widget-label,
+.monaco-workbench .part.titlebar.inactive .sessions-account-titlebar-widget.arni-account-visible .sessions-account-titlebar-widget-icon {
+	/* Account and balance must remain readable while another window is active. */
+	color: var(--vscode-titleBar-activeForeground, var(--vscode-foreground));
+}
+
 .agent-sessions-workbench .arni-account-summary {
 	display: grid;
 	gap: var(--vscode-spacing-size60);

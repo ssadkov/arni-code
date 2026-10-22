@@ -20,12 +20,23 @@ import { TestThemeService } from '../../../../../platform/theme/test/common/test
 import { ChatPetAccessoryId, ChatPetAccessoryIds, ChatPetAchievementId, ChatPetAchievementIds } from '../../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
 import { ChatPetVariant, IChatPetService } from '../../../../../workbench/contrib/chat/browser/chatPetService.js';
 import { Menus } from '../../../../browser/menus.js';
-import { renderAccountPanelActions, shouldShowAccountPanelSummary } from '../../browser/account.contribution.js';
+import { getArniAvailableBalance, renderAccountPanelActions, shouldShowAccountPanelSummary } from '../../browser/account.contribution.js';
 import { getSessionsChatPetAchievementBadges, SessionsChatPetAchievementBadges } from '../../browser/chatPetAchievementBadges.js';
 
 suite('Sessions - Account Menu', () => {
 
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('only spendable funds appear in available balance', () => {
+		const budget = { balanceMicros: 1_380_000, enabled: true, expired: false, validUntil: '' };
+		assert.deepStrictEqual([
+			getArniAvailableBalance(budget),
+			getArniAvailableBalance({ ...budget, enabled: false }),
+			getArniAvailableBalance({ ...budget, expired: true }),
+			getArniAvailableBalance({ ...budget, balanceMicros: -1 }),
+			getArniAvailableBalance(undefined),
+		], [1.38, 0, 0, 0, 0]);
+	});
 
 	test('renders personal card as a visible clickable account menu action', async () => {
 		const panel = mainWindow.document.createElement('div');

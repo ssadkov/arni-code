@@ -4,10 +4,14 @@
 import argparse
 from collections import Counter, defaultdict
 import csv
+import importlib.util
 from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 import sys
+import subprocess
+
+sys.dont_write_bytecode = True
 
 LIMIT = 50000
 
@@ -154,26 +158,43 @@ def operate(command, paths, output=None, key_column=None, amount_column=None, sh
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['inspect', 'merge', 'reconcile'])
-    parser.add_argument('paths', nargs='+')
+    parser.add_argument('command', choices=['prepare', 'inspect', 'merge', 'reconcile'])
+    parser.add_argument('paths', nargs='*')
     parser.add_argument('--key')
     parser.add_argument('--amount')
     parser.add_argument('--sheet')
     parser.add_argument('--delimiter', default=',')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
-    if args.command != 'inspect' and (not args.key or not args.output):
-        parser.error('--key and --output required')
-    if args.command == 'reconcile' and not args.amount:
-        parser.error('--amount required for reconciliation')
-    if args.command == 'inspect' and len(args.paths) != 1:
-        parser.error('Inspect one file at a time')
+    if args.command == 'prepare':
+        if args.paths or args.output or args.key or args.amount or args.sheet:
+            parser.error('Prepare takes no input files or output options')
+    else:
+        if not args.paths:
+            parser.error('At least one input file is required')
+        if args.command != 'inspect' and (not args.key or not args.output):
+            parser.error('--key and --output required')
+        if args.command == 'reconcile' and not args.amount:
+            parser.error('--amount required for reconciliation')
+        if args.command == 'inspect' and len(args.paths) != 1:
+            parser.error('Inspect one file at a time')
+    if args.command == 'prepare' or any(Path(path).suffix.lower() == '.xlsx' for path in [*args.paths, str(args.output or '')]):
+        # Load by absolute path so this also works with the managed interpreter's -I mode.
+        spec = importlib.util.spec_from_file_location('arni_xlsx_runtime', Path(__file__).with_name('xlsx_runtime.py'))
+        runtime = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runtime)
+        executable = runtime.prepare()
+        if args.command == 'prepare':
+            print(json.dumps({'status': 'ready', 'python_executable': str(executable)}, ensure_ascii=True))
+            return
+        if Path(sys.prefix).resolve() != executable.parent.parent.resolve():
+            sys.exit(subprocess.run([str(executable), '-I', str(Path(__file__).resolve()), *sys.argv[1:]]).returncode)
     print(json.dumps(operate(args.command, args.paths, args.output, args.key, args.amount, args.sheet, args.delimiter), ensure_ascii=True, default=str))
 
 
 if __name__ == '__main__':
     try:
         main()
-    except (OSError, ValueError, ImportError, KeyError) as error:
+    except (OSError, ValueError, ImportError, KeyError, RuntimeError) as error:
         print(json.dumps({'status': 'failed', 'reason': str(error)}, ensure_ascii=True), file=sys.stderr)
         sys.exit(2)

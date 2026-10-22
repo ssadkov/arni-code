@@ -105,13 +105,13 @@ suite('ChatErrorMessages', () => {
 			const withServer = getChatErrorDetailsFromFetchError({ type: ChatFetchResponseType.Failed, requestId: 'rid', serverRequestId: 'gh', reason: 'boom' }, undefined);
 			assert.deepStrictEqual(withServer, {
 				code: ChatFetchResponseType.Failed,
-				message: 'Sorry, your request failed. Please try again.\n\nClient Request Id: rid\n\nGH Request Id: gh\n\nReason: boom',
+				message: 'Не удалось выполнить запрос.\n\nИдентификатор запроса: rid\n\nИдентификатор сервера: gh\n\nПричина: boom',
 			});
 
 			const withoutServer = getChatErrorDetailsFromFetchError({ type: ChatFetchResponseType.Failed, requestId: 'rid', reason: 'boom' }, undefined);
 			assert.deepStrictEqual(withoutServer, {
 				code: ChatFetchResponseType.Failed,
-				message: 'Sorry, your request failed. Please try again.\n\nClient Request Id: rid\n\nReason: boom',
+				message: 'Не удалось выполнить запрос.\n\nИдентификатор запроса: rid\n\nПричина: boom',
 			});
 		});
 
@@ -164,7 +164,7 @@ suite('ChatErrorMessages', () => {
 			const details = getChatErrorDetailsFromFetchError({ type: ChatFetchResponseType.NetworkError, requestId: 'rid', reason: 'offline' }, undefined);
 			assert.deepStrictEqual(details, {
 				code: ChatFetchResponseType.NetworkError,
-				message: 'Sorry, there was a network error. Please try again later. Request id: rid\n\nReason: offline',
+				message: 'Не удалось подключиться к серверу. Повторите попытку позже. Идентификатор запроса: rid\n\nПричина: offline',
 			});
 		});
 

@@ -24,6 +24,7 @@ import { buildCopilotSystemNotification } from './copilotSystemNotification.js';
 import { buildChatErrorInfoFromCopilotSdkFields } from './copilotSdkChatError.js';
 import { buildMcpChannel, buildMcpTopLevelCustomizationId } from '../shared/mcpCustomizationController.js';
 import { readSimpleAttachmentDisplayKindFromMimeType } from './copilotAttachmentUtils.js';
+import { spreadsheetAttachmentsFromPrompt } from './spreadsheetAttachments.js';
 
 function tryStringify(value: unknown): string | undefined {
 	try {
@@ -550,7 +551,9 @@ export async function mapSessionEvents(
 				const d = e.data;
 				const messageId = d.interactionId ?? '';
 				const content = stripPromptScaffolding(d.content ?? '');
-				const attachments = sdkAttachmentsToProtocol(d.attachments);
+				const sdkAttachments = sdkAttachmentsToProtocol(d.attachments);
+				const spreadsheets = spreadsheetAttachmentsFromPrompt(d.content ?? '');
+				const attachments = spreadsheets.length ? [...(sdkAttachments ?? []), ...spreadsheets] : sdkAttachments;
 				// User messages carry no deprecated `parentToolCallId`; route
 				// sub-agent user messages by the envelope `agentId` only.
 				const parentToolCallId = resolveParentToolCallId(e.agentId, undefined);

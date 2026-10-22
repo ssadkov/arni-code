@@ -298,10 +298,10 @@ function getChatErrorDetailsInner(fetchError: IChatFetchErrorPayload, copilotPla
 		case ChatFetchResponseType.BadRequest:
 		case ChatFetchResponseType.Failed:
 			return fetchError.serverRequestId
-				? { message: localize('chatError.failedWithServerId', "Sorry, your request failed. Please try again.\n\nClient Request Id: {0}\n\nGH Request Id: {1}\n\nReason: {2}", requestId, fetchError.serverRequestId, reason) }
-				: { message: localize('chatError.failed', "Sorry, your request failed. Please try again.\n\nClient Request Id: {0}\n\nReason: {1}", requestId, reason) };
+				? { message: localize('chatError.failedWithServerId', "Не удалось выполнить запрос.\n\nИдентификатор запроса: {0}\n\nИдентификатор сервера: {1}\n\nПричина: {2}", requestId, fetchError.serverRequestId, reason) }
+				: { message: localize('chatError.failed', "Не удалось выполнить запрос.\n\nИдентификатор запроса: {0}\n\nПричина: {1}", requestId, reason) };
 		case ChatFetchResponseType.NetworkError:
-			return { message: localize('chatError.network', "Sorry, there was a network error. Please try again later. Request id: {0}\n\nReason: {1}", requestId, reason) };
+			return { message: localize('chatError.network', "Не удалось подключиться к серверу. Повторите попытку позже. Идентификатор запроса: {0}\n\nПричина: {1}", requestId, reason) };
 		case ChatFetchResponseType.Filtered:
 		case ChatFetchResponseType.PromptFiltered:
 			return {
