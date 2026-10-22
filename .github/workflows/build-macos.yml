@@ -31,6 +31,11 @@ on:
         required: false
         default: ''
         type: string
+      publish_ready_run:
+        description: 'Publish already verified final artifacts from this run; skip rebuilding and signing'
+        required: false
+        default: ''
+        type: string
       publish_release:
         description: 'Publish artifacts to a GitHub Release'
         required: false
@@ -53,6 +58,7 @@ permissions:
 
 jobs:
   build-macos:
+    if: inputs.publish_ready_run == ''
     name: Build macOS ${{ matrix.arch }}
     strategy:
       fail-fast: false
@@ -142,6 +148,12 @@ jobs:
           node scripts/test-sdk-vision-bridge.mjs
           node test/unit/node/index.js --run src/vs/sessions/contrib/chat/test/browser/arniSkillLibrary.test.ts
           node test/unit/node/index.js --run src/vs/sessions/contrib/providers/agentHost/test/browser/agentHostAgents.test.ts
+
+      - name: Test native runtime packaging filters
+        if: ${{ !inputs.recover_signed_run }}
+        run: |
+          node --test build/lib/test/copilot.test.ts
+          node --test scripts/test-packaged-copilot-runtime.mjs
 
       - name: Test media skill with native macOS FFmpeg
         if: ${{ !inputs.recover_signed_run }}
@@ -298,6 +310,28 @@ jobs:
           grep -Fx "$VSCODE_ARCH" "$RUNNER_TEMP/cli-version.txt"
           cat "$RUNNER_TEMP/cli-version.txt" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Prepare SDK fixture for recovered signed app
+        if: inputs.recover_signed_run != ''
+        run: |
+          npm ci
+          npm run transpile-client
+
+      - name: Verify packaged agent startup, tool images and completion
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          # Signing changes native Mach-O bytes: publish hashes of the final
+          # signed payload rather than the earlier fail-fast inspection.
+          GITHUB_SHA="$(git rev-parse HEAD)" node scripts/verify-billing-package.mjs "$APP_DIR/$APP_NAME/Contents/Resources/app" "artifacts/macos/build-manifest-$VSCODE_ARCH.json" "$VSCODE_ARCH"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/$APP_NAME/Contents/Info.plist")
+          PACKAGED_CLI="$APP_DIR/$APP_NAME/Contents/Resources/app/node_modules.asar.unpacked/@github/copilot-darwin-$VSCODE_ARCH/index.js"
+          # Run with the shipped Electron executable and the shipped CLI/native
+          # payload, not the checkout runtime. The model is a local HTTP fixture.
+          ELECTRON_RUN_AS_NODE=1 COPILOT_CLI_RUN_AS_NODE=1 "$APP_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE" \
+            "$GITHUB_WORKSPACE/scripts/test-sdk-vision-bridge.mjs" "$PACKAGED_CLI" \
+            | tee "artifacts/macos/agent-smoke-$VSCODE_ARCH.txt"
+          cat "artifacts/macos/agent-smoke-$VSCODE_ARCH.txt" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Package zip
         id: package_zip
         run: |
@@ -415,3 +449,68 @@ jobs:
       - name: Remove signing keychain
         if: always() && env.SIGNING_ENABLED == 'true'
         run: security delete-keychain "$RUNNER_TEMP/buildagent.keychain" || true
+
+  publish-ready:
+    if: inputs.publish_ready_run != '' && inputs.publish_release
+    name: Publish verified macOS ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(inputs.build_arch == 'arm64' && '["arm64"]' || inputs.build_arch == 'x64' && '["x64"]' || '["arm64","x64"]') }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_RUN: ${{ inputs.publish_ready_run }}
+      SOURCE_COMMIT: ${{ inputs.build_ref }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      VSCODE_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Require successful package and Apple checks
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          [[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9A-Za-z._-]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN" > source-run.json
+          gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN/jobs?per_page=100" > source-jobs.json
+          python3 - <<'PY'
+          import json, os
+          run = json.load(open('source-run.json'))
+          assert run['repository']['full_name'] == os.environ['GH_REPO']
+          assert run['path'] == '.github/workflows/build-macos.yml'
+          jobs = json.load(open('source-jobs.json'))['jobs']
+          matches = [job for job in jobs if job['name'] == 'Build macOS ' + os.environ['VSCODE_ARCH']]
+          assert len(matches) == 1 and matches[0]['status'] == 'completed'
+          steps = {step['name']: step['conclusion'] for step in matches[0]['steps']}
+          required = ['Notarize app', 'Verify native CLI', 'Verify packaged agent startup, tool images and completion', 'Package zip', 'Package dmg', 'Sign and notarize dmg', 'Create signed update manifest', 'Upload build artifacts']
+          assert all(steps.get(name) == 'success' for name in required), steps
+          assert all(result != 'failure' or name == 'Publish GitHub Release' for name, result in steps.items()), steps
+          PY
+
+      - name: Download verified final package
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.publish_ready_run }}
+          name: ArniCode-darwin-${{ matrix.arch }}
+          path: artifacts/macos
+
+      - name: Verify source and final file checksums
+        run: |
+          set -euo pipefail
+          sha256sum --check "artifacts/macos/SHA256SUMS-darwin-$VSCODE_ARCH.txt"
+          python3 - <<'PY'
+          import json, os
+          manifest = json.load(open('artifacts/macos/build-manifest-' + os.environ['VSCODE_ARCH'] + '.json'))
+          assert manifest['commit'] == os.environ['SOURCE_COMMIT'], manifest
+          assert manifest['architecture'] == os.environ['VSCODE_ARCH'], manifest
+          PY
+
+      - name: Upload to existing release
+        run: |
+          set -euo pipefail
+          # Release creation/tagging remains explicit; recovery only uploads the
+          # unchanged files whose original agent and Apple checks passed above.
+          gh release view "$RELEASE_TAG"
+          gh release upload "$RELEASE_TAG" artifacts/macos/* --clobber
