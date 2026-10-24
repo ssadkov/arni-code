@@ -396,6 +396,24 @@ suite('ByokLmProxyService', () => {
 		);
 	});
 
+	for (const code of ['context_too_large', 'context_length_exceeded', 'model_context_window_exceeded', 'insufficient_tokens']) {
+		test(`preserves context failure semantics without reclassifying ${code}`, async () => {
+			const message = `Request Failed: 400 ${JSON.stringify({ error: { code, message: 'Provider rejected the request' } })}`;
+			await withProxy(
+				async () => ({ output: [], error: `Error: [arni-user-error] ${message}` }),
+				async handle => {
+					const response = await fetch(responsesUrl(handle, 'acme'), {
+						method: 'POST', headers: authHeaders(handle), body: JSON.stringify({ model: 'm', input: [] }),
+					});
+					assert.deepStrictEqual({ status: response.status, body: await response.json() }, {
+						status: 400,
+						body: { error: { message, type: 'invalid_request_error', ...(code === 'insufficient_tokens' ? {} : { code: 'context_length_exceeded' }) } },
+					});
+				},
+			);
+		});
+	}
+
 	test('rejects a malformed JSON body with 400', async () => {
 		await withProxy(
 			async () => ({ output: [] }),

@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import type { SectionOverride } from '@github/copilot-sdk';
-import { COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION, COPILOT_AGENT_HOST_SUBAGENT_TOOL_INSTRUCTIONS, resolveToolInstructionsOverride, toolSearchInstructionLines, universalToolInstructions, type IToolInstructionContext } from '../../node/copilot/prompts/toolInstructions.js';
+import { browserTaskInstructions, COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION, COPILOT_AGENT_HOST_SUBAGENT_TOOL_INSTRUCTIONS, COPILOT_AGENT_HOST_WORKFLOW_TOOL_INSTRUCTION, resolveToolInstructionsOverride, toolSearchInstructionLines, universalToolInstructions, type IToolInstructionContext } from '../../node/copilot/prompts/toolInstructions.js';
 import type { SchemaValues } from '../../common/agentHostSchema.js';
 import { CopilotCliConfigKey, copilotCliConfigSchema } from '../../common/copilotCliConfig.js';
 import { CLIENT_TOOL_SEARCH_REFERENCE_NAME } from '../../common/toolSearchConstants.js';
@@ -35,7 +35,7 @@ suite('toolInstructions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	const LARGE_OUTPUT_LINE = COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION;
-	const UNCONDITIONAL_TOOL_INSTRUCTIONS = LARGE_OUTPUT_LINE;
+	const UNCONDITIONAL_TOOL_INSTRUCTIONS = `${LARGE_OUTPUT_LINE}\n${COPILOT_AGENT_HOST_WORKFLOW_TOOL_INSTRUCTION}`;
 
 	suite('universalToolInstructions', () => {
 		test('joins applicable lines in order and drops gated-out ones', () => {
@@ -78,11 +78,19 @@ suite('toolInstructions', () => {
 					universalToolInstructions(hasTools('readPage')),
 				],
 				[
-					`${UNCONDITIONAL_TOOL_INSTRUCTIONS}\nUse the browser tools (openBrowserPage, readPage, etc.) when beneficial for front-end tasks, such as when visualizing or validating UI changes.`,
+					`${UNCONDITIONAL_TOOL_INSTRUCTIONS}\n${browserTaskInstructions('readPage')}`,
 					UNCONDITIONAL_TOOL_INSTRUCTIONS,
 					UNCONDITIONAL_TOOL_INSTRUCTIONS,
 				]
 			);
+		});
+
+		test('routes form tasks to rendered questions without borrowing another program workflow', () => {
+			const instructions = universalToolInstructions(hasTools('openBrowserPage', 'readPage'))!;
+			assert.ok(instructions.includes('its purpose and target service or program match'));
+			assert.ok(instructions.includes('truncated before the questions'));
+			assert.ok(instructions.includes('read the visible field labels, choices, and validation'));
+			assert.ok(instructions.includes('respect the user\'s scope'));
 		});
 	});
 
@@ -144,7 +152,7 @@ suite('toolInstructions', () => {
 		test('composes the tool-search line after the registered large-output and browser lines', () => {
 			assert.strictEqual(
 				universalToolInstructions(hasTools('openBrowserPage', 'readPage', CLIENT_TOOL_SEARCH_REFERENCE_NAME), toolSearchInstructionLines(true)),
-				`${UNCONDITIONAL_TOOL_INSTRUCTIONS}\nUse the browser tools (openBrowserPage, readPage, etc.) when beneficial for front-end tasks, such as when visualizing or validating UI changes.\n${TOOL_SEARCH_LINE}`
+				`${UNCONDITIONAL_TOOL_INSTRUCTIONS}\n${browserTaskInstructions('readPage')}\n${TOOL_SEARCH_LINE}`
 			);
 		});
 

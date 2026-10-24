@@ -25,6 +25,7 @@ import { hasKey, isDefined, isObject, isString, type Mutable } from '../../../..
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
+import { BrowserChatToolReferenceName } from '../../../browserView/common/browserChatToolReferenceNames.js';
 import { INativeEnvironmentService } from '../../../environment/common/environment.js';
 import { FileOperationResult, FileSystemProviderCapabilities, IFileService, toFileOperationResult } from '../../../files/common/files.js';
 import { IInstantiationService } from '../../../instantiation/common/instantiation.js';
@@ -4649,6 +4650,20 @@ export class CopilotAgentSession extends Disposable {
 					permissionDecisionReason: restriction,
 					additionalContext: restriction,
 				};
+			}
+			// Google Forms questions often occur after a large script/header block.
+			// Route to the available rendered-page tools before a truncated fetch
+			// sends the model into repeated searches of an incomplete HTML file.
+			if (input.toolName === 'web_fetch'
+				&& this._clientToolNames.has(BrowserChatToolReferenceName.OpenBrowserPage)
+				&& this._clientToolNames.has(BrowserChatToolReferenceName.ReadPage)
+				&& isObject(input.toolArgs) && typeof input.toolArgs.url === 'string') {
+				let url: URL | undefined;
+				try { url = new URL(input.toolArgs.url); } catch { /* Let the fetch tool validate other URLs. */ }
+				if (url?.protocol === 'https:' && (url.hostname === 'forms.gle' || (url.hostname === 'docs.google.com' && url.pathname.startsWith('/forms/')))) {
+					const guidance = 'Use openBrowserPage for this Google Form, then readPage to inspect its rendered questions. These tools are available; load them through tool search if deferred. Do not fetch or search raw HTML for this form. Continue with the user\'s requested draft or form work; do not expand authorization to enter private data or submit.';
+					return { permissionDecision: 'deny', permissionDecisionReason: guidance, additionalContext: guidance };
+				}
 			}
 			if (isEditTool(input.toolName, getToolCommand(input))) {
 				const filePaths = this._getEditFilePaths(input.toolArgs);

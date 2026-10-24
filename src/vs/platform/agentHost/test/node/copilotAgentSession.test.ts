@@ -10006,6 +10006,38 @@ Use the attached image as context.
 
 	suite('SDK callback logging', () => {
 
+		test('routes Google Forms fetches to available rendered-page tools', async () => {
+			const { runtime } = await createAgentSession(disposables, {
+				clientSnapshot: { tools: [{ name: 'openBrowserPage' }, { name: 'readPage' }], plugins: [], mcpServers: {} },
+			});
+			for (const url of ['https://docs.google.com/forms/d/e/example/viewform', 'https://forms.gle/example']) {
+				const result = await runtime.handlePreToolUse({
+					sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp',
+					toolName: 'web_fetch', toolArgs: { url, raw: true, max_length: 20000 },
+				});
+				assert.strictEqual(result?.permissionDecision, 'deny');
+				assert.ok(result?.additionalContext?.includes('openBrowserPage'));
+				assert.ok(result?.additionalContext?.includes('readPage'));
+			}
+		});
+
+		test('keeps other fetches and browser-unavailable sessions unchanged', async () => {
+			const { runtime } = await createAgentSession(disposables, {
+				clientSnapshot: { tools: [{ name: 'openBrowserPage' }, { name: 'readPage' }], plugins: [], mcpServers: {} },
+			});
+			for (const url of ['https://docs.google.com/document/d/example', 'https://docs.google.com.example/forms/d/example', 'http://docs.google.com/forms/d/example', 'not a URL']) {
+				assert.strictEqual(await runtime.handlePreToolUse({
+					sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp',
+					toolName: 'web_fetch', toolArgs: { url },
+				}), undefined);
+			}
+			const { runtime: noBrowser } = await createAgentSession(disposables);
+			assert.strictEqual(await noBrowser.handlePreToolUse({
+				sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp',
+				toolName: 'web_fetch', toolArgs: { url: 'https://docs.google.com/forms/d/e/example/viewform' },
+			}), undefined);
+		});
+
 		test('logs and rethrows user input callback failures', async () => {
 			const logService = new CapturingLogService();
 			const { session, runtime } = await createAgentSession(disposables, { logService });

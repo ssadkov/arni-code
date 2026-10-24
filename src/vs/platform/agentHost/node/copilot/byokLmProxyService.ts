@@ -230,7 +230,7 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 			if (result.error) {
 				const userError = userFacingByokError(result.error);
 				if (userError !== undefined) {
-					this._writeJsonError(res, 400, userError, 'invalid_request_error');
+					this._writeJsonError(res, 400, userError, 'invalid_request_error', contextErrorCode(userError));
 				} else {
 					this._writeJsonError(res, 502, result.error, 'api_error');
 				}
@@ -266,12 +266,27 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 		}
 	}
 
-	private _writeJsonError(res: http.ServerResponse, status: number, message: string, type = 'api_error'): void {
+	private _writeJsonError(res: http.ServerResponse, status: number, message: string, type = 'api_error', code?: string): void {
 		if (res.headersSent || res.writableEnded) {
 			return;
 		}
 		res.writeHead(status, { 'Content-Type': 'application/json' });
-		res.end(responsesErrorBody(message, type));
+		res.end(responsesErrorBody(message, type, code));
+	}
+}
+
+/** Preserve the provider's context failure so the SDK can recognize it instead of treating it as a generic 400. */
+function contextErrorCode(message: string): string | undefined {
+	const start = message.indexOf('{');
+	if (start === -1) {
+		return undefined;
+	}
+	try {
+		const code = JSON.parse(message.slice(start))?.error?.code;
+		return code === 'context_too_large' || code === 'context_length_exceeded' || code === 'model_context_window_exceeded'
+			? 'context_length_exceeded' : undefined;
+	} catch {
+		return undefined;
 	}
 }
 

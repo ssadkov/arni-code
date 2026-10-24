@@ -61,6 +61,14 @@ const agenticBrowserToolNames = browserChatToolReferenceNames.filter(name => nam
 export const COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION = 'When a tool reports that its output was saved to a temporary file because it was too large, ONLY use the `view` tool with a narrow `view_range` to inspect that file. NEVER read it with shell commands such as `cat`, `head`, `tail`, or `sed`, because their output may be offloaded again.';
 const largeOutputToolInstructions: ToolInstructionLine = () => COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION;
 
+/** Match a workflow's purpose and destination, rather than a shared keyword in its title. */
+export const COPILOT_AGENT_HOST_WORKFLOW_TOOL_INSTRUCTION = 'Before loading a specialized skill, check that its purpose and target service or program match the user\'s task; shared words such as "application", "grant", or "Superteam" are not enough. For a supplied form URL, its actual questions define the task. If fetched content is truncated before the questions, change to rendered browser inspection instead of repeatedly searching the incomplete file; never invent missing fields.';
+const workflowToolInstructions: ToolInstructionLine = () => COPILOT_AGENT_HOST_WORKFLOW_TOOL_INSTRUCTION;
+
+export function browserTaskInstructions(companion: string): string {
+	return `Use the browser tools (${BrowserChatToolReferenceName.OpenBrowserPage}, ${companion}, etc.) to inspect and interact with rendered websites, especially online forms, as well as to validate UI changes. For form tasks, open the supplied URL and read the visible field labels, choices, and validation before drafting answers; prefer this over fetching raw HTML. Preserve existing answers and respect the user's scope for entering data or submitting it. If browser tools are deferred, load them with tool search; if unavailable, explain the missing capability instead of looping through shell searches.`;
+}
+
 /** Keeps subagents on their default model unless the user explicitly requests another model. */
 export const COPILOT_AGENT_HOST_SUBAGENT_TOOL_INSTRUCTIONS = [
 	'When launching subagents with the task tool, leave the `model`, `reasoning_effort`, and `context_tier` parameters unset — each agent type already runs on a model suited to it, and overriding the model changes the session\'s cost and behavior profile.',
@@ -84,13 +92,13 @@ const browserToolInstructions: ToolInstructionLine = ({ hasTool }) => {
 	if (!companion) {
 		return undefined;
 	}
-	return `Use the browser tools (${BrowserChatToolReferenceName.OpenBrowserPage}, ${companion}, etc.) when beneficial for front-end tasks, such as when visualizing or validating UI changes.`;
+	return browserTaskInstructions(companion);
 };
 
 /**
  * The registered tool-instruction lines, in render order.
  */
-const TOOL_INSTRUCTION_LINES: readonly ToolInstructionLine[] = [largeOutputToolInstructions, subagentToolInstructions, browserToolInstructions];
+const TOOL_INSTRUCTION_LINES: readonly ToolInstructionLine[] = [largeOutputToolInstructions, workflowToolInstructions, subagentToolInstructions, browserToolInstructions];
 
 /** Tool-search guidance mirrored from the Copilot extension prompt. */
 const toolSearchToolInstructions: ToolInstructionLine = ({ hasTool }) =>

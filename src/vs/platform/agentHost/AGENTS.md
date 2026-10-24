@@ -728,3 +728,7 @@ nor exposes them.
 The renderer publishes effective prompt, output and total-context limits in `IByokLmModelInfo`. The Copilot launcher supplies both provider model limits and capability overrides so the SDK does not fall back to a generic context window. Cache read/write counts cross the BYOK bridge and Responses translation.
 
 The loopback proxy attaches its session-scoped chat identifier to bridge requests. The Arni provider sends it as `X-Arni-Chat-Id` to the authenticated backend ledger. USD costs remain separate from Copilot credits; the backend owns persistence and account isolation. Agent Host PTY shell tools are enabled by default, and terminal progress is rendered from command output without model polling.
+
+Confirmed, marked BYOK context failures retain the standard `context_length_exceeded` code in the Responses error envelope; other user errors remain generic 400s. Do not infer successful SDK compaction from preserving that code alone.
+
+Copilot's pre-tool hook routes Google Forms `web_fetch` calls to `openBrowserPage` and `readPage` only when both rendered-page tools are in the applied client snapshot. Browser-unavailable sessions retain their existing fetch behavior. Universal tool guidance matches specialized skills to the requested program and tells the model to change approach when a fetched document ends before the form questions.

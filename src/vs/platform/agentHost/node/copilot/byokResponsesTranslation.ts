@@ -521,6 +521,6 @@ export function bridgeResultToResponsesSseFrames(result: IByokLmChatResult, mode
 	return frames;
 }
 
-export function responsesErrorBody(message: string, type = 'api_error'): string {
-	return JSON.stringify({ error: { message, type } });
+export function responsesErrorBody(message: string, type = 'api_error', code?: string): string {
+	return JSON.stringify({ error: { message, type, ...(code ? { code } : {}) } });
 }
