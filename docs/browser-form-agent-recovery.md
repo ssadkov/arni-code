@@ -171,7 +171,19 @@ content, and existing confirmation/delegation behavior. Logs are in
 
 Client output was rebuilt and loaded by reloading the existing Arni window.
 A live smoke test uses a new folder containing only a synthetic README with
-`https://example.com`. It reached Arni's workspace trust confirmation; a human
-must approve that prompt before the live model run can proceed. No successful
-Nemotron response or Google Form submission is claimed at this point. The Qwen
-`context_too_large` failure remains a separate unresolved issue.
+`https://example.com`. The user approved Arni's workspace trust prompt. In a
+fresh chat, the selected and SDK-observed model was
+`nvidia/nemotron-3.5-super-vl:free`. Its first `readFile` call provided `filePath`
+but omitted `startLine` and `endLine`; the renderer returned the required names.
+The model corrected its next call to lines 1–200, read the file successfully,
+and answered with the correct URL and Dev plan for one year. The session became
+idle without session errors or file edits. Evidence is in the ignored
+`.build/form-agent-validation/nemotron-live-smoke.json` (SDK session
+`93c58564-c25a-4211-952d-fdc34f1fa6c7`). This verifies live recovery from the
+argument error, rather than only a unit-test replay. The backend routing ledger
+was not independently audited.
+
+The synthetic read does not establish the complete Google Form workflow. No
+form was submitted. The Qwen `context_too_large` failure remains a separate
+unresolved issue; continuing the old oversized conversation is not a clean
+model comparison.
