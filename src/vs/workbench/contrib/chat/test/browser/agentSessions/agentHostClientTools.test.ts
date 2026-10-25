@@ -41,6 +41,7 @@ import { TestInstantiationService } from '../../../../../../platform/instantiati
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../../../services/configurationResolver/common/configurationResolver.js';
 import { AgentHostSessionHandler, toolDataToDefinition, toolResultToProtocol, UNOBSERVED_CLIENT_TOOL_GRACE_MS } from '../../../browser/agentSessions/agentHost/agentHostSessionHandler.js';
+import { getToolInputError } from '../../../browser/agentSessions/agentHost/agentHostToolUtils.js';
 import { AgentHostActiveClientService, IAgentHostActiveClientService } from '../../../browser/agentSessions/agentHost/agentHostActiveClientService.js';
 import { IAgentHostCustomizationService, NullAgentHostCustomizationService } from '../../../browser/agentSessions/agentHost/agentHostCustomizationService.js';
 import { AGENT_HOST_COPILOT_CLI_SESSION_TYPE, IAgentHostToolSetEnablementService, IToolEnablementState } from '../../../browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
@@ -303,6 +304,16 @@ suite('AgentHostClientTools', () => {
 	});
 
 	// ── toolDataToDefinition ─────────────────────────────────────────────
+
+	suite('tool input contract', () => {
+		test('reports declared required names rather than crashing on a path alias', () => {
+			const tool: IToolData = { ...readFileTool, inputSchema: { type: 'object', required: ['filePath'], properties: { filePath: { type: 'string' }, offset: { type: 'integer' }, limit: { type: ['number', 'null'] } } } };
+			assert.ok(getToolInputError(tool, { path: '/repo/README.md' })?.includes('filePath'));
+			assert.ok(getToolInputError(tool, { filePath: null })?.includes('type string'));
+			assert.ok(getToolInputError(tool, { filePath: '/repo/README.md', offset: 1.5 })?.includes('type integer'));
+			assert.strictEqual(getToolInputError(tool, { filePath: '/repo/README.md', offset: 1, limit: null }), undefined);
+		});
+	});
 
 	suite('toolDataToDefinition', () => {
 
@@ -1133,6 +1144,70 @@ suite('AgentHostClientTools', () => {
 					: { confirmed }),
 			});
 		}
+
+		async function executeTestClientTool(connection: MockAgentHostConnection, chatURI: URI, tool: IToolData, parameters: Record<string, unknown>, callId: string, turnId = 'turn-1'): Promise<void> {
+			connection.applySessionAction(chatURI, { type: ActionType.ChatToolCallStart, turnId, toolCallId: callId, toolName: tool.toolReferenceName!, displayName: tool.displayName, contributor: { kind: ToolCallContributorKind.Client, clientId: connection.clientId } });
+			connection.applySessionAction(chatURI, { type: ActionType.ChatToolCallReady, turnId, toolCallId: callId, invocationMessage: tool.displayName, toolInput: JSON.stringify(parameters), confirmed: ToolCallConfirmationReason.NotNeeded });
+			applyRunningClientExecution(connection, chatURI.toString(), turnId, { toolCallId: callId, toolName: tool.toolReferenceName!, displayName: tool.displayName, invocationMessage: tool.displayName, toolInput: JSON.stringify(parameters) });
+			await timeout(0);
+			await timeout(0);
+		}
+
+		test('rejects invalid readFile input before invocation and stops a three-error loop across different paths', async () => {
+			const tool: IToolData = { ...testUnlistedTool, inputSchema: { type: 'object', required: ['filePath'], properties: { filePath: { type: 'string' } } } };
+			const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [tool]);
+			const chatURI = URI.parse(buildDefaultChatUri(AgentSession.uri('copilot', 'session-1').toString()));
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnStarted, turnId: 'turn-1', startedAt: '2025-01-01T00:00:00.000Z', message: { text: 'Read project facts', origin: { kind: MessageKind.User } } });
+			await handler.provideChatSessionContent(URI.parse('agent-host-copilot:/session-1'), CancellationToken.None);
+			for (let index = 0; index < 3; index++) {
+				await executeTestClientTool(connection, chatURI, tool, { path: index % 2 ? '/repo/routes.ts' : '/repo/README.md' }, `invalid-${index}`);
+			}
+			assert.strictEqual(toolsService.invokedToolCalls.length, 0);
+			const completions = connection.dispatchedActions.flatMap(({ action }) => action.type === ActionType.ChatToolCallComplete ? [action] : []);
+			assert.strictEqual(completions.length, 3);
+			assert.ok(completions.every(action => action.result.error?.message.includes('filePath')));
+			assert.ok(completions[2].result.error?.message.includes('Stopped this request'));
+			assert.strictEqual(connection.dispatchedActions.filter(({ action }) => action.type === ActionType.ChatTurnCancelled).length, 1);
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnStarted, turnId: 'turn-2', startedAt: '2025-01-01T00:00:02.000Z', message: { text: 'Use corrected arguments', origin: { kind: MessageKind.User } } });
+			await executeTestClientTool(connection, chatURI, tool, { filePath: '/repo/README.md' }, 'recovered', 'turn-2');
+			assert.strictEqual(toolsService.invokedToolCalls.length, 1);
+			assert.strictEqual(connection.dispatchedActions.filter(({ action }) => action.type === ActionType.ChatTurnCancelled).length, 1);
+		});
+
+		test('a corrected tool call and a new user turn reset the client-tool failure budget', async () => {
+			const tool: IToolData = { ...testUnlistedTool, inputSchema: { type: 'object', required: ['filePath'], properties: { filePath: { type: 'string' } } } };
+			const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [tool]);
+			const chatURI = URI.parse(buildDefaultChatUri(AgentSession.uri('copilot', 'session-1').toString()));
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnStarted, turnId: 'turn-1', startedAt: '2025-01-01T00:00:00.000Z', message: { text: 'Read project facts', origin: { kind: MessageKind.User } } });
+			await handler.provideChatSessionContent(URI.parse('agent-host-copilot:/session-1'), CancellationToken.None);
+			await executeTestClientTool(connection, chatURI, tool, { path: '/repo/README.md' }, 'bad-1');
+			await executeTestClientTool(connection, chatURI, tool, { path: '/repo/README.md' }, 'bad-2');
+			await executeTestClientTool(connection, chatURI, tool, { filePath: '/repo/README.md' }, 'corrected');
+			await executeTestClientTool(connection, chatURI, tool, { path: '/repo/README.md' }, 'bad-3');
+			await executeTestClientTool(connection, chatURI, tool, { path: '/repo/README.md' }, 'bad-4');
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnComplete, turnId: 'turn-1', duration: 1000 });
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnStarted, turnId: 'turn-2', startedAt: '2025-01-01T00:00:02.000Z', message: { text: 'Try again', origin: { kind: MessageKind.User } } });
+			await executeTestClientTool(connection, chatURI, tool, { path: '/repo/README.md' }, 'next-turn', 'turn-2');
+			assert.deepStrictEqual(toolsService.invokedToolCalls.map(call => call.parameters), [{ filePath: '/repo/README.md' }]);
+			assert.strictEqual(connection.dispatchedActions.filter(({ action }) => action.type === ActionType.ChatTurnCancelled).length, 0);
+		});
+
+		test('bounds repeated execution errors while preserving tool error content', async () => {
+			const result = new DeferredPromise<IToolResult>();
+			await result.complete({ content: [{ kind: 'text', value: 'Diagnostic detail' }], toolResultError: "Cannot read properties of undefined (reading 'length')" });
+			const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [testRunTaskTool], { invokeResult: result });
+			const chatURI = URI.parse(buildDefaultChatUri(AgentSession.uri('copilot', 'session-1').toString()));
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnStarted, turnId: 'turn-1', startedAt: '2025-01-01T00:00:00.000Z', message: { text: 'Run task', origin: { kind: MessageKind.User } } });
+			await handler.provideChatSessionContent(URI.parse('agent-host-copilot:/session-1'), CancellationToken.None);
+			for (let index = 0; index < 3; index++) {
+				await executeTestClientTool(connection, chatURI, testRunTaskTool, { task: `attempt-${index}` }, `runtime-${index}`);
+			}
+			assert.strictEqual(toolsService.invokedToolCalls.length, 3);
+			const completions = connection.dispatchedActions.flatMap(({ action }) => action.type === ActionType.ChatToolCallComplete ? [action] : []);
+			assert.ok(completions.every(action => JSON.stringify(action.result).includes('Diagnostic detail')));
+			assert.ok(completions[2].result.error?.message.includes('Stopped this request'));
+			assert.strictEqual(connection.dispatchedActions.filter(({ action }) => action.type === ActionType.ChatTurnCancelled).length, 1);
+		});
 
 		test('maps tool data to protocol definitions', async () => {
 			const { connection } = createHandlerWithMocks(disposables, [testRunTestsTool, testRunTaskTool, testUnlistedTool]);

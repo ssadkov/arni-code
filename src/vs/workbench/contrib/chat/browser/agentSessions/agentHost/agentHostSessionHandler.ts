@@ -114,7 +114,7 @@ import type { AgentHostPromptCacheNotification } from './agentHostPromptCacheNot
 import { IChatResponseFileChangesService } from '../../chatResponseFileChangesService.js';
 import { AgentHostSessionReferenceAttachmentDisplayKind, AgentHostSessionReferenceTrajectoryAttachmentDisplayKind, toSessionReferenceAttachmentMeta, toSessionReferenceModelRepresentation } from './agentHostSessionReferenceAttachment.js';
 import { buildHostLocalEventsPath } from '../../copilotCliEventsUri.js';
-import { toolDataToDefinition } from './agentHostToolUtils.js';
+import { getToolInputError, toolDataToDefinition } from './agentHostToolUtils.js';
 import { isCopilotCliSessionType } from './agentHostToolSetEnablementService.js';
 import { IAgentHostUntitledProvisionalSessionService } from './agentHostUntitledProvisionalSessionService.js';
 import { IAgentHostImportConversationStore } from './agentHostImportConversationStore.js';
@@ -1013,6 +1013,7 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 	private static readonly ACTIVE_CLIENT_RECONCILIATION_DEBOUNCE_MS = 5;
 
 	private readonly _activeSessions = new ResourceMap<AgentHostChatSession>();
+	private readonly _clientToolFailures = new Map<string, { turnId: string; counts: Map<string, number>; stopped: boolean }>();
 	private readonly _chatURIsBySessionResource = new ResourceMap<string>();
 	/** Per-session subscription to chat model pending request changes. */
 	private readonly _pendingMessageSubscriptions = this._register(new DisposableResourceMap());
@@ -2779,7 +2780,13 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			? this._ensureClientToolInvocation(chatURI, request.turnId, toolCall.toolCallId, toolData.id, undefined)
 			: undefined;
 		const fail = (message: string, code: string) => {
-			const pastTenseMessage = localize('agentHost.clientTool.pastTense', "Couldn't run {0}", toolCall.displayName);
+			const stopTurn = this._recordClientToolFailure(chatURI, request.turnId, toolName, code, message);
+			if (stopTurn) {
+				message = localize('agentHost.clientTool.repeatedFailure', "Stopped this request after three identical errors from \"{0}\". {1}", toolName, message);
+			}
+			const pastTenseMessage = stopTurn
+				? localize('agentHost.clientTool.stopped', "Stopped after repeated {0} errors", toolCall.displayName)
+				: localize('agentHost.clientTool.pastTense', "Couldn't run {0}", toolCall.displayName);
 			const result: IToolResult = {
 				content: [],
 				toolResultError: message,
@@ -2797,7 +2804,16 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 				},
 				...completionMeta,
 			});
+			if (stopTurn) {
+				this._config.connection.dispatch(chatURI, { type: ActionType.ChatTurnCancelled, turnId: request.turnId, duration: this._turnDuration(chatURI, request.turnId) });
+			}
 		};
+
+		const priorFailures = this._clientToolFailures.get(chatURI);
+		if (priorFailures?.turnId === request.turnId && priorFailures.stopped) {
+			fail(localize('agentHost.clientTool.alreadyStopped', "This request was stopped after repeated tool errors. Start a new request to continue."), 'repeatedToolFailure');
+			return;
+		}
 
 		if (!toolData) {
 			fail(localize('agentHost.clientTool.unknown', "Tool \"{0}\" is not available on this client.", toolName), 'toolUnavailable');
@@ -2843,6 +2859,11 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 		if (toolSearchCandidates !== undefined) {
 			parameters = { ...parameters, candidateTools: toolSearchCandidates };
 		}
+		const inputError = getToolInputError(toolData, parameters);
+		if (inputError) {
+			fail(inputError, 'invalidInput');
+			return;
+		}
 
 		this._logService.info(`[AgentHost] Running client tool: ${toolName} (callId=${toolCall.toolCallId}, withContext=${contextSessionResource !== undefined})`);
 		let result: IToolResult | undefined;
@@ -2871,6 +2892,16 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			}
 			result = { content: [], toolResultError: error instanceof Error ? error.message : String(error) };
 		}
+		let stopAfterRepeatedFailure = false;
+		if (result?.toolResultError) {
+			const message = typeof result.toolResultError === 'string' ? result.toolResultError : localize('agentHost.clientTool.failed', "Tool \"{0}\" failed.", toolName);
+			stopAfterRepeatedFailure = this._recordClientToolFailure(chatURI, request.turnId, toolName, 'toolExecutionFailed', message);
+			if (stopAfterRepeatedFailure) {
+				result = { ...result, toolResultError: localize('agentHost.clientTool.repeatedFailure', "Stopped this request after three identical errors from \"{0}\". {1}", toolName, message), toolResultMessage: localize('agentHost.clientTool.stopped', "Stopped after repeated {0} errors", toolCall.displayName) };
+			}
+		} else if (this._clientToolFailures.get(chatURI)?.turnId === request.turnId && !this._clientToolFailures.get(chatURI)?.stopped) {
+			this._clientToolFailures.delete(chatURI);
+		}
 
 		this._resolveToolCall(chatURI, request.turnId, toolCall.toolCallId, {
 			type: ActionType.ChatToolCallComplete,
@@ -2879,7 +2910,7 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			result: toolResultToProtocol(result ?? { content: [] }, toolName),
 			...completionMeta,
 		});
-		if (toolData.source.type === 'internal' && result?.stopCurrentTurn) {
+		if (stopAfterRepeatedFailure || (toolData.source.type === 'internal' && result?.stopCurrentTurn)) {
 			this._config.connection.dispatch(chatURI, {
 				type: ActionType.ChatTurnCancelled,
 				turnId: request.turnId,
@@ -6920,7 +6951,26 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 		return (value && !(value instanceof Error)) ? value : undefined;
 	}
 
+	/** Successful tool work or a new turn gives the model a fresh recovery budget. */
+	private _recordClientToolFailure(chatURI: string, turnId: string, toolName: string, code: string, message: string): boolean {
+		let failures = this._clientToolFailures.get(chatURI);
+		if (!failures || failures.turnId !== turnId) {
+			failures = { turnId, counts: new Map(), stopped: false };
+			this._clientToolFailures.set(chatURI, failures);
+		}
+		const key = JSON.stringify([toolName, code, message]);
+		const count = (failures.counts.get(key) ?? 0) + 1;
+		failures.counts.set(key, count);
+		if (count < 3 || failures.stopped) {
+			return false;
+		}
+		failures.stopped = true;
+		this._logService.warn(`[AgentHost] Stopping turn after repeated client tool errors: ${toolName}`);
+		return true;
+	}
+
 	override dispose(): void {
+		this._clientToolFailures.clear();
 		for (const [, session] of this._activeSessions) {
 			session.dispose();
 		}

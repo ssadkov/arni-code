@@ -141,3 +141,37 @@ the contribution test fixture was supplied so these tests can execute.
 Changed client modules were rebuilt incrementally. Relaunch metadata is in
 `.build/form-agent-validation/restored-auth-launch.jsonl`. A successful paid
 model call or complete form run is not claimed by these tests.
+
+## Client tool input and failure-loop recovery, 2026-10-26
+
+Nemotron's later run alternated between two `readFile` calls using `{ path: ... }`.
+The extension expects `filePath`, so preparation crashed while dereferencing an
+undefined parameter. A similar notebook call failed on `startsWith`. Neither
+failure taught the model the required parameter names, and it kept retrying.
+
+The renderer now checks the tool's declared required parameters and top-level
+primitive types before invoking the extension. This is a basic object-contract
+check, not a replacement for the tool's validation of nested schemas, ranges,
+permissions, or file access. Invalid arguments produce a recoverable tool error
+listing the required names; no parameter aliases or file paths are guessed.
+
+Per-chat, per-turn tracking cancels a request after three identical failures
+from a client tool, including failures repeated with different input paths.
+Successful tool work resets the recovery budget, and a new turn gets a fresh
+budget. Cancellation is dispatched through the existing turn-cancellation
+protocol. Tool error content is preserved, and late calls for the stopped turn
+are rejected while cancellation settles. The account/authentication checks and
+tool confirmation behavior remain in place.
+
+The complete `AgentHostClientTools` Chromium suite passes **62 tests**, including
+the recorded missing-parameter shape, wrong primitive types, three-error loops,
+corrected calls, recovery in a new turn after cancellation, execution-error
+content, and existing confirmation/delegation behavior. Logs are in
+`.build/form-agent-validation/nemotron-tool-recovery-tests-final.log`.
+
+Client output was rebuilt and loaded by reloading the existing Arni window.
+A live smoke test uses a new folder containing only a synthetic README with
+`https://example.com`. It reached Arni's workspace trust confirmation; a human
+must approve that prompt before the live model run can proceed. No successful
+Nemotron response or Google Form submission is claimed at this point. The Qwen
+`context_too_large` failure remains a separate unresolved issue.
