@@ -468,35 +468,40 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	private static readonly _arniAuthProviders = ['yandex', 'vk'] as const;
 
 	private async exchangeArniSession(provider: 'yandex' | 'vk', accessToken: string): Promise<string | undefined> {
-		let response: Response | undefined;
 		for (const apiBase of this.getBackendApiCandidates()) {
 			try {
-				response = await fetch(`${apiBase}/auth/exchange`, {
+				const response = await fetch(`${apiBase}/auth/exchange`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ provider, token: accessToken })
+					body: JSON.stringify({ provider, token: accessToken }),
+					signal: AbortSignal.timeout(10_000),
 				});
+				if (response.status >= 500 || response.status === 408 || response.status === 429) {
+					this._logService.warn(`Arni sign-in backend temporarily unavailable at ${apiBase}: HTTP ${response.status}`);
+					continue;
+				}
+				if (!response.ok) {
+					this._logService.error(`Arni ${provider} token exchange rejected: HTTP ${response.status}`);
+					if (response.status === 401 || response.status === 403) {
+						this._arniJwt = undefined;
+					}
+					return undefined;
+				}
+				const data = await response.json() as { token?: string; user?: { freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
+				if (!data.token) {
+					this._logService.warn(`Arni sign-in backend returned no token at ${apiBase}`);
+					continue;
+				}
 				this._reachableApiBase = apiBase;
-				break;
+				this._arniJwt = data.token;
+				this.showFreeSteps(data.user?.freeSteps);
+				return data.token;
 			} catch (e) {
 				this._logService.warn(`Arni backend unreachable at ${apiBase}: ${String(e)}`);
 			}
 		}
-		if (!response) {
-			this._logService.error(`Failed to exchange ${provider} token: no Arni backend is reachable`);
-			return undefined;
-		}
-		if (response.ok) {
-			const data = await response.json() as { token?: string; user?: { freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
-			if (data.token) {
-				this._arniJwt = data.token;
-				this.showFreeSteps(data.user?.freeSteps);
-				return data.token;
-			}
-			return undefined;
-		}
-		this._logService.error(`Failed to exchange ${provider} token: ` + await response.text());
-		this._arniJwt = undefined;
+		// An outage says nothing about the validity of the saved product session.
+		this._logService.error(`Arni ${provider} token exchange unavailable on all configured backends`);
 		return undefined;
 	}
 
@@ -595,7 +600,10 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const backendUrls = this.getBackendApiCandidates().map(apiBase => ({ url: `${apiBase}/models`, apiBase }));
 		for (const { url, apiBase } of [...backendUrls, { url: OPENROUTER_MODELS_URL, apiBase: undefined }]) {
 			try {
-				const res = await fetch(url, apiBase && apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : undefined);
+				const res = await fetch(url, {
+					...(apiBase && apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {}),
+					signal: AbortSignal.timeout(10_000),
+				});
 				if (res.ok) {
 					const json = await res.json() as { data?: OpenRouterModelData[]; arni_managed?: boolean };
 					// The backend already sends only free models; the direct OpenRouter catalog does not.
@@ -648,13 +656,18 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const rates = price && [price.prompt, price.completion].map(value => Number((Number(value) * 1_000_000).toFixed(6)));
 		const priceLabel = rates?.every(value => Number.isFinite(value) && value >= 0)
 			? vscode.l10n.t(' · ${0}/${1} за 1М вх./вых.', rates[0], rates[1]) : '';
+		// This adapter carries both routes through Arni. Its OpenRouter name or
+		// internal selection-id prefix does not identify the inference provider.
+		const providerLabel = openRouterModelData.arni_provider === 'bedrock' ? 'Amazon Bedrock'
+			: openRouterModelData.arni_provider === 'openrouter' ? 'OpenRouter' : undefined;
+		const modelName = providerLabel ? `${providerLabel} · ${openRouterModelData.name}` : openRouterModelData.name;
 		const labels = openRouterModelData.arni_provider ? [
 			openRouterModelData.arni_free ? vscode.l10n.t('Бесплатная') : vscode.l10n.t('Платная'),
 			...(openRouterModelData.architecture?.input_modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : []),
 			...(openRouterModelData.arni_cache ? [vscode.l10n.t('Кэш')] : []),
 		].join(' · ') : '';
 		return {
-			name: openRouterModelData.name + priceLabel + (labels ? ` · ${labels}` : ''),
+			name: modelName + priceLabel + (labels ? ` · ${labels}` : ''),
 			toolCalling: supportedParameters.includes('tools'),
 			vision: openRouterModelData.architecture?.input_modalities?.includes('image') ?? false,
 			maxInputTokens: contextWindow - maxOutputTokens,

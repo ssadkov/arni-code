@@ -153,7 +153,7 @@ The renderer now checks the tool's declared required parameters and top-level
 primitive types before invoking the extension. This is a basic object-contract
 check, not a replacement for the tool's validation of nested schemas, ranges,
 permissions, or file access. Invalid arguments produce a recoverable tool error
-listing the required names; no parameter aliases or file paths are guessed.
+listing the required names; file paths and missing line ranges are not guessed.
 
 Per-chat, per-turn tracking cancels a request after three identical failures
 from a client tool, including failures repeated with different input paths.
@@ -187,3 +187,35 @@ The synthetic read does not establish the complete Google Form workflow. No
 form was submitted. The Qwen `context_too_large` failure remains a separate
 unresolved issue; continuing the old oversized conversation is not a clean
 model comparison.
+
+## Catalog outage, provider labels, and explicit read ranges, 2026-10-26
+
+The next launch retained the Yandex account, but its Copilot extension log at
+02:49:53 recorded HTTP 502 from `/auth/exchange`. The client stopped trying
+configured backend candidates after any HTTP response, including gateway
+errors. The empty model picker then presented the upstream Copilot sign-in
+action. The catalog eventually recovered at 02:50:26.
+
+Token exchange now tries configured backups after network failures, a ten-second
+timeout, HTTP 5xx, 408, or 429. Temporary outages preserve the cached token;
+explicit 401/403 rejection clears it and does not try another origin. Logs
+record status rather than response bodies. Catalog requests also have a
+ten-second timeout before trying the next source. When an Arni product session exists,
+the empty picker explains that Arni models are unavailable instead of offering
+Copilot sign-in. Model names show `Amazon Bedrock` or `OpenRouter` from the
+backend's `arni_provider` field; the shared adapter's internal ID prefix does
+not identify the inference provider.
+
+The real form session `5e59b826-d225-4d27-9917-1289c67f69c1` opened the browser
+and read the user profile, then stopped at 02:54:42 after three invalid reader
+calls. Nemotron supplied `filePath` and `view_range` rather than `startLine` and
+`endLine`. For the bundled legacy `copilot_readFile` schema only, the client now
+translates an explicit two-element, positive, ordered integer range. Canonical
+parameters take precedence; invalid/unbounded ranges and third-party tools are
+unchanged. File-access and confirmation checks still apply.
+
+Validation: provider/authentication unit suite **26 passing**, model-picker
+Chromium suite **101 passing**, client-tool Chromium suite **64 passing**,
+including replay of the observed range arguments. Logs are under
+`.build/form-agent-validation/`. This range replay is not a new complete live
+form run, and it does not resolve the separate Qwen context-limit failure.

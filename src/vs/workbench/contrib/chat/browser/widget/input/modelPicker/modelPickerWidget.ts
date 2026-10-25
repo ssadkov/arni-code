@@ -119,6 +119,7 @@ export class ModelPickerWidget extends Disposable {
 	readonly onDidChangeMinimumWidth: Event<number> = this._onDidChangeMinimumWidth.event;
 
 	private _selectedModel: ILanguageModelChatMetadataAndIdentifier | undefined;
+	private _productAccountSignedIn = false;
 	private _badge: ModelPickerBadge | undefined;
 	private _compact: IObservable<boolean> | undefined;
 	private _minimal: IObservable<boolean> | undefined;
@@ -321,6 +322,17 @@ export class ModelPickerWidget extends Disposable {
 	 */
 	isSetupRequired(): boolean {
 		return this._unavailableReason() === ModelPickerUnavailableReason.SetupRequired;
+	}
+
+	get productAccountSignedIn(): boolean {
+		return this._productAccountSignedIn;
+	}
+
+	setProductAccountSignedIn(value: boolean): void {
+		if (this._productAccountSignedIn !== value) {
+			this._productAccountSignedIn = value;
+			this._renderLabel();
+		}
 	}
 
 	private _clearActivating(): void {
@@ -605,6 +617,7 @@ export class ModelPickerWidget extends Disposable {
 				...presentation,
 				restrictedMode: this.isRestrictedMode(),
 				setupRequired: this.isSetupRequired(),
+				productAccountSignedIn: this._productAccountSignedIn,
 				showManageModelsInSetupRequired: this._configurationService.getValue<boolean>(AgentHostAllowSignedOutWhenUsableSettingId) === true,
 				isUBB: !!this._entitlementService.quotas.usageBasedBilling,
 			},
@@ -776,7 +789,9 @@ export class ModelPickerWidget extends Disposable {
 		const ariaLabel = restrictedMode
 			? localize('chat.modelPicker.ariaLabelRestricted', "Models, unavailable while in Restricted mode")
 			: setupRequired
-				? localize('chat.modelPicker.ariaLabelSetupRequired', "Models, sign in to use Copilot")
+				? this._productAccountSignedIn
+					? localize('chat.modelPicker.ariaLabelArniUnavailable', "Модели Arni пока недоступны")
+					: localize('chat.modelPicker.ariaLabelSetupRequired', "Models, sign in to use Copilot")
 				: configSummary
 					? localize('chat.modelPicker.ariaLabelConfigured', "Models, {0}, {1}", modelLabel, configSummary)
 					: localize('chat.modelPicker.ariaLabel', "Models, {0}", modelLabel);

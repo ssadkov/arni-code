@@ -41,7 +41,7 @@ import { TestInstantiationService } from '../../../../../../platform/instantiati
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../../../services/configurationResolver/common/configurationResolver.js';
 import { AgentHostSessionHandler, toolDataToDefinition, toolResultToProtocol, UNOBSERVED_CLIENT_TOOL_GRACE_MS } from '../../../browser/agentSessions/agentHost/agentHostSessionHandler.js';
-import { getToolInputError } from '../../../browser/agentSessions/agentHost/agentHostToolUtils.js';
+import { getToolInputError, normalizeReadFileRange } from '../../../browser/agentSessions/agentHost/agentHostToolUtils.js';
 import { AgentHostActiveClientService, IAgentHostActiveClientService } from '../../../browser/agentSessions/agentHost/agentHostActiveClientService.js';
 import { IAgentHostCustomizationService, NullAgentHostCustomizationService } from '../../../browser/agentSessions/agentHost/agentHostCustomizationService.js';
 import { AGENT_HOST_COPILOT_CLI_SESSION_TYPE, IAgentHostToolSetEnablementService, IToolEnablementState } from '../../../browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
@@ -306,6 +306,19 @@ suite('AgentHostClientTools', () => {
 	// ── toolDataToDefinition ─────────────────────────────────────────────
 
 	suite('tool input contract', () => {
+		test('translates only explicit bounded SDK ranges for the bundled reader', () => {
+			const tool: IToolData = { ...readFileTool, id: 'copilot_readFile', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' } } } };
+			const parameters = Object.freeze({ filePath: '/repo/README.md', view_range: [5, 20] });
+			assert.deepStrictEqual(normalizeReadFileRange(tool, parameters), { filePath: '/repo/README.md', startLine: 5, endLine: 20 });
+			assert.deepStrictEqual(parameters.view_range, [5, 20]);
+			for (const range of [[1, -1], [20, 5], [0, 10], [1], [1, 2.5], ['1', '20']]) {
+				const invalid = { filePath: '/repo/README.md', view_range: range };
+				assert.strictEqual(normalizeReadFileRange(tool, invalid), invalid);
+			}
+			const canonical = { ...parameters, startLine: 3, endLine: 4 };
+			assert.strictEqual(normalizeReadFileRange(tool, canonical), canonical);
+			assert.strictEqual(normalizeReadFileRange({ ...tool, id: 'third-party.readFile' }, parameters), parameters);
+		});
 		test('reports declared required names rather than crashing on a path alias', () => {
 			const tool: IToolData = { ...readFileTool, inputSchema: { type: 'object', required: ['filePath'], properties: { filePath: { type: 'string' }, offset: { type: 'integer' }, limit: { type: ['number', 'null'] } } } };
 			assert.ok(getToolInputError(tool, { path: '/repo/README.md' })?.includes('filePath'));
@@ -1152,6 +1165,16 @@ suite('AgentHostClientTools', () => {
 			await timeout(0);
 			await timeout(0);
 		}
+
+		test('executes a bundled readFile call with the explicit view_range observed in the live form request', async () => {
+			const tool: IToolData = { ...testUnlistedTool, id: 'copilot_readFile', inputSchema: { type: 'object', required: ['filePath', 'startLine', 'endLine'], properties: { filePath: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' } } } };
+			const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [tool]);
+			const chatURI = URI.parse(buildDefaultChatUri(AgentSession.uri('copilot', 'session-1').toString()));
+			connection.applySessionAction(chatURI, { type: ActionType.ChatTurnStarted, turnId: 'turn-1', startedAt: '2025-01-01T00:00:00.000Z', message: { text: 'Read project facts', origin: { kind: MessageKind.User } } });
+			await handler.provideChatSessionContent(URI.parse('agent-host-copilot:/session-1'), CancellationToken.None);
+			await executeTestClientTool(connection, chatURI, tool, { filePath: '/repo/README.md', view_range: [5, 20] }, 'sdk-range');
+			assert.deepStrictEqual(toolsService.invokedToolCalls.map(call => call.parameters), [{ filePath: '/repo/README.md', startLine: 5, endLine: 20 }]);
+		});
 
 		test('rejects invalid readFile input before invocation and stops a three-error loop across different paths', async () => {
 			const tool: IToolData = { ...testUnlistedTool, inputSchema: { type: 'object', required: ['filePath'], properties: { filePath: { type: 'string' } } } };

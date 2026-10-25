@@ -30,6 +30,7 @@ export interface IBuildModelPickerItemsOptions {
 		readonly showAutoModel: boolean;
 		readonly restrictedMode: boolean;
 		readonly setupRequired: boolean;
+		readonly productAccountSignedIn?: boolean;
 		readonly showManageModelsInSetupRequired: boolean;
 		readonly isUBB: boolean;
 	};

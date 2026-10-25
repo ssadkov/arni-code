@@ -65,8 +65,15 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'test/vision:free', name: 'Vision', arni_provider: 'openrouter', arni_free: true,
 			architecture: { input_modalities: ['text', 'image'] }, context_length: 131072, supported_parameters: ['tools'],
 			top_provider: { context_length: 131072, max_completion_tokens: 4096 }, pricing: { prompt: '0', completion: '0' } });
-		expect(caps?.name).toBe('Vision · $0/$0 за 1М вх./вых. · Бесплатная · Изображения');
+		expect(caps?.name).toBe('OpenRouter · Vision · $0/$0 за 1М вх./вых. · Бесплатная · Изображения');
 		expect(caps?.vision).toBe(true);
+	});
+	it('identifies the backend route independently of the adapter and model id', () => {
+		const data = { id: 'qwen.qwen3-coder-next', name: 'Qwen3 Coder Next', context_length: 262144, top_provider: { context_length: 262144, max_completion_tokens: 4096 } };
+		const provider = createProvider();
+		expect(provider.resolveCapabilities({ ...data, arni_provider: 'bedrock' })?.name).toContain('Amazon Bedrock · Qwen3 Coder Next');
+		expect(provider.resolveCapabilities({ ...data, arni_provider: 'openrouter' })?.name).toContain('OpenRouter · Qwen3 Coder Next');
+		expect(provider.resolveCapabilities(data)?.name).toBe('Qwen3 Coder Next');
 	});
 	it('shows managed USD prices and preserves Qwen vision and effective limits', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'qwen.qwen3-vl-235b-a22b', name: 'Qwen3 VL', supported_parameters: ['tools'],
@@ -155,6 +162,20 @@ describe('Arni backend URL', () => {
 });
 
 describe('Model discovery records capabilities', () => {
+	it('bounds catalog requests and tries the backup after a timeout', async () => {
+		const provider = createProvider();
+		provider.backendCandidates = ['https://primary.example/api', 'https://backup.example/api'];
+		const fetchMock = vi.fn().mockRejectedValueOnce(new DOMException('Timed out', 'TimeoutError')).mockResolvedValueOnce({
+			ok: true, json: async () => ({ arni_managed: true, data: [{ id: 'qwen.qwen3-coder-next', name: 'Qwen', arni_provider: 'bedrock', context_length: 262144, top_provider: { context_length: 262144, max_completion_tokens: 4096 } }] }),
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		try {
+			const models = await provider.listModels(true, 'test-jwt');
+			expect({ ids: models.map(model => model.id), urls: fetchMock.mock.calls.map(call => call[0]), signals: fetchMock.mock.calls.every(call => call[1].signal instanceof AbortSignal) }).toEqual({
+				ids: ['qwen.qwen3-coder-next'], urls: ['https://primary.example/api/models', 'https://backup.example/api/models'], signals: true,
+			});
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
+	});
 	it('keeps tool calling enabled so the request is not stripped of its tools', async () => {
 		const provider = createProvider();
 		const fetchMock = vi.fn().mockResolvedValue({
@@ -189,6 +210,55 @@ describe('Model discovery records capabilities', () => {
 			ids: models.map(model => model.id),
 			toolCalls: provider.modelInfoFor('poolside/laguna-s-2.1:free').capabilities.supports.tool_calls,
 		}).toEqual({ ids: ['poolside/laguna-s-2.1:free'], toolCalls: true });
+	});
+});
+
+describe('Arni product authentication backend recovery', () => {
+	it('uses the configured backup after HTTP 502 without treating it as sign-out', async () => {
+		const fetchMock = vi.fn().mockResolvedValueOnce({ ok: false, status: 502 }).mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ token: 'replacement-jwt' }) });
+		vi.stubGlobal('fetch', fetchMock);
+		const provider = createProvider();
+		provider.backendCandidates = ['https://primary.example/api', 'https://backup.example/api'];
+		const internals = provider as unknown as { exchangeArniSession(provider: string, token: string): Promise<string | undefined>; _arniJwt?: string; _reachableApiBase?: string };
+		try {
+			expect(await internals.exchangeArniSession('yandex', 'test-oauth-token')).toBe('replacement-jwt');
+			expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['https://primary.example/api/auth/exchange', 'https://backup.example/api/auth/exchange']);
+			expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+			expect(internals._reachableApiBase).toBe('https://backup.example/api');
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
+	});
+	it('keeps the existing token when all configured backends return transient errors', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+		const provider = createProvider();
+		const internals = provider as unknown as { exchangeArniSession(provider: string, token: string): Promise<string | undefined>; _arniJwt?: string };
+		internals._arniJwt = 'existing-jwt';
+		try {
+			expect(await internals.exchangeArniSession('yandex', 'test-oauth-token')).toBeUndefined();
+			expect(internals._arniJwt).toBe('existing-jwt');
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
+	});
+	it('honors an explicit authentication rejection without trying another origin', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+		vi.stubGlobal('fetch', fetchMock);
+		const provider = createProvider();
+		provider.backendCandidates = ['https://primary.example/api', 'https://backup.example/api'];
+		const internals = provider as unknown as { exchangeArniSession(provider: string, token: string): Promise<string | undefined>; _arniJwt?: string };
+		internals._arniJwt = 'existing-jwt';
+		try {
+			expect(await internals.exchangeArniSession('yandex', 'test-oauth-token')).toBeUndefined();
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			expect(internals._arniJwt).toBeUndefined();
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
+	});
+	it('tries the configured backup after a timeout', async () => {
+		const fetchMock = vi.fn().mockRejectedValueOnce(new DOMException('Timed out', 'TimeoutError')).mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ token: 'replacement-jwt' }) });
+		vi.stubGlobal('fetch', fetchMock);
+		const provider = createProvider();
+		provider.backendCandidates = ['https://primary.example/api', 'https://backup.example/api'];
+		try {
+			expect(await (provider as unknown as { exchangeArniSession(provider: string, token: string): Promise<string | undefined> }).exchangeArniSession('yandex', 'test-oauth-token')).toBe('replacement-jwt');
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+		} finally { provider.dispose(); vi.unstubAllGlobals(); }
 	});
 });
 

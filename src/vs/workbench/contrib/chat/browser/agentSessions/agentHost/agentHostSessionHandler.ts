@@ -114,7 +114,7 @@ import type { AgentHostPromptCacheNotification } from './agentHostPromptCacheNot
 import { IChatResponseFileChangesService } from '../../chatResponseFileChangesService.js';
 import { AgentHostSessionReferenceAttachmentDisplayKind, AgentHostSessionReferenceTrajectoryAttachmentDisplayKind, toSessionReferenceAttachmentMeta, toSessionReferenceModelRepresentation } from './agentHostSessionReferenceAttachment.js';
 import { buildHostLocalEventsPath } from '../../copilotCliEventsUri.js';
-import { getToolInputError, toolDataToDefinition } from './agentHostToolUtils.js';
+import { getToolInputError, normalizeReadFileRange, toolDataToDefinition } from './agentHostToolUtils.js';
 import { isCopilotCliSessionType } from './agentHostToolSetEnablementService.js';
 import { IAgentHostUntitledProvisionalSessionService } from './agentHostUntitledProvisionalSessionService.js';
 import { IAgentHostImportConversationStore } from './agentHostImportConversationStore.js';
@@ -2859,6 +2859,7 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 		if (toolSearchCandidates !== undefined) {
 			parameters = { ...parameters, candidateTools: toolSearchCandidates };
 		}
+		parameters = normalizeReadFileRange(toolData, parameters);
 		const inputError = getToolInputError(toolData, parameters);
 		if (inputError) {
 			fail(inputError, 'invalidInput');

@@ -60,6 +60,15 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 		];
 	}
 	if (setupRequired) {
+		if (options.presentation.productAccountSignedIn) {
+			const items: IActionListItem<IActionWidgetDropdownAction>[] = [
+				{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.arniUnavailable', "Модели Arni пока недоступны") },
+			];
+			if (options.manageModelsAction) {
+				items.push({ kind: ActionListItemKind.Action, item: options.manageModelsAction, label: options.manageModelsAction.label, group: { title: '', icon: Codicon.blank }, hideIcon: false, showAlways: true });
+			}
+			return items;
+		}
 		const enabled = !!options.actions.onRequestSetup;
 		const items: IActionListItem<IActionWidgetDropdownAction>[] = [
 			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "Sign in to use Copilot") },

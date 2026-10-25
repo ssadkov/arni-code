@@ -13,6 +13,7 @@ import { MutableDisposable } from '../../../../../../../base/common/lifecycle.js
 import { autorun, IObservable } from '../../../../../../../base/common/observable.js';
 import { localize } from '../../../../../../../nls.js';
 import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
+import { ArniAccountSignedInContext } from '../../../../../../services/authentication/common/arniProductAuth.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../../../../platform/keybinding/common/keybinding.js';
 import { getLanguageModelDisplayNameWithSubscriptionSource } from '../../../../common/languageModelSourcePresentation.js';
@@ -80,6 +81,13 @@ export class ModelPickerActionItem extends BaseActionViewItem {
 		super(undefined, action);
 
 		this._pickerWidget = this._register(instantiationService.createInstance(ModelPickerWidget, delegate));
+		const refreshProductSignIn = () => this._pickerWidget.setProductAccountSignedIn(this._contextKeyService.getContextKeyValue<boolean>(ArniAccountSignedInContext.key) === true);
+		refreshProductSignIn();
+		this._register(this._contextKeyService.onDidChangeContext(event => {
+			if (event.affectsSome(new Set([ArniAccountSignedInContext.key]))) {
+				refreshProductSignIn();
+			}
+		}));
 		this._pickerWidget.setSelectedModel(delegate.currentModel.get());
 		this._pickerWidget.setCompact(pickerOptions.compact);
 		if (pickerOptions.minimal) {
@@ -191,6 +199,9 @@ export class ModelPickerActionItem extends BaseActionViewItem {
 			return localize('chat.modelPicker.restrictedHover', "{0} • Unavailable while in Restricted mode. Trust Workspace to enable models.", label);
 		}
 		if (this._pickerWidget.isSetupRequired()) {
+			if (this._pickerWidget.productAccountSignedIn) {
+				return localize('chat.modelPicker.arniUnavailableHover', "{0} • Вход в Arni сохранён. Каталог моделей загружается или сервер временно недоступен.", label);
+			}
 			return localize('chat.modelPicker.setupRequiredHover', "{0} • Sign in to GitHub Copilot to choose a model.", label);
 		}
 		const selectedModel = this._pickerWidget.selectedModel;

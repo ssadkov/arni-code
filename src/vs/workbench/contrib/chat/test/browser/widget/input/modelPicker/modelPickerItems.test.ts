@@ -142,6 +142,7 @@ function callBuild(
 		restrictedMode?: boolean;
 		onRequestTrust?: () => void;
 		setupRequired?: boolean;
+		productAccountSignedIn?: boolean;
 		showManageModelsInSetupRequired?: boolean;
 		onRequestSetup?: () => void;
 		onSelect?: (model: ILanguageModelChatMetadataAndIdentifier) => void;
@@ -173,6 +174,7 @@ function callBuild(
 			showAutoModel: opts.showAutoModel ?? true,
 			restrictedMode: opts.restrictedMode ?? false,
 			setupRequired: opts.setupRequired ?? false,
+			productAccountSignedIn: opts.productAccountSignedIn,
 			showManageModelsInSetupRequired: opts.showManageModelsInSetupRequired ?? false,
 			isUBB: false,
 		},
@@ -372,6 +374,16 @@ suite('buildModelPickerItems', () => {
 		assert.strictEqual(actions[0].item?.enabled, true);
 		assert.strictEqual(actions.some(a => a.label === 'Auto'), false);
 		assert.strictEqual(actions[1].item?.id, 'manageModels');
+	});
+
+	test('a signed-in Arni account with no models is unavailable rather than signed out of Copilot', () => {
+		let signInRequests = 0;
+		const items = callBuild([], { setupRequired: true, productAccountSignedIn: true, onRequestSetup: () => { signInRequests++; } });
+		const actions = getActionItems(items);
+		assert.ok(items.some(item => item.kind === ActionListItemKind.Header && item.label === 'Модели Arni пока недоступны'));
+		assert.strictEqual(actions.some(action => action.item?.id === 'setupRequiredSignIn'), false);
+		assert.strictEqual(actions.some(action => action.item?.id === 'manageModels'), true);
+		assert.strictEqual(signInRequests, 0);
 	});
 
 	test('setupRequired Sign In action is disabled without a setup callback', () => {
