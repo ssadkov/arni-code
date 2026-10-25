@@ -65,3 +65,26 @@ client, extension and Copilot build logs, `fresh-build-smoke.log`, and
 A live GLM run on the ordinary application-preparation request remains required
 before calling the form workflow end-to-end verified. That run should first
 produce a draft, preserve missing-value questions, and avoid submitting the form.
+
+## Startup correction, 2026-10-25
+
+The first launch was incomplete despite the client, standard extensions and
+Copilot build succeeding. The standard extension task omitted Arni's three
+esbuild extensions: `arni-agent`, `yandex-authentication`, and
+`vk-authentication`. Their manifests point to `dist/extension.js`. The missing
+Yandex entry point caused activation to fail with `Cannot find module`, followed
+by `command 'yandex.signIn' not found` and the generic chat setup failure.
+
+The standard compile/transpile extension tasks now build those three extensions.
+Pre-launch repairs missing or empty bundles even when the client `out` directory
+already exists. Incremental build readiness also requires those entry points.
+The build-fast suite passes **13 tests**, including missing authentication
+outputs forcing an extension rebuild; `compile-arni-extensions` also succeeds.
+
+The corrected isolated launch is recorded in
+`.build/form-agent-validation/auth-fixed-launch.jsonl`. Its extension-host log
+shows Yandex activation without the missing-module failure. Copilot reports
+`ConversationFeature: BYOK models available`, and the renderer initializes its
+model catalog with GLM 5.3 Flash present. Extension-host startup remains slow in
+this development build and briefly triggers unresponsive warnings before
+recovering. No successful live model request or browser form run is claimed.

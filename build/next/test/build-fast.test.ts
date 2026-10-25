@@ -10,13 +10,36 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { suite, test } from 'node:test';
-import { collectSnapshot, computeChangedPaths, createBuildFastPrerequisites, createBuildPlan, parseNullSeparatedPaths, selectBuiltSnapshot, type BuildFastSnapshot, type BuildFastState, type OutputStatus, type StateReadResult } from '../build-fast.ts';
+import { collectSnapshot, computeChangedPaths, createBuildFastPrerequisites, createBuildPlan, getOutputStatus, parseNullSeparatedPaths, selectBuiltSnapshot, type BuildFastSnapshot, type BuildFastState, type OutputStatus, type StateReadResult } from '../build-fast.ts';
 import { applyIncrementalClientChanges, getOutputRelativePath } from '../transpile.ts';
 
 const environment = 'test-environment';
 const outputsPresent: OutputStatus = { client: true, extensions: true, copilot: true };
 
 suite('build-fast planning', () => {
+	test('requires Arni authentication bundles before treating extensions as ready', async () => {
+		const repoRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'arni-build-outputs-'));
+		try {
+			await write(repoRoot, 'out/main.js', '// client');
+			await write(repoRoot, 'extensions/configuration-editing/out/configurationEditingMain.js', '// extension');
+			await write(repoRoot, 'extensions/copilot/dist/extension.js', '// copilot');
+			assert.deepStrictEqual(await getOutputStatus(repoRoot), { client: true, extensions: false, copilot: true });
+			for (const name of ['arni-agent', 'yandex-authentication', 'vk-authentication']) {
+				await write(repoRoot, `extensions/${name}/dist/extension.js`, '// bundle');
+			}
+			assert.deepStrictEqual(await getOutputStatus(repoRoot), outputsPresent);
+			await fs.promises.unlink(path.join(repoRoot, 'extensions/yandex-authentication/dist/extension.js'));
+			const missingAuth = await getOutputStatus(repoRoot);
+			assert.strictEqual(missingAuth.extensions, false);
+			assert.strictEqual(createBuildPlan(savedState(), environment, [], missingAuth, false).extensions, 'full');
+			await write(repoRoot, 'extensions/yandex-authentication/dist/extension.js', '// restored');
+			await write(repoRoot, 'extensions/vk-authentication/dist/extension.js', '');
+			assert.strictEqual((await getOutputStatus(repoRoot)).extensions, false);
+		} finally {
+			await fs.promises.rm(repoRoot, { recursive: true, force: true });
+		}
+	});
+
 	test('parses NUL-separated Git paths', () => {
 		assert.deepStrictEqual(
 			parseNullSeparatedPaths(Buffer.from('src/one.ts\0extensions/two file.ts\0')),

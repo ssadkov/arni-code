@@ -5,6 +5,7 @@
 import path from 'path';
 import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
+import { buildArniExtensions, hasArniExtensionOutputs } from './arniExtensions.ts';
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const rootDir = path.resolve(import.meta.dirname, '..', '..');
@@ -67,6 +68,9 @@ async function main() {
 	await ensureNodeModules();
 	await getElectron();
 	await ensureCompiled();
+	if (!await hasArniExtensionOutputs(rootDir)) {
+		await buildArniExtensions(rootDir);
+	}
 
 	// Can't require this until after dependencies are installed
 	const { getBuiltInExtensions } = await import('./builtInExtensions.ts');

@@ -22,6 +22,7 @@ import * as tsb from './lib/tsb/index.ts';
 import { createTsgoStream, spawnTsgo } from './lib/tsgo.ts';
 import * as util from './lib/util.ts';
 import watcher from './lib/watch/index.ts';
+import { buildArniExtensions } from './lib/arniExtensions.ts';
 
 const root = path.dirname(import.meta.dirname);
 const commit = getVersion(root);
@@ -232,10 +233,13 @@ const tasks = compilations.map(function (tsconfigFile) {
 	return { transpileTask, compileTask, watchTask };
 });
 
-const transpileExtensionsTask = task.define('transpile-extensions', task.parallel(...tasks.map(t => t.transpileTask)));
+const compileArniExtensionsTask = task.define('compile-arni-extensions', () => buildArniExtensions(root));
+task.task(compileArniExtensionsTask);
+
+const transpileExtensionsTask = task.define('transpile-extensions', task.parallel(...tasks.map(t => t.transpileTask), compileArniExtensionsTask));
 task.task(transpileExtensionsTask);
 
-export const compileExtensionsTask = task.define('compile-extensions', task.parallel(...tasks.map(t => t.compileTask)));
+export const compileExtensionsTask = task.define('compile-extensions', task.parallel(...tasks.map(t => t.compileTask), compileArniExtensionsTask));
 task.task(compileExtensionsTask);
 
 export const watchExtensionsTask = task.define('watch-extensions', task.parallel(...tasks.map(t => t.watchTask)));

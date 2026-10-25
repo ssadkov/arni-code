@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getGitCommitDate } from '../lib/date.ts';
 import { applyIncrementalClientChanges, mapWithConcurrency, MAX_CONCURRENT_FILE_OPERATIONS } from './transpile.ts';
+import { hasArniExtensionOutputs } from '../lib/arniExtensions.ts';
 
 const STATE_SCHEMA = 1;
 const BUILD_RECIPE = 1;
@@ -349,13 +350,13 @@ function fullPlan(reason: string, changedPaths: readonly string[]): BuildFastPla
 	return { reason, changedPaths, client: 'full', extensions: 'full', copilot: 'full' };
 }
 
-async function getOutputStatus(repoRoot: string): Promise<OutputStatus> {
+export async function getOutputStatus(repoRoot: string): Promise<OutputStatus> {
 	const [client, extensions, copilot] = await Promise.all([
 		pathExists(path.join(repoRoot, 'out', 'main.js')),
 		pathExists(path.join(repoRoot, 'extensions', 'configuration-editing', 'out', 'configurationEditingMain.js')),
 		pathExists(path.join(repoRoot, 'extensions', 'copilot', 'dist', 'extension.js')),
 	]);
-	return { client, extensions, copilot };
+	return { client, extensions: extensions && await hasArniExtensionOutputs(repoRoot), copilot };
 }
 
 function validateSelectedOutputs(plan: BuildFastPlan, outputs: OutputStatus): void {
@@ -363,7 +364,7 @@ function validateSelectedOutputs(plan: BuildFastPlan, outputs: OutputStatus): vo
 		throw new Error('Client build completed without producing out/main.js.');
 	}
 	if (plan.extensions !== 'skip' && !outputs.extensions) {
-		throw new Error('Extension build completed without producing the expected configuration-editing output.');
+		throw new Error('Extension build completed without all required standard and Arni extension entry points.');
 	}
 	if (plan.copilot !== 'skip' && !outputs.copilot) {
 		throw new Error('Copilot build completed without producing dist/extension.js.');
