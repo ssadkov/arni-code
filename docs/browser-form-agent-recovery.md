@@ -43,7 +43,25 @@ dependencies and compiled support modules. No paid model requests were made.
   document URLs, malformed URLs, and a spoofed Google hostname.
 - `git diff --check`: passed.
 
-The installed application was not replaced. A full product build and a live
-GLM run on the ordinary application-preparation request are still required
-before calling this an end-to-end verified fix. That run should first produce
-a draft, preserve missing-value questions, and avoid submitting the form.
+## Source build and launch, 2026-10-25
+
+The client was rebuilt from all 8,838 TypeScript files, and 2,074 resources
+were copied. Both built-in extension compilation/media checks and the Copilot
+extension build completed successfully after dependency installation finished.
+The fresh output passes 63 tests across tool instructions, prompt registry,
+and the local HTTP BYOK proxy.
+
+The build was launched from this worktree with an isolated copy of the current
+Arni profile. Its command-center label is `Arni Code — формы d58881bb`; the
+native window title is `Agents`. The launcher confirmed CDP readiness, the
+main-process log confirmed agent-host startup, and the window process reports
+`Responding: true`. The installed application was not replaced.
+
+Startup evidence is in `.build/form-agent-validation/` (ignored): installation,
+client, extension and Copilot build logs, `fresh-build-smoke.log`, and
+`launch-result.jsonl`. The executable output is from implementation commit
+`d58881bb`; this documentation update does not change executable behavior.
+
+A live GLM run on the ordinary application-preparation request remains required
+before calling the form workflow end-to-end verified. That run should first
+produce a draft, preserve missing-value questions, and avoid submitting the form.
