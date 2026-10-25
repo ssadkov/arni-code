@@ -29,6 +29,7 @@ import type { ITextModel } from '../../../../../../editor/common/model.js';
 import { IModelService } from '../../../../../../editor/common/services/model.js';
 import { localize } from '../../../../../../nls.js';
 import { AgentHostAllowSignedOutWhenUsableSettingId, AgentProvider, AgentSession, CODEX_AGENT_PROVIDER_ID, type IAgentConnection } from '../../../../../../platform/agentHost/common/agentService.js';
+import { readAgentModelByokIdentifier } from '../../../../../../platform/agentHost/common/agentModelByokMeta.js';
 import { agentHostAuthority, LOCAL_AGENT_HOST_AUTHORITY } from '../../../../../../platform/agentHost/common/agentHostUri.js';
 import { isCustomizationEnabled } from '../../../../../../platform/agentHost/common/customizationEnablement.js';
 import { findDeepestContainingWorkingDirectory } from '../../../../../../platform/agentHost/common/agentHostWorkingDirectories.js';
@@ -5371,6 +5372,12 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 		const agentInfo = this._getRootState()?.agents.find(a => a.provider === this._config.provider);
 		const protectedResources = agentInfo?.protectedResources ?? [];
 		const allowSignedOutWhenUsable = this._configurationService.getValue<boolean>(AgentHostAllowSignedOutWhenUsableSettingId) === true;
+		// A restored BYOK selection can arrive before the model catalog. Missing
+		// metadata is not evidence that a Copilot login is needed. Fail without
+		// changing models or prompting for unrelated protected-resource auth.
+		if (allowSignedOutWhenUsable && this._config.resolveAuthentication && (!model || !agentInfo?.models.some(candidate => candidate.id === model.id))) {
+			throw new Error(localize('agentHost.modelNotReady', "The selected model is not available yet. Wait for the model list to load, then select an available model and try again."));
+		}
 		if (modelRequiresAgentAuthentication(agentInfo, model, allowSignedOutWhenUsable) && this._config.resolveAuthentication) {
 			const authenticated = await this._config.resolveAuthentication(protectedResources);
 			if (!authenticated) {
@@ -5752,6 +5759,14 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			return languageModelIdentifier.substring(prefix.length);
 		}
 		if (languageModelIdentifier.includes('/')) {
+			// Restored chats can carry the raw host id or the original renderer
+			// BYOK id. Accept only an exact advertised match, preserving the
+			// foreign-vendor fallback for unrelated participant selections.
+			const advertisedModel = this._getRootState()?.agents.find(agent => agent.provider === this._config.provider)?.models
+				.find(model => model.id === languageModelIdentifier || readAgentModelByokIdentifier(model) === languageModelIdentifier);
+			if (advertisedModel) {
+				return advertisedModel.id;
+			}
 			this._logService.warn(`[AgentHost] Dropping foreign model identifier '${languageModelIdentifier}' for session type '${this._config.sessionType}'; falling back to default model.`);
 			return undefined;
 		}

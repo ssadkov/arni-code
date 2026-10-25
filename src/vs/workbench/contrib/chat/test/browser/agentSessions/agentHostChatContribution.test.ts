@@ -27,7 +27,7 @@ import { IModelService } from '../../../../../../editor/common/services/model.js
 import { createTextModel } from '../../../../../../editor/test/common/testTextModel.js';
 import { ILogService, NullLogService } from '../../../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { IAgentCreateSessionConfig, IAgentHostService, IAgentSessionMetadata, AgentSession } from '../../../../../../platform/agentHost/common/agentService.js';
+import { IAgentCreateSessionConfig, IAgentHostService, IAgentSessionMetadata, AgentSession, AgentHostAllowSignedOutWhenUsableSettingId } from '../../../../../../platform/agentHost/common/agentService.js';
 import type { ChatInputRequestWithPlanReview } from '../../../../../../platform/agentHost/common/agentHostPlanReview.js';
 import { agentHostAuthority, createAgentHostResourceUriMapper, fromAgentHostUri, identityAgentHostResourceUriMapper, toAgentHostUri } from '../../../../../../platform/agentHost/common/agentHostUri.js';
 import { AgentFeedbackAttachmentDisplayKind, AgentFeedbackAttachmentMetadataKey } from '../../../../../../platform/agentHost/common/meta/agentFeedbackAttachments.js';
@@ -44,6 +44,8 @@ import { CompletionItemKind as AhpCompletionItemKind, type CompletionsParams, ty
 import { sessionReducer, chatReducer } from '../../../../../../platform/agentHost/common/state/sessionReducers.js';
 import { IDefaultAccountService } from '../../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
+import { MockContextKeyService } from '../../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { IProgress, IProgressNotificationOptions, IProgressService, IProgressStep } from '../../../../../../platform/progress/common/progress.js';
 import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../../platform/telemetry/common/telemetryUtils.js';
@@ -713,6 +715,7 @@ function createTestServices(disposables: DisposableStore, workingDirectoryResolv
 	};
 
 	instantiationService.stub(IAgentHostService, agentHostService);
+	instantiationService.stub(IContextKeyService, new MockContextKeyService());
 	instantiationService.stub(ILogService, new NullLogService());
 	instantiationService.stub(IProductService, { quality: 'insider' });
 	instantiationService.stub(ITelemetryService, NullTelemetryService);
@@ -4278,6 +4281,39 @@ suite('AgentHostChatContribution', () => {
 			assert.strictEqual(agentHostService.createSessionCalls.length, 1);
 			assert.strictEqual(agentHostService.createSessionCalls[0].model, undefined);
 		}));
+
+		test('preserves advertised raw BYOK model ids restored from a previous chat', () => runWithFakedTimers({ useFakeTimers: true }, async () => {
+			const { sessionHandler, agentHostService, chatAgentService } = createContribution(disposables);
+			const modelId = 'openrouter/qwen.qwen3-vl-235b-a22b';
+			agentHostService.setRootState({ agents: [{ provider: 'copilot', displayName: 'Copilot', description: 'test', models: [{ id: modelId, name: 'Qwen', _meta: { byokModelIdentifier: `openrouter/Arni/${modelId}` } }] }], activeSessions: 0 });
+			const { turnPromise, session, turnId, fire } = await startTurn(sessionHandler, agentHostService, chatAgentService, disposables, {
+				message: 'Continue', userSelectedModelId: modelId,
+			});
+			fire({ type: 'chat/turnComplete', endedAt: '2025-01-01T00:00:00.000Z', session, turnId } as ChatAction);
+			await turnPromise;
+			assert.deepStrictEqual(agentHostService.createSessionCalls[0].model, { id: modelId });
+			const internals = sessionHandler as unknown as { _createModelSelection(id: string, config: undefined): { id: string } };
+			assert.deepStrictEqual(internals._createModelSelection(`openrouter/Arni/${modelId}`, undefined), { id: modelId });
+		}));
+
+		test('does not open unrelated sign-in while a restored BYOK model catalog is unavailable', async () => {
+			const { instantiationService, agentHostService } = createContribution(disposables, { configOverrides: { [AgentHostAllowSignedOutWhenUsableSettingId]: true } });
+			let authenticationRequests = 0;
+			const handler = disposables.add(instantiationService.createInstance(AgentHostSessionHandler, {
+				provider: 'copilot', agentId: 'model-auth-test', sessionType: 'agent-host-copilot', fullName: 'Copilot', description: 'test', connection: agentHostService, connectionAuthority: 'local',
+				resolveAuthentication: async () => { authenticationRequests++; return true; },
+			}));
+			const internals = handler as unknown as { _ensureRequiredAuthentication(model: { id: string } | undefined): Promise<ProtectedResourceMetadata[]> };
+			await assert.rejects(internals._ensureRequiredAuthentication(undefined), /selected model is not available yet/);
+			await assert.rejects(internals._ensureRequiredAuthentication({ id: 'openrouter/qwen.qwen3-vl-235b-a22b' }), /selected model is not available yet/);
+			assert.strictEqual(authenticationRequests, 0);
+			const resource = { resource: 'https://api.github.com', required: true };
+			agentHostService.setRootState({ agents: [{ provider: 'copilot', displayName: 'Copilot', description: 'test', protectedResources: [resource], models: [{ id: 'openrouter/qwen.qwen3-vl-235b-a22b', name: 'Qwen', _meta: { byokModelIdentifier: 'openrouter/qwen.qwen3-vl-235b-a22b' } }, { id: 'gpt-5', name: 'Copilot model' }] }], activeSessions: 0 });
+			await internals._ensureRequiredAuthentication({ id: 'openrouter/qwen.qwen3-vl-235b-a22b' });
+			assert.strictEqual(authenticationRequests, 0);
+			await internals._ensureRequiredAuthentication({ id: 'gpt-5' });
+			assert.strictEqual(authenticationRequests, 1);
+		});
 
 		test('does not create backend session eagerly for untitled sessions', async () => {
 			const { sessionHandler, agentHostService } = createContribution(disposables);

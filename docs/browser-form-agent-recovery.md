@@ -113,3 +113,31 @@ suites have **41 passing**. Changed client modules and the stylesheet were
 rebuilt incrementally. Launch evidence is stored in
 `.build/form-agent-validation/search-contrast-launch.jsonl`. Actual visual
 contrast and model behavior after relaunch still require a live check.
+
+## Restored model and unrelated sign-in correction, 2026-10-26
+
+The next send carried the raw selected identifier
+`openrouter/qwen.qwen3-vl-235b-a22b`. At 01:56:39 the renderer rejected its slash
+as a foreign participant model and fell back to the default selection. The
+protected-resource check then requested Copilot authentication through the
+product's Yandex/VK dialog, despite the existing Arni product account. The BYOK
+catalog did not finish loading until 01:57:10. Product authentication and
+Copilot's GitHub resource authentication are separate requirements.
+
+The session handler now accepts raw host or renderer BYOK identifiers only when
+they exactly match an advertised model for the current provider. With signed-out
+BYOK operation enabled, an unavailable selection stops with a model-loading
+message before interactive authentication, instead of silently selecting a
+default model. Known Copilot models retain their existing authentication check.
+
+Six targeted Chromium tests pass, covering restored raw/renderer identifiers,
+missing catalog, genuine Copilot authentication, existing namespaced selections,
+model configuration, and unrelated vendor identifiers. The older standalone
+authentication matrix also exposes an unrelated pre-existing expectation
+mismatch for `optionalResourceSignedOutDisabled` (expected true, actual false);
+its helper is unchanged by this correction. A missing context-key service in
+the contribution test fixture was supplied so these tests can execute.
+
+Changed client modules were rebuilt incrementally. Relaunch metadata is in
+`.build/form-agent-validation/restored-auth-launch.jsonl`. A successful paid
+model call or complete form run is not claimed by these tests.
