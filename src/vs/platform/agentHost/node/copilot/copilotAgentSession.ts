@@ -16,7 +16,7 @@ import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.
 import { Disposable, DisposableMap, IReference, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { isAuthorizationProtectedResourceMetadata } from '../../../../base/common/oauth.js';
-import { safeStringify } from '../../../../base/common/objects.js';
+import { safeStringify, stableStringify } from '../../../../base/common/objects.js';
 import { isAbsolute, join } from '../../../../base/common/path.js';
 import { extUriBiasedIgnorePathCase, normalizePath } from '../../../../base/common/resources.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
@@ -887,6 +887,8 @@ export class CopilotAgentSession extends Disposable {
 	private readonly _developmentErrorInjectionEnabled: boolean;
 	private _dropLateRootTurnEvents = false;
 	private _agentMergeTurn = false;
+	private _lastGrepArgs: string | undefined;
+	private _consecutiveGrepCalls = 0;
 	private readonly _mcpServerNames: ReadonlySet<string>;
 	/** Monotonic 0-based ordinal assigned to each turn as it starts, for numeric `turnIndex` telemetry parity. */
 	private _nextTurnOrdinal = 0;
@@ -1569,6 +1571,8 @@ export class CopilotAgentSession extends Disposable {
 	 * response part. The turn becomes `running` on the first SDK event.
 	 */
 	resetTurnState(turnId: string, senderClientId?: string, clientType = AgentHostClientType.Unknown, clientContext = createUnknownAgentHostClientTelemetryContext(clientType)): void {
+		this._lastGrepArgs = undefined;
+		this._consecutiveGrepCalls = 0;
 		this._detectInterruptedTurnOnRestore = false;
 		this._streamingToolCalls.clear();
 		this._streamingToolDisplaySchedulers.clearAndDisposeAll();
@@ -4639,6 +4643,22 @@ export class CopilotAgentSession extends Disposable {
 
 	private async _handlePreToolUse(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
 		try {
+			// Re-executing the same read-only search does not reveal its matching
+			// lines. Bound the observed SDK grep loop without restricting edits,
+			// searches after intervening work, or a later user turn.
+			if (input.toolName === 'grep') {
+				const args = stableStringify(input.toolArgs);
+				this._consecutiveGrepCalls = args === this._lastGrepArgs ? this._consecutiveGrepCalls + 1 : 1;
+				this._lastGrepArgs = args;
+				if (this._consecutiveGrepCalls > 2) {
+					const guidance = 'This identical grep search has already run twice consecutively. Do not repeat it. If the result lists file names, use view to read a narrow range in a relevant file, or request matching lines using the grep tool schema. For a project website, inspect repository documentation or canonical URL configuration; do not guess a domain. If the fact is still missing, ask the user.';
+					this._logService.warn(`[Copilot:${this.sessionId}] Denying consecutive duplicate grep search`);
+					return { permissionDecision: 'deny', permissionDecisionReason: guidance, additionalContext: guidance };
+				}
+			} else {
+				this._lastGrepArgs = undefined;
+				this._consecutiveGrepCalls = 0;
+			}
 			const restriction = this._agentMergeTurn
 				? getAgentMergeGitHubToolRestriction(input.toolName, input.toolArgs)
 				?? (isCopilotMcpToolName(input.toolName, this._mcpServerNames) ? AGENT_MERGE_GITHUB_TOOL_RESTRICTION : undefined)

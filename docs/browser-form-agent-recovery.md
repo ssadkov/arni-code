@@ -88,3 +88,28 @@ shows Yandex activation without the missing-module failure. Copilot reports
 model catalog with GLM 5.3 Flash present. Extension-host startup remains slow in
 this development build and briefly triggers unresponsive warnings before
 recovering. No successful live model request or browser form run is claimed.
+
+## Contrast and repeated search correction, 2026-10-26
+
+The account label's contrast fix existed only as an uncommitted change in the
+older media checkout, so it was absent from this isolated source build. Ported
+the specific CSS override: Arni account text and icon use the title-bar text
+color in both active and inactive windows, overriding Copilot warning colors.
+
+A later run selected `nvidia/nemotron-3.5-super-vl:free` and made 65 SDK `grep`
+calls. The repeated URL query returned file names, not matching URL lines; the
+model kept repeating it rather than inspecting the results. The project's
+existing documentation contains its public domain. No project-specific domain
+is embedded in Arni's global prompt.
+
+The pre-tool hook now denies a third consecutive `grep` with identical arguments
+and directs the model to read results. Changed queries, intervening other tools,
+and new user turns reset the check. Universal instructions prefer repository
+documentation and canonical URL configuration for project website facts.
+
+The two new callback tests pass. The session suite has **434 passing and the
+same 2 pre-existing terminal-title localization failures**; prompt and registry
+suites have **41 passing**. Changed client modules and the stylesheet were
+rebuilt incrementally. Launch evidence is stored in
+`.build/form-agent-validation/search-contrast-launch.jsonl`. Actual visual
+contrast and model behavior after relaunch still require a live check.

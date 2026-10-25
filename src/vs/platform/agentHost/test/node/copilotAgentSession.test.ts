@@ -10006,6 +10006,34 @@ Use the attached image as context.
 
 	suite('SDK callback logging', () => {
 
+		test('blocks a third identical SDK grep call even when argument key order changes', async () => {
+			const { runtime } = await createAgentSession(disposables);
+			const input = { sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp', toolName: 'grep' };
+			assert.strictEqual(await runtime.handlePreToolUse({ ...input, toolArgs: { pattern: 'https://', path: '/repo' } }), undefined);
+			assert.strictEqual(await runtime.handlePreToolUse({ ...input, toolArgs: { path: '/repo', pattern: 'https://' } }), undefined);
+			const blocked = await runtime.handlePreToolUse({ ...input, toolArgs: { pattern: 'https://', path: '/repo' } });
+			assert.strictEqual(blocked?.permissionDecision, 'deny');
+			assert.ok(blocked?.additionalContext?.includes('use view'));
+			assert.ok(blocked?.additionalContext?.includes('do not guess a domain'));
+			assert.strictEqual((await runtime.handlePreToolUse({ ...input, toolArgs: { pattern: 'https://', path: '/repo' } }))?.permissionDecision, 'deny');
+		});
+
+		test('allows changed searches, searches after reading results, and a later user turn', async () => {
+			const { session, runtime } = await createAgentSession(disposables);
+			const input = { sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp', toolName: 'grep', toolArgs: { pattern: 'https://', path: '/repo' } };
+			await runtime.handlePreToolUse(input);
+			await runtime.handlePreToolUse(input);
+			assert.strictEqual(await runtime.handlePreToolUse({ ...input, toolArgs: { ...input.toolArgs, output_mode: 'content' } }), undefined);
+			assert.strictEqual(await runtime.handlePreToolUse({ ...input, toolArgs: { ...input.toolArgs, path: '/other' } }), undefined);
+			await runtime.handlePreToolUse(input);
+			await runtime.handlePreToolUse(input);
+			assert.strictEqual(await runtime.handlePreToolUse({ ...input, toolName: 'view', toolArgs: { path: '/repo/README.md', view_range: [1, 25] } }), undefined);
+			assert.strictEqual(await runtime.handlePreToolUse(input), undefined);
+			await runtime.handlePreToolUse(input);
+			session.resetTurnState('next-turn');
+			assert.strictEqual(await runtime.handlePreToolUse(input), undefined);
+		});
+
 		test('routes Google Forms fetches to available rendered-page tools', async () => {
 			const { runtime } = await createAgentSession(disposables, {
 				clientSnapshot: { tools: [{ name: 'openBrowserPage' }, { name: 'readPage' }], plugins: [], mcpServers: {} },
