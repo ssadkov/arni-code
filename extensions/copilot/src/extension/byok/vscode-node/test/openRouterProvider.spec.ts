@@ -263,6 +263,16 @@ describe('Arni product authentication backend recovery', () => {
 });
 
 describe('Non-retryable backend errors', () => {
+	it('marks structured account errors after they cross the language model API', () => {
+		const provider = createProvider();
+		try {
+			for (const code of ['insufficient_budget', 'five_hour_limit', 'weekly_limit', 'access_expired']) {
+				const message = JSON.stringify({ error: { code, message: 'Недостаточно бюджета' } });
+				const mapped = (provider as unknown as { toUserFacingError(error: unknown): Error }).toUserFacingError(new Error(message));
+				expect(mapped.message).toBe('[arni-user-error] ' + message);
+			}
+		} finally { provider.dispose(); }
+	});
 	it('marks invalid requests for the SDK proxy so it returns HTTP 400 rather than retrying as 502', () => {
 		const provider = createProvider();
 		try {

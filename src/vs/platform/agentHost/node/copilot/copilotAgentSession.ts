@@ -93,6 +93,7 @@ import { CopilotSlashCommandProvider } from './copilotSlashCommandProvider.js';
 import { createCopilotFailureCorrelation, reportCopilotModelCallFailure, reportCopilotSdkSessionError } from './copilotFailureTelemetry.js';
 import { reportCopilotTodoStoreOperation } from './copilotTodoStoreTelemetry.js';
 import { ModelCallTurnCorrelation } from './modelCallTurnCorrelation.js';
+import { FormTaskGuard } from './formTaskGuard.js';
 
 type CopilotSdkAttachment = Required<MessageOptions>['attachments'][number];
 type CopilotCommandInvocationResult = Awaited<ReturnType<CopilotSession['rpc']['commands']['invoke']>>;
@@ -889,6 +890,7 @@ export class CopilotAgentSession extends Disposable {
 	private _agentMergeTurn = false;
 	private _lastGrepArgs: string | undefined;
 	private _consecutiveGrepCalls = 0;
+	private readonly _formTaskGuard = new FormTaskGuard();
 	private readonly _mcpServerNames: ReadonlySet<string>;
 	/** Monotonic 0-based ordinal assigned to each turn as it starts, for numeric `turnIndex` telemetry parity. */
 	private _nextTurnOrdinal = 0;
@@ -1571,6 +1573,7 @@ export class CopilotAgentSession extends Disposable {
 	 * response part. The turn becomes `running` on the first SDK event.
 	 */
 	resetTurnState(turnId: string, senderClientId?: string, clientType = AgentHostClientType.Unknown, clientContext = createUnknownAgentHostClientTelemetryContext(clientType)): void {
+		this._formTaskGuard.resetTurn();
 		this._lastGrepArgs = undefined;
 		this._consecutiveGrepCalls = 0;
 		this._detectInterruptedTurnOnRestore = false;
@@ -2555,6 +2558,7 @@ export class CopilotAgentSession extends Disposable {
 			this.resetTurnState(turnId, senderClientId, clientType, clientContext);
 		}
 		const currentTurn = this._currentTurn.value;
+		this._formTaskGuard.start(prompt, this._clientToolNames.has(BrowserChatToolReferenceName.OpenBrowserPage) && this._clientToolNames.has(BrowserChatToolReferenceName.ReadPage));
 		if (currentTurn) {
 			currentTurn.messageCharLen = prompt.length;
 		}
@@ -4643,6 +4647,23 @@ export class CopilotAgentSession extends Disposable {
 
 	private async _handlePreToolUse(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
 		try {
+			const formGuidance = this._formTaskGuard.beforeTool(input.toolName, input.toolArgs);
+			if (formGuidance) {
+				if (this._formTaskGuard.stopped && this._currentTurn.value && !this._abortingTurn) {
+					const turn = this._currentTurn.value;
+					this._emitAction({
+						type: ActionType.ChatError,
+						turnId: turn.id,
+						duration: turn.duration,
+						part: createErrorResponsePart({
+							errorType: 'formWorkflowLimit',
+							message: localize('copilotAgent.formWorkflowLimit', "Агент остановлен: повторно отклоняется от подготовки формы или превышает лимит чтения источников. Собранный контекст сохранён; запросите черновик по уже прочитанным данным."),
+						}),
+					});
+					void this.abort().catch(error => this._logService.error(error, 'Failed to stop form source-gathering loop'));
+				}
+				return { permissionDecision: 'deny', permissionDecisionReason: formGuidance, additionalContext: formGuidance };
+			}
 			// Re-executing the same read-only search does not reveal its matching
 			// lines. Bound the observed SDK grep loop without restricting edits,
 			// searches after intervening work, or a later user turn.
@@ -4698,6 +4719,7 @@ export class CopilotAgentSession extends Disposable {
 
 	private async _handlePostToolUse(input: PostToolUseHookInput): Promise<void> {
 		try {
+			this._formTaskGuard.afterTool(input.toolName, input.toolArgs, input.toolResult.resultType === 'success', input.toolResult.textResultForLlm);
 			if (isEditTool(input.toolName, getToolCommand(input))) {
 				const filePaths = this._getEditFilePaths(input.toolArgs);
 				await Promise.all(filePaths.map(p => this._editTracker.completeEdit(p)));

@@ -396,6 +396,14 @@ suite('ByokLmProxyService', () => {
 		);
 	});
 
+	test('preserves the confirmed budget error code as a non-retryable response', async () => {
+		const message = 'Request Failed: 403 {"error":{"code":"insufficient_budget","message":"Недостаточно бюджета"}}';
+		await withProxy(async () => ({ output: [], error: `[arni-user-error] ${message}` }), async handle => {
+			const response = await fetch(responsesUrl(handle, 'acme'), { method: 'POST', headers: authHeaders(handle), body: JSON.stringify({ model: 'm', input: [] }) });
+			assert.deepStrictEqual({ status: response.status, body: await response.json() }, { status: 400, body: { error: { type: 'invalid_request_error', code: 'insufficient_budget', message } } });
+		});
+	});
+
 	for (const code of ['context_too_large', 'context_length_exceeded', 'model_context_window_exceeded', 'insufficient_tokens']) {
 		test(`preserves context failure semantics without reclassifying ${code}`, async () => {
 			const message = `Request Failed: 400 ${JSON.stringify({ error: { code, message: 'Provider rejected the request' } })}`;

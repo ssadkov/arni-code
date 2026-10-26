@@ -219,3 +219,56 @@ Chromium suite **101 passing**, client-tool Chromium suite **64 passing**,
 including replay of the observed range arguments. Logs are under
 `.build/form-agent-validation/`. This range replay is not a new complete live
 form run, and it does not resolve the separate Qwen context-limit failure.
+
+## Form workflow limits and budget-error propagation, 2026-10-27
+
+Audit of SDK session `28ba6f72-f920-4542-b98f-5d776afdf3ae` and the production
+ledger confirmed Bedrock Qwen3 VL. Its last cycle made 37 successful requests
+costing $1.049759 while reading documents, without opening the form or producing
+a draft. The automatic `apply-grant` skill targeted a different program and
+triggered telemetry/export setup. Six subsequent HTTP 403 insufficient-budget
+responses were exposed to the SDK as 502; those rejected attempts had no new
+usage charges. Internal budget was topped up separately at the user's request.
+
+The shared fetcher used to interpret every 401/403 as an expired Copilot token,
+discarding the structured provider error. For BYOK only, permanent request or
+account errors now preserve HTTP status and the error body before that branch.
+Provider classification recognizes confirmed structured account/context codes;
+the loopback proxy preserves budget codes in a non-retryable 400 envelope.
+Ordinary Copilot authentication and transient upstream retries retain their
+existing paths. A fetcher regression test checks one call and no token reset.
+
+`FormTaskGuard` applies to a new user message asking to prepare/fill an
+application and containing an HTTPS Google Form link, when both browser tools
+are present. It requires successful open/read of that target page before
+repository reads, rejects automatically selected skills and shell setup for
+this task, and allows ten reader/search calls per turn. A skill explicitly
+named by the user is retained. Three ignored guard corrections stop the turn
+with a visible explanation; they do not authorize browser sharing, file access
+or submission. A new ordinary coding message clears this form-specific state.
+This orders source inspection; it does not semantically validate the extracted
+questions or guarantee a model-written draft.
+
+Tests: fetcher/provider/endpoint **81 passing**, loopback proxy **24 passing**,
+prompt instructions **15 passing**. Full session suite: **438 passing**, with
+the same two existing English-vs-Russian terminal-title expectation failures;
+all four added form tests pass. The recorded bad trace is stopped at its fourth
+tool request by the new guard, before its document-reading cycle. Logs and replay
+evidence are in `.build/form-agent-validation/*20261027*`. No paid inference was
+used for these checks. A new live form draft still needs user testing.
+
+### Repeat test
+
+1. Use the updated window and create a **new chat** in the actual Yield AI
+   project, not in the Arni source checkout or the old oversized conversation.
+2. Select `Amazon Bedrock · Qwen3 VL 235B A22B` so the comparison keeps the same
+   model. Wait until the model is displayed before sending.
+3. Send a normal request: "Подготовь черновик заявки по этой ссылке для Yield AI.
+   Факты возьми из проекта, контакты — из «Моих данных». Выбранный план: Dev plan
+   for 1 year. Покажи ответы с источниками, недостающее спроси. Форму пока не
+   заполняй и не отправляй." Append the Helius × Superteam Google Form URL.
+4. Expect browser open/read before repository gathering, targeted source reads,
+   and then a draft or a specific access blocker. A telemetry question, transcript
+   export, another grant's checklist, or continued sequential reading is a
+   regression. Report the chat's result for log/ledger review; do not repeatedly
+   continue the old run. Form submission remains a separate user-approved step.

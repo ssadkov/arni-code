@@ -230,7 +230,7 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 			if (result.error) {
 				const userError = userFacingByokError(result.error);
 				if (userError !== undefined) {
-					this._writeJsonError(res, 400, userError, 'invalid_request_error', contextErrorCode(userError));
+					this._writeJsonError(res, 400, userError, 'invalid_request_error', userErrorCode(userError));
 				} else {
 					this._writeJsonError(res, 502, result.error, 'api_error');
 				}
@@ -275,16 +275,18 @@ export class ByokLmProxyService extends LoopbackProxyServer<ByokLmProxyState> im
 	}
 }
 
-/** Preserve the provider's context failure so the SDK can recognize it instead of treating it as a generic 400. */
-function contextErrorCode(message: string): string | undefined {
+/** Preserve confirmed account refusals and normalize context failures for the SDK. */
+function userErrorCode(message: string): string | undefined {
 	const start = message.indexOf('{');
 	if (start === -1) {
 		return undefined;
 	}
 	try {
 		const code = JSON.parse(message.slice(start))?.error?.code;
-		return code === 'context_too_large' || code === 'context_length_exceeded' || code === 'model_context_window_exceeded'
-			? 'context_length_exceeded' : undefined;
+		if (code === 'context_too_large' || code === 'context_length_exceeded' || code === 'model_context_window_exceeded') {
+			return 'context_length_exceeded';
+		}
+		return typeof code === 'string' && ['insufficient_budget', 'five_hour_limit', 'weekly_limit', 'access_expired', 'account_blocked', 'request_in_progress', 'free_daily_limit', 'pricing_unavailable'].includes(code) ? code : undefined;
 	} catch {
 		return undefined;
 	}

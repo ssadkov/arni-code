@@ -7,6 +7,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { CopilotSession, CurrentToolMetadata, PermissionMode, PermissionRequest, SessionEvent, SessionEventHandler, SessionEventPayload, SessionEventType, Tool, ToolResultObject, TypedSessionEventHandler } from '@github/copilot-sdk';
 import type { CCAModel } from '@vscode/copilot-api';
 import assert from 'assert';
+import { FormTaskGuard } from '../../node/copilot/formTaskGuard.js';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { PluginFormat } from '../../../agentPlugins/common/pluginParsers.js';
@@ -10005,6 +10006,66 @@ Use the attached image as context.
 	});
 
 	suite('SDK callback logging', () => {
+		test('requires a successful read of the supplied form page before repository gathering', async () => {
+			const { session, runtime } = await createAgentSession(disposables, {
+				clientSnapshot: { tools: [{ name: 'openBrowserPage' }, { name: 'readPage' }], plugins: [], mcpServers: {} },
+			});
+			const url = 'https://docs.google.com/forms/d/e/example/viewform';
+			await session.send(`Подготовь заявку по ${url}`, undefined, 'form-turn');
+			const input = { sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp' };
+			assert.strictEqual((await runtime.handlePreToolUse({ ...input, toolName: 'view', toolArgs: { path: 'README.md' } }))?.permissionDecision, 'deny');
+			await runtime.handlePostToolUse({ ...input, toolName: 'openBrowserPage', toolArgs: { url }, toolResult: { resultType: 'success', textResultForLlm: 'Page ID: target-page\nSummary: Form' } });
+			await runtime.handlePostToolUse({ ...input, toolName: 'readPage', toolArgs: { pageId: 'target-page' }, toolResult: { resultType: 'success', textResultForLlm: 'textbox Project name; textbox Website' } });
+			assert.strictEqual(await runtime.handlePreToolUse({ ...input, toolName: 'view', toolArgs: { path: 'README.md' } }), undefined);
+		});
+
+		test('stops a form turn after three ignored workflow corrections', async () => {
+			const { session, runtime, mockSession, signals } = await createAgentSession(disposables, {
+				clientSnapshot: { tools: [{ name: 'openBrowserPage' }, { name: 'readPage' }], plugins: [], mcpServers: {} },
+			});
+			await session.send('Подготовь заявку https://forms.gle/example', undefined, 'form-loop');
+			for (let i = 0; i < 3; i++) {
+				await runtime.handlePreToolUse({ sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp', toolName: 'skill', toolArgs: { skill: 'apply-grant' } });
+			}
+			assert.ok(signals.some(signal => signal.kind === 'action' && signal.action.type === ActionType.ChatError));
+			assert.strictEqual(mockSession.abortCalls, 1);
+			await session.send('Explain the README', undefined, 'ordinary-turn');
+			assert.strictEqual(await runtime.handlePreToolUse({ sessionId: 'test-session-1', timestamp: new Date(0), workingDirectory: '/tmp', toolName: 'view', toolArgs: { path: 'README.md' } }), undefined);
+		});
+
+		test('bounds sequential form reads without applying the limit to ordinary coding tasks', () => {
+			const guard = new FormTaskGuard();
+			const url = 'https://docs.google.com/forms/d/e/example/viewform';
+			guard.start(`Подготовь заявку [форма](${url})`, true);
+			guard.afterTool('openBrowserPage', { url }, true, 'Page ID: form-page\n');
+			guard.afterTool('readPage', { pageId: 'wrong-page' }, true, 'Unrelated page');
+			assert.ok(guard.beforeTool('view', {}));
+			guard.afterTool('readPage', { pageId: 'form-page' }, false, 'Failed');
+			assert.ok(guard.beforeTool('view', {}));
+			guard.afterTool('readPage', { pageId: 'form-page' }, true, 'Project name / Website');
+			for (let i = 0; i < 10; i++) { assert.strictEqual(guard.beforeTool('view', { path: 'README.md', view_range: [i * 50 + 1, i * 50 + 50] }), undefined); }
+			assert.ok(guard.beforeTool('view', {})?.includes('ten'));
+			guard.resetTurn();
+			assert.strictEqual(guard.beforeTool('view', {}), undefined);
+			guard.start('Fix the code', true);
+			for (let i = 0; i < 20; i++) { assert.strictEqual(guard.beforeTool('view', {}), undefined); }
+		});
+
+		test('does not auto-load grant skills or terminal setup for forms, and respects explicit skills', () => {
+			const guard = new FormTaskGuard();
+			guard.start('Подготовь заявку https://forms.gle/example', true);
+			assert.ok(guard.beforeTool('skill', { skill: 'apply-grant' }));
+			assert.ok(guard.beforeTool('powershell', { command: 'bash export-session.sh' }));
+			assert.strictEqual(guard.beforeTool('tool_search_tool', {}), undefined);
+			assert.strictEqual(guard.beforeTool('arniReadUserProfile', {}), undefined);
+			guard.start('Подготовь заявку https://forms.gle/example используя apply-grant', true);
+			assert.strictEqual(guard.beforeTool('skill', { skill: 'apply-grant' }), undefined);
+			assert.strictEqual(guard.beforeTool('powershell', {}), undefined);
+			guard.start('Подготовь заявку https://forms.gle/example', false);
+			assert.strictEqual(guard.beforeTool('view', {}), undefined);
+			guard.start('Debug browser navigation https://docs.google.com/forms/d/e/example/viewform', true);
+			assert.strictEqual(guard.beforeTool('powershell', {}), undefined);
+		});
 
 		test('blocks a third identical SDK grep call even when argument key order changes', async () => {
 			const { runtime } = await createAgentSession(disposables);

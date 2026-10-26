@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw } from '@vscode/prompt-tsx';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { CopilotToken } from '../../../../platform/authentication/common/copilotToken';
 import { IFetchMLOptions } from '../../../../platform/chat/common/chatMLFetcher';
@@ -45,6 +45,7 @@ describe('ChatMLFetcherImpl retry logic', () => {
 	let configurationService: InMemoryConfigurationService;
 	let cancellationTokenSource: CancellationTokenSource;
 	let endpoint: IChatEndpoint;
+	let authenticationService: TestAuthenticationService;
 
 	beforeEach(() => {
 		disposables = new DisposableStore();
@@ -60,13 +61,14 @@ describe('ChatMLFetcherImpl retry logic', () => {
 		const experimentationService = new NullExperimentationService();
 
 		endpoint = createMockEndpoint();
+		authenticationService = new TestAuthenticationService();
 
 		fetcher = new ChatMLFetcherImpl(
 			mockFetcherService as unknown as IFetcherService,
 			telemetryService,
 			new NullRequestLogger(),
 			logService,
-			new TestAuthenticationService() as unknown as IAuthenticationService,
+			authenticationService as unknown as IAuthenticationService,
 			createMockInteractionService(),
 			createMockChatQuotaService(),
 			new TestCAPIClientService() as unknown as ICAPIClientService,
@@ -104,6 +106,17 @@ describe('ChatMLFetcherImpl retry logic', () => {
 	}
 
 	describe('server error retry with configured status codes', () => {
+		it('preserves a BYOK budget rejection without resetting Copilot credentials or retrying', async () => {
+			const reset = vi.spyOn(authenticationService, 'resetCopilotToken');
+			endpoint = { ...endpoint, isExtensionContributed: true };
+			const body = { error: { code: 'insufficient_budget', message: 'Недостаточно выданного бюджета API для этого запроса.' } };
+			mockFetcherService.queueResponse(Response.fromText(403, 'Forbidden', new FakeHeaders(), JSON.stringify(body), 'node-fetch'));
+			const result = await fetcher.fetchMany(createBaseOpts(), cancellationTokenSource.token);
+			expect({ type: result.type, reason: 'reason' in result ? result.reason : undefined, calls: mockFetcherService.fetchCallCount }).toEqual({
+				type: ChatFetchResponseType.Failed, reason: `Request Failed: 403 ${JSON.stringify(body)}`, calls: 1,
+			});
+			expect(reset).not.toHaveBeenCalled();
+		});
 		it('retries on 500 status code when configured', async () => {
 			// Order: 1) initial fetch → 500, 2) connectivity check → 200, 3) retry → success
 			mockFetcherService.queueResponse(createErrorResponse(500, 'Internal Server Error'));

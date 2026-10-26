@@ -46,6 +46,7 @@ import { escapeRegExpCharacters } from '../../../util/vs/base/common/strings';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { isBYOKModel } from '../../byok/node/openAIEndpoint';
+import { isNonRetryableBYOKError } from '../../byok/common/byokErrorPolicy';
 import { EXTENSION_ID } from '../../common/constants';
 import { IPowerService } from '../../power/common/powerService';
 import { ChatMLFetcherTelemetrySender as Telemetry } from './chatMLFetcherTelemetry';
@@ -1409,7 +1410,7 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 			const telemetryData = createTelemetryData(chatEndpointInfo, location, ourRequestId);
 			this._logService.info('Request ID for failed request: ' + ourRequestId);
 			return {
-				result: await this._handleError(telemetryData, response, ourRequestId),
+				result: await this._handleError(telemetryData, response, ourRequestId, isBYOKModel(chatEndpointInfo) >= 0),
 				fetcher: response.fetcher,
 				bytesReceived: response.bytesReceived,
 				statusCode: response.status
@@ -1620,7 +1621,8 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 	private async _handleError(
 		telemetryData: TelemetryData,
 		response: Response,
-		requestId: string
+		requestId: string,
+		isByok = false,
 	): Promise<ChatRequestFailed> {
 		const modelRequestIdObj = getRequestId(response.headers);
 		requestId = modelRequestIdObj.headerRequestId || requestId;
@@ -1644,6 +1646,18 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 		const reasonNoText = `Server error: ${response.status}`;
 		const reason = `${reasonNoText} ${text}`;
 		this._logService.error(reason);
+
+		// BYOK account refusals are not expired GitHub credentials. Preserve the
+		// provider status and error code through LanguageModelAccess and the SDK
+		// proxy instead of replacing them with only a translated message.
+		if (isByok && isNonRetryableBYOKError(`HTTP ${response.status} ${text}`)) {
+			return {
+				type: FetchResponseKind.Failed,
+				modelRequestId: modelRequestIdObj,
+				failKind: ChatFailKind.Unknown,
+				reason: `Request Failed: ${response.status} ${text}`,
+			};
+		}
 
 		if (400 <= response.status && response.status < 500) {
 
