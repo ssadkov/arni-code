@@ -17,6 +17,8 @@ import { runWithFakedTimers } from '../../../../../base/test/common/virtualSched
 import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { ContextKeyExpression } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService, NoOpNotification } from '../../../../../platform/notification/common/notification.js';
+import { TestNotificationService } from '../../../../../platform/notification/test/common/testNotificationService.js';
 import { IEncryptionService, KnownStorageProvider } from '../../../../../platform/encryption/common/encryptionService.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
@@ -202,6 +204,7 @@ suite('Arni personal card', () => {
 		instantiation.stub(IArniUserProfileService, h.profiles);
 		instantiation.stub(IAuthenticationService, h.authentication);
 		instantiation.stub(IDialogService, {});
+		instantiation.stub(INotificationService, new TestNotificationService());
 		instantiation.stub(ICommandService, {});
 		const contribution = store.add(new ArniUserProfileTools(tools, instantiation));
 		const activeSets = [...sets].filter(set => !set.deprecated);
@@ -233,6 +236,55 @@ suite('Arni personal card', () => {
 			status: 'approved', destination: 'https://forms.cloud.microsoft/example', values: { firstName: 'Alice' }, fieldLabels: { firstName: 'Имя' }, missingFields: [],
 		});
 		assert.strictEqual(reviews, 2);
+	});
+
+	test('resolves unique social contact labels after review without unrelated values', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Alice', phone: 'PHONE-SENTINEL', email: 'private@example.test' }, [
+			{ id: 'custom_tg_work', label: 'Рабочий Telegram', value: '@alice' },
+			{ id: 'custom_social', label: 'Twitter / X', value: '@alice_x' },
+			{ id: 'custom_passport', label: 'Passport X', value: 'PASSPORT-SENTINEL' },
+			{ id: 'custom_login', label: 'Telegram login code', value: 'LOGIN-SENTINEL' },
+		]);
+		const reviews: string[] = [];
+		const dialogs = new class extends mock<IDialogService>() {
+			override async confirm(options: Parameters<IDialogService['confirm']>[0]) { reviews.push(JSON.stringify(options)); return { confirmed: true }; }
+		};
+		const reader = new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication);
+		const response = await reader.invoke({ ...invocation(), parameters: { purpose: 'Draft founder fields', fields: ['firstName', 'telegram', 'twitter'] } }, async () => 0, { report() { } }, CancellationToken.None);
+		assert.deepStrictEqual(JSON.parse(resultText(response)).values, { firstName: 'Alice', custom_tg_work: '@alice', custom_social: '@alice_x' });
+		for (const value of ['PHONE-SENTINEL', 'private@example.test', 'PASSPORT-SENTINEL', 'LOGIN-SENTINEL']) {
+			assert.ok(!(resultText(response) + reviews.join('')).includes(value));
+		}
+	});
+
+	test('does not guess between two Telegram contacts or treat document X as a social contact', () => {
+		const profile = { schemaVersion: 2 as const, values: {}, customFields: [
+			{ id: 'custom_work', label: 'Рабочий Telegram', value: '@work' },
+			{ id: 'custom_personal', label: 'Личный Telegram', value: '@personal' },
+			{ id: 'custom_document', label: 'Document X', value: 'PRIVATE' },
+		] };
+		assert.deepStrictEqual(selectArniProfileEntries(profile, ['telegram', 'twitter']), { entries: [], missingFields: ['telegram', 'twitter'] });
+	});
+
+	test('shows a persistent pending-review notice and closes it after the user decides', async () => {
+		const h = setup();
+		await h.profiles.save(await h.profiles.getAccount(), { firstName: 'Alice' });
+		const opened = new DeferredPromise<void>();
+		const answer = new DeferredPromise<{ confirmed: boolean }>();
+		const notices: Parameters<INotificationService['notify']>[0][] = [];
+		let closed = 0;
+		const notifications = new class extends TestNotificationService {
+			override notify(notification: Parameters<INotificationService['notify']>[0]) { notices.push(notification); return new class extends NoOpNotification { override close() { closed++; } }; }
+		};
+		const dialogs = new class extends mock<IDialogService>() { override async confirm() { void opened.complete(); return answer.p; } };
+		const pending = new ArniReadUserProfileTool(h.profiles, dialogs, h.authentication, notifications).invoke(invocation(), async () => 0, { report() { } }, CancellationToken.None);
+		await opened.p;
+		assert.deepStrictEqual({ notices: notices.length, sticky: notices[0].sticky, closed }, { notices: 1, sticky: true, closed: 0 });
+		assert.ok(String(notices[0].message).includes('Передать эти поля'));
+		await answer.complete({ confirmed: true });
+		assert.strictEqual(JSON.parse(resultText(await pending)).status, 'approved');
+		assert.strictEqual(closed, 1);
 	});
 
 	function resultText(result: IToolResult): string { return result.content[0].kind === 'text' ? result.content[0].value : '{}'; }

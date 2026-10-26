@@ -272,3 +272,44 @@ used for these checks. A new live form draft still needs user testing.
    export, another grant's checklist, or continued sequential reading is a
    regression. Report the chat's result for log/ledger review; do not repeatedly
    continue the old run. Form submission remains a separate user-approved step.
+
+## Profile review and continuation recovery, 2026-10-27
+
+The fresh live session `5c632002-d2aa-4fdd-ae61-c193c61350c4` corrected course
+after its automatic grant skill was denied. It opened/read the actual form and
+used five bounded reads of the browser snapshot, then requested too many card
+fields. The card review expired at 120 seconds, disclosing no values, and its
+`stopCurrentTurn` result cancelled the turn. The SDK's `user_initiated` abort
+label alone does not establish a physical user cancellation. The ledger records
+nine successful Bedrock Qwen3 VL requests costing $0.209376; no draft or form
+submission occurred.
+
+The form guard now derives a bounded profile request from observed level-three
+question headings. For the recorded form this selects firstName, lastName, bio,
+telegram and twitter, with the supplied form as the destination. It does not
+inspect card values or approve disclosure. Unknown/custom field selections and
+explicit metadata/full-card modes keep their existing handling. Ordinary coding
+messages do not use this transformation. Explicit continuation messages restore
+the most recent task's public browser observations from local SDK events so a
+restart does not require reopening and rereading the form.
+
+The card reader recognizes only a unique Telegram/Twitter contact label from
+a bounded set of common labels. Ambiguous work/personal contacts remain missing;
+document labels such as "Document X" and "Telegram login code" are not aliases.
+Exact user-specified labels/IDs retain their existing behavior. All selected
+values still require user review, account-change checks and cancellation checks.
+
+A persistent notification now explains that Arni is waiting for card review,
+names the approval button and the two-minute deadline, then closes when the
+review resolves. Expiry also produces a plain-language notification. This does
+not bypass the review or prove that the dialog was visible in the user's prior
+run.
+
+Validation: card Chromium tests **20 passing**, full SDK-session tests **439
+passing** with the same two existing terminal-title localization failures.
+Replaying the recorded browser observations transforms the ten-field request
+into the five-field request above. Evidence is in
+`.build/form-agent-validation/profile-*20261027*`. No real card values or paid
+inference were used for these checks. The next live step is to open the existing
+Yield AI chat, send "Продолжи подготовку черновика заявки", and review the new
+card request. A complete final draft is still awaiting that test.

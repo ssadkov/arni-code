@@ -2558,7 +2558,13 @@ export class CopilotAgentSession extends Disposable {
 			this.resetTurnState(turnId, senderClientId, clientType, clientContext);
 		}
 		const currentTurn = this._currentTurn.value;
-		this._formTaskGuard.start(prompt, this._clientToolNames.has(BrowserChatToolReferenceName.OpenBrowserPage) && this._clientToolNames.has(BrowserChatToolReferenceName.ReadPage));
+		const browserAvailable = this._clientToolNames.has(BrowserChatToolReferenceName.OpenBrowserPage) && this._clientToolNames.has(BrowserChatToolReferenceName.ReadPage);
+		this._formTaskGuard.start(prompt, browserAvailable);
+		if (FormTaskGuard.isContinuation(prompt)) {
+			try {
+				this._formTaskGuard.restore(await this._wrapper.session.getEvents(), browserAvailable);
+			} catch (error) { this._logService.warn(`[Copilot:${this.sessionId}] Could not restore form observations: ${getErrorMessage(error)}`); }
+		}
 		if (currentTurn) {
 			currentTurn.messageCharLen = prompt.length;
 		}
@@ -4691,6 +4697,12 @@ export class CopilotAgentSession extends Disposable {
 					permissionDecisionReason: restriction,
 					additionalContext: restriction,
 				};
+			}
+			if (input.toolName === 'arniReadUserProfile') {
+				const modifiedArgs = this._formTaskGuard.profileArguments(input.toolArgs);
+				if (modifiedArgs) {
+					return { modifiedArgs, additionalContext: 'This profile request is limited to the observed form questions and its exact destination. The user must still review and approve the selected values in Arni. Wait for that review; do not request the whole card or repeat a timed-out request without a new user message.' };
+				}
 			}
 			// Google Forms questions often occur after a large script/header block.
 			// Route to the available rendered-page tools before a truncated fetch

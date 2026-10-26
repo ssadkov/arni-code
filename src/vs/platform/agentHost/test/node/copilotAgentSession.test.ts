@@ -10006,6 +10006,28 @@ Use the attached image as context.
 	});
 
 	suite('SDK callback logging', () => {
+		test('narrows the observed broad profile request and restores observations for a continuation', () => {
+			const guard = new FormTaskGuard();
+			const url = 'https://docs.google.com/forms/d/e/example/viewform';
+			const headings = ['Founder name', 'Founder Telegram', 'Founder Twitter / X', 'Project website (optional)', 'Proof of work'].map(label => `- heading "${label}" [level=3]`).join('\n');
+			const history = [
+				{ type: 'user.message', data: { content: `Подготовь заявку ${url}` } },
+				{ type: 'tool.execution_start', data: { toolCallId: 'open', toolName: 'openBrowserPage', arguments: { url } } },
+				{ type: 'tool.execution_complete', data: { toolCallId: 'open', success: true, result: { content: 'Page ID: target\n' } } },
+				{ type: 'tool.execution_start', data: { toolCallId: 'read', toolName: 'readPage', arguments: { pageId: 'target' } } },
+				{ type: 'tool.execution_complete', data: { toolCallId: 'read', success: true, result: { detailedContent: headings } } },
+			];
+			guard.restore(history, true);
+			const args = { purpose: 'Draft application', fields: ['firstName', 'lastName', 'email', 'phone', 'country', 'city', 'companyName', 'jobTitle', 'website', 'bio'] };
+			assert.deepStrictEqual(guard.profileArguments(args), { purpose: args.purpose, fields: ['firstName', 'lastName', 'bio', 'telegram', 'twitter'], destination: url });
+			assert.strictEqual(guard.beforeTool('view', {}), undefined);
+			assert.strictEqual(guard.profileArguments({ purpose: 'Explicit custom field', fields: ['custom_document'] }), undefined);
+			assert.strictEqual(guard.profileArguments({ metadataOnly: true }), undefined);
+			guard.start('Fix the code', true);
+			assert.strictEqual(guard.profileArguments(args), undefined);
+			for (const prompt of ['Продолжи', 'Продолжай подготовку', 'Continue the draft']) { assert.ok(FormTaskGuard.isContinuation(prompt)); }
+			assert.ok(!FormTaskGuard.isContinuation('Explain this code'));
+		});
 		test('requires a successful read of the supplied form page before repository gathering', async () => {
 			const { session, runtime } = await createAgentSession(disposables, {
 				clientSnapshot: { tools: [{ name: 'openBrowserPage' }, { name: 'readPage' }], plugins: [], mcpServers: {} },

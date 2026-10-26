@@ -134,7 +134,14 @@ export function selectArniProfileEntries(profile: IArniUserProfile, fields?: rea
 	const entries = new Map<string, IArniCustomProfileField>();
 	const missingFields: string[] = [];
 	for (const name of fields) {
-		const entry = all.find(field => field.id === name) ?? all.find(field => field.label.toLowerCase() === name.trim().toLowerCase());
+		const normalized = name.trim().toLowerCase();
+		const contact = /^(telegram|телеграм|tg)$/.test(normalized)
+			? /^(?:(?:personal|work|личный|рабочий|мой|основной)\s+)?(?:telegram|телеграм|tg)(?:\s+(?:username|handle|профиль|аккаунт))?$/iu
+			: /^(twitter|x|twitter\s*\/\s*x)$/.test(normalized)
+				? /^(?:(?:personal|work|личный|рабочий|мой|основной)\s+)?(?:twitter|x|twitter\s*\/\s*x|x\s*\(twitter\)|x\.com)(?:\s+(?:profile|username|handle|профиль|аккаунт))?$/iu : undefined;
+		const matches = contact ? profile.customFields.filter(field => contact.test(field.label)) : [];
+		// Never choose between work/personal contacts or inspect values to guess.
+		const entry = all.find(field => field.id === name) ?? all.find(field => field.label.toLowerCase() === normalized) ?? (matches.length === 1 ? matches[0] : undefined);
 		if (entry) { entries.set(entry.id, entry); }
 		if (!entry?.value) { missingFields.push(name); }
 	}

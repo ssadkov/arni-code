@@ -12,6 +12,7 @@ import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfirmation, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
 import { CountTokensCallback, ILanguageModelToolsService, IToolData, IToolImpl, IToolInvocation, IToolResult, ToolDataSource, ToolProgress } from '../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
@@ -21,7 +22,7 @@ import { IArniUserProfileService } from './arniUserProfileService.js';
 const readTool: IToolData = {
 	id: 'arni_read_user_profile', toolReferenceName: 'arniReadUserProfile',
 	displayName: localize('arni.profile.readTool', 'Получить выбранные поля карточки'),
-	modelDescription: 'Read selected My Data fields after user review. Specify fields by IDs or exact visible labels. If the custom field name is unknown, use metadataOnly:true to review/discover field names without any values, then request only the matching field. Omitting fields does NOT read the whole card. Use allFields:true only when the user explicitly asks for the entire card; the review warns about full disclosure. Built-in IDs: ' + arniProfileFields.map(field => field.key).join(', ') + '. Optional destination is the exact HTTPS form URL. Never submit a form or accept terms based on this review.',
+	modelDescription: 'Read only My Data fields needed for the observed form, after user review. Do not copy the built-in field list into a request. For founder name/Telegram/X/proof of work request firstName,lastName,telegram,twitter,bio; do not request phone, address, company or email unless the form asks for them. Logical telegram/twitter aliases select a unique matching custom contact label; ambiguous/missing contacts are reported missing, never guessed. IDs and exact visible labels also work. If another custom field name is unknown, use metadataOnly:true to review names without values. Omitting fields does NOT read the whole card. Use allFields:true only when the user explicitly asks for the entire card. Built-in IDs: ' + arniProfileFields.map(field => field.key).join(', ') + '. Include destination with the exact HTTPS form URL. Tell the user in Russian to review the Arni confirmation before invoking; the tool waits up to two minutes. Approval does not submit the form or accept terms.',
 	source: ToolDataSource.Internal,
 	inputSchema: { type: 'object', properties: {
 		fields: { type: 'array', description: 'Only the requested field IDs or exact visible labels. For a passport query, request only its field, never the whole card.', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: arniProfileFields.length + arniCustomProfileFieldLimit, uniqueItems: true },
@@ -54,7 +55,7 @@ type ReviewStatus = 'approved' | 'denied' | 'approval_timeout' | 'awaiting_user'
 class ProfileReviewGuard {
 	private readonly states = new LRUCache<string, ReviewStatus>(100);
 
-	async confirm(invocation: IToolInvocation, dialogs: IDialogService, confirmation: IConfirmation, token: CancellationToken, progress: ToolProgress): Promise<ReviewStatus> {
+	async confirm(invocation: IToolInvocation, dialogs: IDialogService, confirmation: IConfirmation, token: CancellationToken, progress: ToolProgress, notifications?: INotificationService): Promise<ReviewStatus> {
 		const scope = JSON.stringify([invocation.context?.sessionResource.toString(), invocation.chatRequestId ?? invocation.callId]);
 		const previous = this.states.get(scope);
 		if (previous) {
@@ -64,17 +65,19 @@ class ProfileReviewGuard {
 		const resources = new DisposableStore();
 		const cancellation = resources.add(new CancellationTokenSource(token));
 		let expired = false;
+		const notice = notifications?.notify({ severity: Severity.Info, message: localize('arni.profile.reviewNotice', 'Нужно подтверждение «Моих данных» в окне Arni. Проверьте выбранные поля и нажмите «Передать эти поля». Через две минуты ожидание завершится.'), sticky: true });
 		resources.add(disposableTimeout(() => { expired = true; cancellation.cancel(); }, 120_000));
 		try {
 			progress.report({ message: localize('arni.profile.waitingForReview', 'Ожидается ваше подтверждение в окне карточки данных. Через две минуты запрос остановится без передачи или сохранения данных.') });
 			const answer = await raceCancellation(dialogs.confirm({ ...confirmation, custom: true, token: cancellation.token }), cancellation.token);
 			const status = expired ? 'approval_timeout' : answer?.confirmed && !cancellation.token.isCancellationRequested ? 'approved' : 'denied';
+			if (expired) { notifications?.info(localize('arni.profile.reviewTimeoutNotice', 'Подтверждение «Моих данных» не получено. Данные не переданы. Напишите агенту «Продолжи», чтобы запросить подтверждение снова.')); }
 			if (status === 'approved') { this.states.delete(scope); } else { this.states.set(scope, status); }
 			return status;
 		} catch (error) {
 			this.states.set(scope, 'denied');
 			throw error;
-		} finally { resources.dispose(); }
+		} finally { notice?.close(); resources.dispose(); }
 	}
 }
 
@@ -93,6 +96,7 @@ export class ArniReadUserProfileTool implements IToolImpl {
 		@IArniUserProfileService private readonly profiles: IArniUserProfileService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IAuthenticationService private readonly authentication: IAuthenticationService,
+		@INotificationService private readonly notifications?: INotificationService,
 	) { }
 
 	async invoke(invocation: IToolInvocation, _countTokens: CountTokensCallback, _progress: ToolProgress, token: CancellationToken): Promise<IToolResult> {
@@ -126,7 +130,7 @@ export class ArniReadUserProfileTool implements IToolImpl {
 				detail: localize('arni.profile.reviewDetail', 'Аккаунт: {0}\nЗадача: {1}\nПолучатель формы: {2}\nМодель: {3}\n\n{4}\n\nЭти сведения попадут в контекст чата и могут сохраниться в его истории. Разрешение не отправляет форму и не принимает условия сайта.', account.label, purpose, url?.href ?? localize('arni.profile.chatOnly', 'нет — просмотр в текущем чате'), invocation.modelId ?? localize('arni.profile.currentModel', 'выбранная в чате'), lines.join('\n')),
 				primaryButton: localize('arni.profile.share', 'Передать эти поля'),
 				cancelButton: localize('arni.profile.doNotShare', 'Не передавать'),
-			}, cancellation.token, _progress);
+			}, cancellation.token, _progress, this.notifications);
 			if (confirmation !== 'approved') { return reviewStopped(confirmation); }
 			if (cancellation.token.isCancellationRequested) { return this.result({ status: 'denied' }); }
 			const latest = selectArniProfileEntries(await this.profiles.read(account), fields);
