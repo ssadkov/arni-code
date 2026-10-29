@@ -10,7 +10,7 @@
 ## Подготовка
 
 ```bash
-python test/arni-cases/pptx-update/build_project.py C:/work/test-arni-pptx
+python test/arni-cases/new_run.py pptx-update kimi-k2.5
 ```
 
 Создаёт `source/Курс_AI-агенты.pptx` (5 слайдов, синяя полоса слева на каждом, шесть устаревших фактов), `brief.md` и `.case.json` с SHA-256 исходника.
@@ -21,7 +21,7 @@ python test/arni-cases/pptx-update/build_project.py C:/work/test-arni-pptx
 
 Ни то ни другое не входит в Arni. На машине без PowerPoint и LibreOffice агент не сможет посмотреть слайды и должен прямо об этом сказать.
 
-## Промпт (новый чат, проект `C:/work/test-arni-pptx`)
+## Промпт (новый чат в папке прогона)
 
 ```text
 Обнови презентацию из source/ по brief.md.
@@ -36,7 +36,7 @@ E-mail и телефон возьми со страницы https://arnion.kz/co
 ## Проверка
 
 ```bash
-python test/arni-cases/pptx-update/check.py C:/work/test-arni-pptx
+python test/arni-cases/pptx-update/check.py C:/work/arni-runs/<папка прогона>
 ```
 
 17 проверок:

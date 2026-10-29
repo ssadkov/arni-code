@@ -7,12 +7,12 @@
 ## Подготовка
 
 ```bash
-python test/arni-cases/landing/build_project.py C:/work/test-arni-landing
+python test/arni-cases/new_run.py landing kimi-k2.5
 ```
 
 Создаёт `brief.md` и `.case.json` с SHA-256 брифа.
 
-## Промпт (новый чат, проект `C:/work/test-arni-landing`)
+## Промпт (новый чат в папке прогона)
 
 ```text
 Сделай одностраничный лендинг курса по brief.md.
@@ -28,7 +28,7 @@ python test/arni-cases/landing/build_project.py C:/work/test-arni-landing
 ## Проверка
 
 ```bash
-node test/arni-cases/landing/check.mjs C:/work/test-arni-landing
+node test/arni-cases/landing/check.mjs C:/work/arni-runs/<папка прогона>
 ```
 
 24 проверки в настоящем Chromium (Playwright из `node_modules` репозитория):

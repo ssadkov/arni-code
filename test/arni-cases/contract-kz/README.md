@@ -7,12 +7,12 @@
 ## Подготовка
 
 ```bash
-python test/arni-cases/contract-kz/build_project.py C:/work/test-arni-contract
+python test/arni-cases/new_run.py contract-kz kimi-k2.5
 ```
 
 Создаёт `template/Договор_оказания_услуг_РК.docx` (шаблон в стиле интернет-образцов с полями `____`), `data/заказчик.txt` (вымышленный заказчик с корректными контрольными суммами БИН и ИИК) и `.case.json` с SHA-256 шаблона. Нужны Python 3 с `python-docx`; для PDF — Microsoft Word или LibreOffice.
 
-## Промпт (новый чат, проект `C:/work/test-arni-contract`)
+## Промпт (новый чат в папке прогона)
 
 ```text
 Заполни договор из template/ для нашей компании как Исполнителя.
@@ -31,7 +31,7 @@ python test/arni-cases/contract-kz/build_project.py C:/work/test-arni-contract
 ## Проверка
 
 ```bash
-python test/arni-cases/contract-kz/check.py C:/work/test-arni-contract
+python test/arni-cases/contract-kz/check.py C:/work/arni-runs/<папка прогона>
 ```
 
 JSON с числом пройденных проверок и списком проваленных; код выхода 1 при любой ошибке. Эталонное заполнение проходит 32/32. Подменённый ИИК, «Бейимбет» вместо «Бейімбет», выдуманный директор исполнителя и оставленное поле города ловятся. Визуальный просмотр PDF скрипт не подтверждает — смотреть в истории чата, открыл ли агент изображение.
