@@ -16,7 +16,7 @@ export interface IArniSkillLibrary {
 }
 
 export const ARNI_LIBRARY_MAX_BYTES = 2 * 1024 * 1024;
-export const ARNI_LIBRARY_SKILLS = ['greenscreen-preview', 'media-toolkit', 'video-trim', 'video-audio', 'video-screencast', 'video-subtitles', 'video-inserts', 'video-reframe', 'video-story-edit', 'video-export-check', 'content-editor', 'user-profile', 'fill-form', 'computer-check'] as const;
+export const ARNI_LIBRARY_SKILLS = ['greenscreen-preview', 'media-toolkit', 'video-trim', 'video-audio', 'video-screencast', 'video-subtitles', 'video-inserts', 'video-reframe', 'video-story-edit', 'video-export-check', 'content-editor', 'user-profile', 'fill-form', 'computer-check', 'docx-fill'] as const;
 export const ARNI_LIBRARY_AGENTS = ['video-editor.agent.md', 'content-editor.agent.md', 'secretary.agent.md', 'sysadmin.agent.md'] as const;
 
 export async function arniLibraryHash(text: string): Promise<string> {

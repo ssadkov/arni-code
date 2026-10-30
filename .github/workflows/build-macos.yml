@@ -154,6 +154,8 @@ jobs:
           python3 src/vs/sessions/skills/media-toolkit/scripts/media.py doctor
           python3 src/vs/sessions/skills/greenscreen-preview/scripts/greenscreen.py doctor
           python3 scripts/test-greenscreen-skill.py
+          python3 -m pip install --quiet --break-system-packages python-docx pymupdf
+          python3 scripts/test-docx-fill-skill.py
           python3 scripts/test-media-toolkit.py
 
       - name: Build bundled Arni extensions

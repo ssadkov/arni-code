@@ -133,6 +133,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/test-greenscreen-skill.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install --quiet python-docx pymupdf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test-docx-fill-skill.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/test-media-toolkit.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
