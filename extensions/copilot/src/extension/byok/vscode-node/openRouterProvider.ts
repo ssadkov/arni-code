@@ -22,7 +22,7 @@ import { CancellationToken, LanguageModelChatMessage, LanguageModelChatMessage2,
 import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { ArniImageTool } from './arniImageTool';
-import { isNonRetryableBYOKError } from '../common/byokErrorPolicy';
+import { IArniBudgetError, isNonRetryableBYOKError, parseArniBudgetError } from '../common/byokErrorPolicy';
 
 interface ArniBudgetWindow {
 	usedMicros: number;
@@ -384,6 +384,11 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		if (!(error instanceof Error)) {
 			return error;
 		}
+		const budgetError = parseArniBudgetError(error.message);
+		if (budgetError) {
+			void this.offerFreeModel();
+			return new Error(ARNI_USER_ERROR_PREFIX + this.budgetErrorText(budgetError));
+		}
 		if (isNonRetryableBYOKError(error.message)) {
 			return new Error(ARNI_USER_ERROR_PREFIX + error.message);
 		}
@@ -396,6 +401,31 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			return new Error(ARNI_USER_ERROR_PREFIX + error.message);
 		}
 		return error;
+	}
+
+	private budgetErrorText(error: IArniBudgetError): string {
+		if (error.code === 'insufficient_budget') {
+			return vscode.l10n.t('Бюджета API не хватает на этот запрос. Выберите бесплатную модель или обратитесь к администратору.');
+		}
+		const reset = error.resetsAt ? vscode.l10n.t('Сброс: {0}.', error.resetsAt.toLocaleString()) : '';
+		return error.code === 'five_hour_limit'
+			? vscode.l10n.t('Лимит API на 5 часов: не хватает на этот запрос. {0} Пока можно выбрать бесплатную модель.', reset)
+			: vscode.l10n.t('Лимит API на неделю: не хватает на этот запрос. {0} Пока можно выбрать бесплатную модель.', reset);
+	}
+
+	private async offerFreeModel(): Promise<void> {
+		try {
+			const choose = vscode.l10n.t('Выбрать модель');
+			const usage = vscode.l10n.t('Расходы API');
+			const choice = await vscode.window.showWarningMessage(vscode.l10n.t('Лимит API исчерпан. Бесплатные модели продолжают работать.'), choose, usage);
+			if (choice === choose) {
+				await vscode.commands.executeCommand('workbench.action.chat.openModelPicker');
+			} else if (choice === usage) {
+				await this.showApiUsage();
+			}
+		} catch {
+			// vscode.window is unavailable in unit tests
+		}
 	}
 
 	private async offerProWaitlist(): Promise<void> {
