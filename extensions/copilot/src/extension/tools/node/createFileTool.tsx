@@ -66,10 +66,6 @@ export class CreateFileTool implements ICopilotTool<ICreateFileParams> {
 			throw new Error(`Invalid file path`);
 		}
 
-		if (!this._promptContext?.stream) {
-			throw new Error('Invalid stream');
-		}
-
 		// Validate parameters
 		if (!options.input.filePath || options.input.content === undefined) {
 			throw new Error('Invalid input: filePath and content are required');
@@ -97,9 +93,22 @@ export class CreateFileTool implements ICopilotTool<ICreateFileParams> {
 			}
 		}
 
+		const stream = this._promptContext?.stream;
+		if (!stream && hasSupportedNotebooks) {
+			throw new Error('Invalid stream');
+		}
+
 		const languageId = doc?.languageId ?? getLanguageForResource(uri).languageId;
 		const fileExtension = extname(uri);
 		const modelId = options.model && (await this.endpointProvider.getChatEndpoint(options.model)).model;
+
+		if (!stream) {
+			// Agent host sessions invoke this tool without a chat response stream; write the file directly.
+			const text = removeLeadingFilepathComment(options.input.content, languageId, options.input.filePath);
+			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(text));
+			this.sendTelemetry(options.chatRequestId, modelId, fileExtension);
+			return new LanguageModelToolResult([new LanguageModelTextPart(`File created at ${this.promptPathRepresentationService.getFilePath(uri)}`)]);
+		}
 
 		if (hasSupportedNotebooks) {
 			// Its possible we have a code block with a language id
@@ -109,8 +118,8 @@ export class CreateFileTool implements ICopilotTool<ICreateFileParams> {
 			processor.processMarkdown(options.input.content);
 			processor.flush();
 			content = removeLeadingFilepathComment(options.input.content, languageId, options.input.filePath);
-			await processFullRewriteNewNotebook(uri, content, this._promptContext.stream, this.alternativeNotebookEditGenerator, { source: NotebookEditGenrationSource.createFile, requestId: options.chatRequestId, model: options.model ? this.endpointProvider.getChatEndpoint(options.model).then(m => m.model) : undefined }, token);
-			this._promptContext.stream.notebookEdit(uri, true);
+			await processFullRewriteNewNotebook(uri, content, stream, this.alternativeNotebookEditGenerator, { source: NotebookEditGenrationSource.createFile, requestId: options.chatRequestId, model: options.model ? this.endpointProvider.getChatEndpoint(options.model).then(m => m.model) : undefined }, token);
+			stream.notebookEdit(uri, true);
 			this.sendTelemetry(options.chatRequestId, modelId, fileExtension);
 		} else {
 			const content = removeLeadingFilepathComment(options.input.content, languageId, options.input.filePath);
@@ -119,11 +128,11 @@ export class CreateFileTool implements ICopilotTool<ICreateFileParams> {
 			// is overwritten rather than prepended to (https://github.com/microsoft/vscode/issues/311043).
 			if (!fileExists && doc && doc.getText().length > 0) {
 				const lastLine = doc.lineCount - 1;
-				this._promptContext.stream.textEdit(uri, TextEdit.replace(new ExtRange(0, 0, lastLine, doc.lineAt(lastLine).text.length), content));
+				stream.textEdit(uri, TextEdit.replace(new ExtRange(0, 0, lastLine, doc.lineAt(lastLine).text.length), content));
 			} else {
-				this._promptContext.stream.textEdit(uri, TextEdit.insert(new ExtPosition(0, 0), content));
+				stream.textEdit(uri, TextEdit.insert(new ExtPosition(0, 0), content));
 			}
-			this._promptContext.stream.textEdit(uri, true);
+			stream.textEdit(uri, true);
 			this.sendTelemetry(options.chatRequestId, modelId, fileExtension);
 			return new LanguageModelToolResult([
 				new LanguageModelPromptTsxPart(

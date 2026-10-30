@@ -68,6 +68,10 @@ def main():
 		missing.write_text(json.dumps([{'at': 'p0', 'nth': 9, 'replace': 'z'}]), encoding='utf-8')
 		assert run('fill', '--template', template, '--spec', missing, '--output', work / 'missing.docx', ok=False)['errors'][0]['error'] == 'match not found'
 
+		bom = work / 'bom.json'
+		bom.write_text(json.dumps([{'at': 'p1', 'set': 'x'}]), encoding='utf-8-sig')
+		assert run('fill', '--template', template, '--spec', bom, '--output', work / 'bom.docx')['applied'] == 1
+
 		doctor = subprocess.run([sys.executable, str(HELPER), 'doctor'], capture_output=True, text=True, encoding='utf-8')
 		if json.loads(doctor.stdout)['pdf_converter']:
 			pdf = run('pdf', output)
