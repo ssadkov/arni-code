@@ -112,6 +112,40 @@
 	cursor: pointer;
 }
 
+.agent-sessions-workbench .arni-budget-window {
+	display: grid;
+	gap: var(--vscode-spacing-size40);
+	font-size: var(--vscode-fontSize-label2);
+}
+
+.agent-sessions-workbench .arni-budget-bar {
+	height: 4px;
+	overflow: hidden;
+	border-radius: var(--vscode-cornerRadius-small);
+	background: var(--vscode-widget-border);
+}
+
+.agent-sessions-workbench .arni-budget-bar-fill {
+	height: 100%;
+	background: var(--vscode-progressBar-background);
+}
+
+.agent-sessions-workbench .arni-budget-bar-fill.arni-budget-warning {
+	background: var(--vscode-editorWarning-foreground);
+}
+
+.agent-sessions-workbench .arni-budget-bar-fill.arni-budget-exhausted {
+	background: var(--vscode-errorForeground);
+}
+
+.agent-sessions-workbench .sessions-account-titlebar-widget-label.arni-budget-warning {
+	color: var(--vscode-editorWarning-foreground);
+}
+
+.agent-sessions-workbench .sessions-account-titlebar-widget-label.arni-budget-exhausted {
+	color: var(--vscode-errorForeground);
+}
+
 @media (max-width: 700px) {
 	.agent-sessions-workbench .sessions-account-titlebar-widget.arni-account-visible {
 		max-width: 190px;
