@@ -128,7 +128,9 @@ function getCopilotOptionalNativePayloadFiles(platform: string): string[] {
 		'prebuilds/*/mediaremote-adapter/**',
 	];
 
-	if (platform !== 'win32') {
+	// The macOS CLI loads this addon during startup, before any model request.
+	// Keep it alongside the Windows runtime; it is not an optional media feature.
+	if (platform !== 'win32' && platform !== 'darwin') {
 		files.push('prebuilds/*/cli-native.node');
 	}
 

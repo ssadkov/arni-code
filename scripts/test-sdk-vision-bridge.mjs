@@ -76,18 +76,29 @@ try {
 	assert.equal(calls, 2, 'Expected a tool call and one completion');
 	assert.equal(receivedImages, 1, 'The SDK must retain the tool image with the actual launcher token limits');
 	assert.equal(reply?.data.content, 'Кадр просмотрен.', 'Hooks must not stall final reply and session.idle notifications');
-	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor'].map(name => ({
+	const customAgents = await toSdkCustomAgents(['video-editor', 'content-editor', 'secretary', 'sysadmin'].map(name => ({
 		name, uri: URI.file(path.join(root, 'src/vs/sessions/agents', name + '.agent.md')),
 	})), { readFile: async uri => ({ value: await fs.readFile(uri.fsPath, 'utf8') }) });
-	assert.equal(customAgents.length, 2);
+	assert.equal(customAgents.length, 4);
 	for (const agent of customAgents) {
+		const skillDirectories = (agent.skills ?? []).map(name => path.join(root, 'src/vs/sessions/skills', name));
 		const selected = await client.createSession({ ...config, model: 'audit/vision', customAgents, agent: agent.name,
+			skillDirectories, enableSkills: true,
 			configDirectory: runDir, workingDirectory: runDir, enableConfigDiscovery: false, enableSessionTelemetry: false, onPermissionRequest: approveAll });
 		const answer = await selected.sendAndWait({ prompt: 'Reply done without tools.' }, 30000);
 		assert.equal(answer?.data.content, 'Кадр просмотрен.');
 		assert.ok(receivedRequests.at(-1).includes(agent.prompt.split(/\r?\n/)[0]), 'The selected profession instructions must reach the model');
+		if (agent.name === 'Секретарь' || agent.name === 'Сисадмин') {
+			assert.deepEqual(agent.skills, agent.name === 'Секретарь' ? ['user-profile', 'fill-form'] : ['computer-check']);
+			const request = JSON.stringify(JSON.parse(receivedRequests.at(-1))).replace(/\\r/g, '');
+			for (const directory of skillDirectories) {
+				const source = await fs.readFile(path.join(directory, 'SKILL.md'), 'utf8');
+				const body = source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim();
+				assert.ok(request.includes(JSON.stringify(body).slice(1, -1).replace(/\\r/g, '')), `Skill body must be preloaded without a model tool call: ${path.basename(directory)}`);
+			}
+		}
 	}
-	console.log('SDK vision/professions passed: tool image retained, hooks completed, both Russian profession names selected and instructions delivered; local HTTP only.');
+	console.log('SDK vision/professions passed: tool image retained, hooks completed, four profiles delivered and Secretary/Sysadmin skills eagerly loaded without model tool calls; local HTTP only.');
 } finally {
 	await client.stop();
 	await new Promise(resolve => server.close(resolve));

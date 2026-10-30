@@ -26,6 +26,39 @@
 	--vscode-chat-font-size-body-xxl: 1.538em;
 }
 
+.interactive-session .arni-agent-identity {
+	margin-bottom: var(--vscode-spacing-size80);
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-chat-font-size-body-s);
+}
+
+.interactive-session .arni-agent-identity[hidden] {
+	display: none;
+}
+
+.interactive-session .arni-response-author,
+.interactive-session .arni-conversation-participants,
+.interactive-session .arni-agent-badge {
+	display: flex;
+	align-items: center;
+	gap: var(--vscode-spacing-size60);
+}
+
+.interactive-session .arni-response-author,
+.interactive-session .arni-conversation-participants {
+	flex-wrap: wrap;
+	row-gap: var(--vscode-spacing-size40);
+}
+
+.interactive-session .arni-conversation-participants {
+	margin-top: var(--vscode-spacing-size40);
+}
+
+.interactive-session .arni-agent-badge {
+	color: var(--vscode-foreground);
+	white-space: nowrap;
+}
+
 @keyframes chat-session-working-glow {
 	0%,
 	100% {

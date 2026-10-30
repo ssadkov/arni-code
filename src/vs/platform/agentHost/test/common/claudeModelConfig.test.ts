@@ -68,7 +68,7 @@ suite('isClaudeEffortLevel (Phase 6.1 / Cycle D3)', () => {
 		// it into `createClaudeThinkingLevelSchema`. A drift between the two
 		// would surface as a model whose enum advertises a value the
 		// materialize site can't honor.
-		const inputs = ['low', 'medium', 'high', 'xhigh', 'max', '', 'LOW', 'turbo', 'minimal', 'High'];
+		const inputs = ['low', 'medium', 'high', 'xhigh', 'max', '', 'LOW', 'turbo', 'minimal', 'Высокий'];
 		assert.deepStrictEqual(inputs.map(isClaudeEffortLevel), [true, true, true, true, true, false, false, false, false, false]);
 	});
 });
@@ -108,8 +108,8 @@ suite('createClaudeThinkingLevelSchema (Phase 6.1 / Cycle D3)', () => {
 						title: 'Thinking Level',
 						description: 'Controls how much reasoning effort Claude uses.',
 						enum: ['low', 'medium', 'high', 'xhigh', 'max'],
-						enumLabels: ['Low', 'Medium', 'High', 'Extra High', 'Max'],
-						enumDescriptions: ['Faster responses with less reasoning', 'Balanced reasoning and speed', 'Greater reasoning depth but slower', 'Highest reasoning depth but slowest', 'Absolute maximum capability with no constraints'],
+						enumLabels: ['Низкий', 'Средний', 'Высокий', 'Очень высокий', 'Максимальный'],
+						enumDescriptions: ['Меньше рассуждений, быстрее ответ', 'Баланс глубины рассуждений и скорости', 'Глубже рассуждения, дольше ответ', 'Самые глубокие рассуждения, самое долгое ожидание', 'Максимально доступная глубина рассуждений'],
 						default: 'high',
 					},
 				},
@@ -122,8 +122,8 @@ suite('createClaudeThinkingLevelSchema (Phase 6.1 / Cycle D3)', () => {
 						title: 'Thinking Level',
 						description: 'Controls how much reasoning effort Claude uses.',
 						enum: ['low', 'medium', 'high'],
-						enumLabels: ['Low', 'Medium', 'High'],
-						enumDescriptions: ['Faster responses with less reasoning', 'Balanced reasoning and speed', 'Greater reasoning depth but slower'],
+						enumLabels: ['Низкий', 'Средний', 'Высокий'],
+						enumDescriptions: ['Меньше рассуждений, быстрее ответ', 'Баланс глубины рассуждений и скорости', 'Глубже рассуждения, дольше ответ'],
 						default: 'high',
 					},
 				},
@@ -136,8 +136,8 @@ suite('createClaudeThinkingLevelSchema (Phase 6.1 / Cycle D3)', () => {
 						title: 'Thinking Level',
 						description: 'Controls how much reasoning effort Claude uses.',
 						enum: ['high'],
-						enumLabels: ['High'],
-						enumDescriptions: ['Greater reasoning depth but slower'],
+						enumLabels: ['Высокий'],
+						enumDescriptions: ['Глубже рассуждения, дольше ответ'],
 						default: 'high',
 					},
 				},
@@ -150,8 +150,8 @@ suite('createClaudeThinkingLevelSchema (Phase 6.1 / Cycle D3)', () => {
 						title: 'Thinking Level',
 						description: 'Controls how much reasoning effort Claude uses.',
 						enum: ['max', 'low'],
-						enumLabels: ['Max', 'Low'],
-						enumDescriptions: ['Absolute maximum capability with no constraints', 'Faster responses with less reasoning'],
+						enumLabels: ['Максимальный', 'Низкий'],
+						enumDescriptions: ['Максимально доступная глубина рассуждений', 'Меньше рассуждений, быстрее ответ'],
 					},
 				},
 			},

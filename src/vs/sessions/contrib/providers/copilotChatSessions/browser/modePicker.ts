@@ -29,6 +29,7 @@ import type { IActiveSession } from '../../../../services/sessions/common/sessio
 import { reportNewChatPickerClosed } from '../../../chat/browser/newChatPickerTelemetry.js';
 import { CopilotCLISessionType } from '../../agentHost/browser/baseAgentHostSessionsProvider.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { getArniAgentIdentity } from '../../../../../workbench/contrib/chat/common/arniAgentIdentity.js';
 
 interface IModePickerItem {
 	readonly kind: 'mode';
@@ -333,8 +334,8 @@ export class ModePicker extends Disposable {
 			undefined,
 			[],
 			{
-				getAriaLabel: (item) => item.label ?? '',
-				getWidgetAriaLabel: () => localize('modePicker.ariaLabel', "Mode Picker"),
+				getAriaLabel: item => item.label ?? '',
+				getWidgetAriaLabel: () => localize('modePicker.ariaLabel', "Выбор агента"),
 			},
 		);
 	}
@@ -348,7 +349,8 @@ export class ModePicker extends Disposable {
 		const agentMode = modes[0];
 		items.push({
 			kind: ActionListItemKind.Action,
-			label: agentMode.label.get(),
+			label: localize('modePicker.generalAgent', "Универсальный агент"),
+			detail: localize('modePicker.generalAgentWhenToChoose', "Когда выбрать: общая задача; для сайта — Программист"),
 			group: { title: '', icon: selectedModeId === agentMode.id ? Codicon.check : Codicon.blank },
 			item: { kind: 'mode', mode: agentMode },
 		});
@@ -358,10 +360,15 @@ export class ModePicker extends Disposable {
 		if (customModes.length > 0) {
 			items.push({ kind: ActionListItemKind.Separator, label: '' });
 			for (const mode of customModes) {
+				const profession = getArniAgentIdentity(mode.name.get(), mode.id);
+				const detail = profession ? localize('modePicker.whenToChoose', "Когда выбрать: {0}", profession.whenToChoose) : mode.description.get();
 				items.push({
 					kind: ActionListItemKind.Action,
-					label: mode.label.get(),
-					group: { title: '', icon: selectedModeId === mode.id ? Codicon.check : Codicon.blank },
+					label: profession?.name ?? mode.label.get(),
+					group: { title: '', icon: profession?.icon ?? (selectedModeId === mode.id ? Codicon.check : Codicon.blank) },
+					description: profession && selectedModeId === mode.id ? localize('modePicker.selectedProfession', 'Выбран') : undefined,
+					detail,
+					tooltip: detail,
 					item: { kind: 'mode', mode },
 				});
 			}
@@ -371,7 +378,7 @@ export class ModePicker extends Disposable {
 		items.push({ kind: ActionListItemKind.Separator, label: '' });
 		items.push({
 			kind: ActionListItemKind.Action,
-			label: localize('configureCustomAgents', "Configure Custom Agents..."),
+			label: localize('configureCustomAgents', "Настроить агентов…"),
 			group: { title: '', icon: Codicon.blank },
 			item: { kind: 'configure' },
 		});
@@ -393,14 +400,16 @@ export class ModePicker extends Disposable {
 		dom.clearNode(this._triggerElement);
 
 		const selectedMode = this._modePickerModel.selectedMode;
-		const icon = selectedMode.icon.get();
+		const profession = getArniAgentIdentity(selectedMode.name.get(), selectedMode.id);
+		const icon = profession?.icon ?? selectedMode.icon.get();
 		if (icon) {
 			dom.append(this._triggerElement, renderIcon(icon));
 		}
 
 		const labelSpan = dom.append(this._triggerElement, dom.$('span.sessions-chat-dropdown-label'));
-		labelSpan.textContent = selectedMode.label.get();
+		const label = profession?.name ?? (selectedMode.id === ChatMode.Agent.id ? localize('modePicker.generalAgent', "Универсальный агент") : selectedMode.label.get());
+		labelSpan.textContent = label;
 
-		this._triggerElement.ariaLabel = localize('modePicker.triggerAriaLabel', "Pick Mode, {0}", selectedMode.label.get());
+		this._triggerElement.ariaLabel = localize('modePicker.triggerAriaLabel', "Выбрать агента: {0}", label);
 	}
 }

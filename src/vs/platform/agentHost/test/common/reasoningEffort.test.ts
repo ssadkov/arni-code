@@ -17,14 +17,14 @@ suite('reasoningEffort', () => {
 		assert.deepStrictEqual(
 			reasoningEffortLevels.map(level => [level, getReasoningEffortLabel(level), getReasoningEffortDescription(level)]),
 			[
-				['none', 'None', 'No reasoning applied'],
-				['minimal', 'Minimal', 'Minimal reasoning for fastest responses'],
-				['low', 'Low', 'Faster responses with less reasoning'],
-				['medium', 'Medium', 'Balanced reasoning and speed'],
-				['high', 'High', 'Greater reasoning depth but slower'],
-				['xhigh', 'Extra High', 'Highest reasoning depth but slowest'],
-				['max', 'Max', 'Absolute maximum capability with no constraints'],
-				['ultra', 'Ultra', 'Maximum reasoning with automatic task delegation'],
+				['none', 'Без рассуждений', 'Без дополнительных рассуждений'],
+				['minimal', 'Минимальный', 'Минимум рассуждений для самого быстрого ответа'],
+				['low', 'Низкий', 'Меньше рассуждений, быстрее ответ'],
+				['medium', 'Средний', 'Баланс глубины рассуждений и скорости'],
+				['high', 'Высокий', 'Глубже рассуждения, дольше ответ'],
+				['xhigh', 'Очень высокий', 'Самые глубокие рассуждения, самое долгое ожидание'],
+				['max', 'Максимальный', 'Максимально доступная глубина рассуждений'],
+				['ultra', 'Ультра', 'Максимальные рассуждения с автоматическим делегированием задач'],
 			],
 		);
 	});

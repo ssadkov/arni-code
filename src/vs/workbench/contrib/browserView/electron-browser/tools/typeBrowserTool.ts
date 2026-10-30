@@ -5,6 +5,7 @@
 
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
+import { hash } from '../../../../../base/common/hash.js';
 import {
 	escapeMarkdownSyntaxTokens,
 	MarkdownString
@@ -12,16 +13,17 @@ import {
 import { localize } from '../../../../../nls.js';
 import { IPlaywrightService } from '../../../../../platform/browserView/common/playwrightService.js';
 import { ToolDataSource, type CountTokensCallback, type IPreparedToolInvocation, type IToolData, type IToolImpl, type IToolInvocation, type IToolInvocationPreparationContext, type IToolResult, type ToolProgress } from '../../../chat/common/tools/languageModelToolsService.js';
-import { createBrowserPageLink, errorResult, getSessionId, playwrightInvoke } from './browserToolHelpers.js';
+import { createBrowserPageLink, errorResult, getSessionId, invokeFunctionResultToToolResult, playwrightInvoke, playwrightInvokeRaw } from './browserToolHelpers.js';
 import { BrowserChatToolReferenceName } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 import { OpenPageToolId } from './openBrowserTool.js';
+import { IBrowserToolProgress } from './browserToolProgress.js';
 
 export const TypeBrowserToolData: IToolData = {
 	id: 'type_in_page',
 	toolReferenceName: BrowserChatToolReferenceName.TypeInPage,
 	displayName: localize('typeBrowserTool.displayName', 'Type in Page'),
 	userDescription: localize('typeBrowserTool.userDescription', 'Type text or press keys in a browser page'),
-	modelDescription: 'Type text or press keys in a browser page.',
+	modelDescription: 'Fill an exact editable element and verify its value, or press a key. Text requires a ref from the current page snapshot or a Playwright selector; element is only a display label and never locates a field. Repeated text actions without progress are blocked. Read the page after an error instead of blindly retrying.',
 	icon: Codicon.symbolText,
 	source: ToolDataSource.Internal,
 	inputSchema: {
@@ -45,11 +47,11 @@ export const TypeBrowserToolData: IToolData = {
 			},
 			ref: {
 				type: 'string',
-				description: 'Element reference to focus and type into. If omitted, types into the focused element.'
+				description: 'Element reference from the current snapshot, e.g. e46. Required for text unless selector is supplied. Do not use a ref as a CSS attribute.'
 			},
 			selector: {
 				type: 'string',
-				description: 'Playwright selector of element to focus and type into. Use if "ref" is not available. If omitted, types into the focused element.'
+				description: 'Playwright selector of the exact editable element. Required for text unless ref is supplied. Keys alone may act on the current focus.'
 			},
 			element: {
 				type: 'string',
@@ -73,6 +75,7 @@ interface ITypeBrowserToolParams {
 export class TypeBrowserTool implements IToolImpl {
 	constructor(
 		@IPlaywrightService private readonly playwrightService: IPlaywrightService,
+		@IBrowserToolProgress private readonly browserProgress: IBrowserToolProgress,
 	) { }
 
 	async prepareToolInvocation(context: IToolInvocationPreparationContext, _token: CancellationToken): Promise<IPreparedToolInvocation | undefined> {
@@ -116,7 +119,7 @@ export class TypeBrowserTool implements IToolImpl {
 		};
 	}
 
-	async invoke(invocation: IToolInvocation, _countTokens: CountTokensCallback, _progress: ToolProgress, _token: CancellationToken): Promise<IToolResult> {
+	async invoke(invocation: IToolInvocation, _countTokens: CountTokensCallback, _progress: ToolProgress, token: CancellationToken): Promise<IToolResult> {
 		const params = invocation.parameters as ITypeBrowserToolParams;
 		const sessionId = getSessionId(invocation);
 
@@ -129,8 +132,11 @@ export class TypeBrowserTool implements IToolImpl {
 			selector = `aria-ref=${params.ref}`;
 		}
 
-		if (!params.text && !params.key) {
-			return errorResult('Either a "text" or "key" parameter is required.');
+		if (token.isCancellationRequested) {
+			return errorResult('Browser input cancelled.');
+		}
+		if ((typeof params.text !== 'string' && !params.key) || (params.text !== undefined && params.key !== undefined)) {
+			return errorResult('Provide either "text" (including an empty string to clear a field) or "key", not both.');
 		}
 
 		// Press key
@@ -141,21 +147,42 @@ export class TypeBrowserTool implements IToolImpl {
 			return playwrightInvoke(this.playwrightService, sessionId, params.pageId, (page, key) => page.keyboard.press(key), params.key);
 		}
 
-		// Type text
-		if (selector) {
-			return playwrightInvoke(this.playwrightService, sessionId, params.pageId, async (page, sel, text, submit) => {
+		const signature = hash([params.pageId, params.ref, params.selector, params.text, params.submit]);
+		const stopped = this.browserProgress.begin(invocation, 'type', params.pageId, signature);
+		if (stopped) { return stopped; }
+		if (!selector || (params.ref !== undefined && !/^e\d+$/.test(params.ref))) {
+			return errorResult('Text input requires an exact ref from the current snapshot (e.g. ref:"e46") or a Playwright selector. The element description does not select a field. Read the page and locate the field; no text was typed.');
+		}
+		try {
+			const result = await playwrightInvokeRaw(this.playwrightService, sessionId, params.pageId, async (page, sel, text, submit) => {
 				const locator = page.locator(sel);
+				const readValue = () => locator.evaluate(element => {
+					if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+						return (element as HTMLInputElement | HTMLTextAreaElement).value;
+					}
+					if ((element as HTMLElement).isContentEditable) {
+						return element.textContent ?? '';
+					}
+					throw new Error('The target is not a text field. Use an editable input, textarea or contenteditable element.');
+				});
+				const before = await readValue();
 				await locator.fill(text);
-				if (submit) {
+				const after = await readValue();
+				if (after !== text) {
+					throw new Error('The field value did not match after filling. Read the page and resolve validation or formatting before continuing.');
+				}
+				// Do not press Enter again when a repeated call found the value already set.
+				if (submit && before !== after) {
 					await locator.press('Enter');
 				}
+				return { verified: true, changed: before !== after };
 			}, selector, params.text!, params.submit ?? false);
-		}
-		return playwrightInvoke(this.playwrightService, sessionId, params.pageId, async (page, text, submit) => {
-			await page.keyboard.type(text);
-			if (submit) {
-				await page.keyboard.press('Enter');
+			if (result.changed) {
+				this.browserProgress.changed(invocation, 'type', params.pageId, signature);
 			}
-		}, params.text!, params.submit ?? false);
+			return invokeFunctionResultToToolResult({ result, summary: await this.playwrightService.getSummary(sessionId, params.pageId) });
+		} catch (error) {
+			return errorResult(`${error instanceof Error ? error.message : String(error)}\nInput was not verified. Read the current page before retrying; the field may have changed.`);
+		}
 	}
 }

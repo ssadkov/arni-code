@@ -23,7 +23,7 @@ suite('StarterProjectGallery', () => {
 	test('creates a fresh folder per start and hands the prompt to the agent', async () => {
 		const hoverTips: string[] = [];
 		const existingFolders = new Set<string>();
-		const startedProjects: { readonly folder: string; readonly prompt: string }[] = [];
+		const startedProjects: { readonly folder: string; readonly prompt: string; readonly professionId: string }[] = [];
 		let existingFolderRequests = 0;
 		const hoverService = new class extends mock<IHoverService>() {
 			override setupDelayedHover(_target: HTMLElement, options: Parameters<IHoverService['setupDelayedHover']>[1]): IDisposable {
@@ -52,7 +52,7 @@ suite('StarterProjectGallery', () => {
 		const container = document.createElement('div');
 		const gallery = disposables.add(new StarterProjectGallery(
 			container,
-			async (folder, prompt) => { startedProjects.push({ folder: folder.path, prompt }); },
+			async (folder, prompt, professionId) => { startedProjects.push({ folder: folder.path, prompt, professionId }); },
 			() => existingFolderRequests++,
 			upcastPartial<IFileDialogService>({}),
 			upcastPartial<IFileService>({
@@ -68,6 +68,8 @@ suite('StarterProjectGallery', () => {
 			upcastPartial<ICommandService>({}),
 		));
 		const visibleCards = [...gallery.element.querySelectorAll<HTMLButtonElement>('.starter-project-card:not([hidden])')];
+		assert.strictEqual(visibleCards[0].dataset.agentId, 'programmer');
+		assert.ok(visibleCards[0].textContent?.includes('Программист'));
 		visibleCards[0].click();
 		await timeout(0);
 		visibleCards[0].click();
@@ -77,17 +79,22 @@ suite('StarterProjectGallery', () => {
 		await timeout(0);
 		gallery.element.querySelector<HTMLButtonElement>('.starter-project-existing')!.click();
 
+		assert.ok(startedProjects.every(project => project.professionId === 'programmer'));
+		const researcher = visibleCards[1];
+		researcher.click();
+		await timeout(0);
+		assert.strictEqual(startedProjects.pop()?.professionId, 'researcher');
 		assert.deepStrictEqual({
 			visibleCards: visibleCards.length,
 			hoverTips: hoverTips.filter(tip => tip.length > 0).length,
-			started: startedProjects.map(project => ({ folder: project.folder, mentionsIdea: project.prompt.includes('Змейка') || project.prompt.includes('сайт для кофейни') })),
+			started: startedProjects.map(project => ({ folder: project.folder, mentionsIdea: project.prompt.includes('лендинг') || project.prompt.includes('сайт для кофейни') })),
 			existingFolderRequests,
 		}, {
-			visibleCards: 3,
-			hoverTips: 6,
+			visibleCards: 6,
+			hoverTips: 15,
 			started: [
-				{ folder: '/home/test/Arni Projects/snake-game', mentionsIdea: true },
-				{ folder: '/home/test/Arni Projects/snake-game-2', mentionsIdea: true },
+				{ folder: '/home/test/Arni Projects/landing-page', mentionsIdea: true },
+				{ folder: '/home/test/Arni Projects/landing-page-2', mentionsIdea: true },
 				{ folder: '/home/test/Arni Projects/my-project', mentionsIdea: true },
 			],
 			existingFolderRequests: 1,

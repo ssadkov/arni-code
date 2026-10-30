@@ -137,7 +137,7 @@ export class AICustomizationShortcutsWidget extends Disposable {
 		header.tabIndex = 0;
 
 		const headerLabel = DOM.append(header, $('span.ai-customization-header-label'));
-		headerLabel.textContent = localize('customizations', "Customizations");
+		headerLabel.textContent = localize('customizations', "Настройки");
 		this._headerTotalCountElement = DOM.append(header, $('span.ai-customization-header-total-count.hidden'));
 
 		this._chevronElement = DOM.append(header, $('span.ai-customization-chevron'));

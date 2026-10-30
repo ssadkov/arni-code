@@ -115,6 +115,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/test-sdk-vision-bridge.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test-xlsx-runtime.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node test/unit/node/index.js --run src/vs/platform/agentHost/test/node/spreadsheetAttachments.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-sdk-xlsx-attachments.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/test-powershell-sentinel.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node test/unit/node/index.js --run src/vs/platform/agentHost/test/node/copilotShellTools.test.ts
@@ -123,6 +129,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node test/unit/node/index.js --run src/vs/sessions/contrib/providers/agentHost/test/browser/agentHostAgents.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\scripts\test.bat --runGlob=vs/sessions/contrib/accountMenu/test/browser/arniUserProfile.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test bundled media skill with real FFmpeg
         shell: pwsh
@@ -130,6 +138,10 @@ jobs:
           choco install ffmpeg --yes --no-progress
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/test-greenscreen-skill.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install --quiet python-docx pymupdf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test-docx-fill-skill.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/test-media-toolkit.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

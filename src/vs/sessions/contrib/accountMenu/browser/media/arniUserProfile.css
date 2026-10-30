@@ -1,0 +1,31 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.arni-personal-card {
+	box-sizing: border-box;
+	overflow: auto;
+	padding: var(--vscode-spacing-size240);
+	color: var(--vscode-foreground);
+}
+.arni-personal-card > * { max-width: 640px; }
+.arni-personal-card h1 { font-size: 1.5em; }
+.arni-personal-card p { line-height: 1.5; }
+.arni-personal-card .arni-profile-account { font-weight: 600; }
+.arni-personal-card fieldset {
+	border: 1px solid var(--vscode-widget-border, transparent);
+	border-radius: var(--vscode-cornerRadius-small);
+	padding: var(--vscode-spacing-size160);
+	margin: var(--vscode-spacing-size160) 0;
+}
+.arni-personal-card legend { font-weight: 600; }
+.arni-personal-card .arni-profile-row { margin-bottom: var(--vscode-spacing-size120); }
+.arni-personal-card label { display: block; margin-bottom: var(--vscode-spacing-size40); }
+.arni-personal-card .monaco-inputbox { width: 100%; }
+.arni-personal-card .arni-profile-buttons { display: flex; gap: var(--vscode-spacing-size120); padding-bottom: var(--vscode-spacing-size240); }
+.arni-personal-card .arni-profile-buttons .monaco-button { width: auto; }
+.arni-personal-card .arni-profile-status { min-height: 2em; }
+.arni-personal-card .arni-profile-custom-row { padding-bottom: var(--vscode-spacing-size160); margin-bottom: var(--vscode-spacing-size160); border-bottom: 1px solid var(--vscode-widget-border, transparent); }
+.arni-personal-card .arni-profile-custom-row label { margin-top: var(--vscode-spacing-size80); }
+.arni-personal-card .arni-profile-custom-row .monaco-button { width: auto; margin-top: var(--vscode-spacing-size80); }
