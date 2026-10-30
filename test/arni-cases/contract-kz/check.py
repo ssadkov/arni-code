@@ -87,11 +87,13 @@ def main() -> int:
 
 	contract = EXPECTED['contract']
 	report.check('номер договора', contract['number'] in text)
-	report.check('дата договора', any(variant in text for variant in contract['date']))
+	# The template writes dates as «02» ноября 2026 г.; quotes are normalized to " by norm().
+	unquoted = text.replace('"', '')
+	report.check('дата договора', any(variant in unquoted for variant in contract['date']))
 	report.check('город Астана', 'г. Астана' in text)
 	report.check('сумма цифрами', contract['amount_digits'] in text or contract['amount_digits'].replace(' ', '') in text)
 	report.check('сумма прописью', contract['amount_words'] in text.lower())
-	report.check('срок оказания', any(variant in text for variant in contract['deadline']))
+	report.check('срок оказания', any(variant in unquoted for variant in contract['deadline']))
 	report.check('предмет', contract['service'] in text)
 
 	preamble = next((paragraph for paragraph in body if 'именуемое в дальнейшем «Исполнитель»'.replace('«', '"').replace('»', '"') in paragraph), '')
