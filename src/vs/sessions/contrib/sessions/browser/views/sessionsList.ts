@@ -3258,7 +3258,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 			// The always-visible "Chats" section shows a muted placeholder row
 			// when it has no sessions yet.
 			if (section.id === QUICK_CHATS_SECTION_ID && section.sessions.length === 0) {
-				sectionChildren = [{ element: { placeholder: true as const, sectionId: section.id, label: localize('noChats', "No chats") } }];
+				sectionChildren = [{ element: { placeholder: true as const, sectionId: section.id, label: localize('noChats', "Нет чатов") } }];
 			}
 
 			// Default collapse state for older time sections

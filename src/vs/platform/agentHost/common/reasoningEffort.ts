@@ -38,14 +38,14 @@ export type ReasoningEffortLevel = typeof reasoningEffortLevels[number];
  */
 export function getReasoningEffortLabel(level: string): string {
 	switch (level) {
-		case 'none': return localize('reasoningEffort.none', "None");
-		case 'minimal': return localize('reasoningEffort.minimal', "Minimal");
-		case 'low': return localize('reasoningEffort.low', "Low");
-		case 'medium': return localize('reasoningEffort.medium', "Medium");
-		case 'high': return localize('reasoningEffort.high', "High");
-		case 'xhigh': return localize('reasoningEffort.xhigh', "Extra High");
-		case 'max': return localize('reasoningEffort.max', "Max");
-		case 'ultra': return localize('reasoningEffort.ultra', "Ultra");
+		case 'none': return localize('reasoningEffort.none', "Без рассуждений");
+		case 'minimal': return localize('reasoningEffort.minimal', "Минимальный");
+		case 'low': return localize('reasoningEffort.low', "Низкий");
+		case 'medium': return localize('reasoningEffort.medium', "Средний");
+		case 'high': return localize('reasoningEffort.high', "Высокий");
+		case 'xhigh': return localize('reasoningEffort.xhigh', "Очень высокий");
+		case 'max': return localize('reasoningEffort.max', "Максимальный");
+		case 'ultra': return localize('reasoningEffort.ultra', "Ультра");
 		default: return level.charAt(0).toUpperCase() + level.slice(1);
 	}
 }
@@ -61,14 +61,14 @@ export function getReasoningEffortLabel(level: string): string {
  */
 export function getReasoningEffortDescription(level: string): string | undefined {
 	switch (level) {
-		case 'none': return localize('reasoningEffort.noneDescription', "No reasoning applied");
-		case 'minimal': return localize('reasoningEffort.minimalDescription', "Minimal reasoning for fastest responses");
-		case 'low': return localize('reasoningEffort.lowDescription', "Faster responses with less reasoning");
-		case 'medium': return localize('reasoningEffort.mediumDescription', "Balanced reasoning and speed");
-		case 'high': return localize('reasoningEffort.highDescription', "Greater reasoning depth but slower");
-		case 'xhigh': return localize('reasoningEffort.xhighDescription', "Highest reasoning depth but slowest");
-		case 'max': return localize('reasoningEffort.maxDescription', "Absolute maximum capability with no constraints");
-		case 'ultra': return localize('reasoningEffort.ultraDescription', "Maximum reasoning with automatic task delegation");
+		case 'none': return localize('reasoningEffort.noneDescription', "Без дополнительных рассуждений");
+		case 'minimal': return localize('reasoningEffort.minimalDescription', "Минимум рассуждений для самого быстрого ответа");
+		case 'low': return localize('reasoningEffort.lowDescription', "Меньше рассуждений, быстрее ответ");
+		case 'medium': return localize('reasoningEffort.mediumDescription', "Баланс глубины рассуждений и скорости");
+		case 'high': return localize('reasoningEffort.highDescription', "Глубже рассуждения, дольше ответ");
+		case 'xhigh': return localize('reasoningEffort.xhighDescription', "Самые глубокие рассуждения, самое долгое ожидание");
+		case 'max': return localize('reasoningEffort.maxDescription', "Максимально доступная глубина рассуждений");
+		case 'ultra': return localize('reasoningEffort.ultraDescription', "Максимальные рассуждения с автоматическим делегированием задач");
 		default: return undefined;
 	}
 }
