@@ -14,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 # Typical template blanks: «___», 20__ г., ______, …… and long dot leaders.
 BLANK = re.compile(r"_{2,}|…{2,}|\.{6,}")
 
@@ -168,7 +168,7 @@ def fill(args):
         fail("Output must differ from the template; templates are never modified")
     if output.exists() and not args.overwrite:
         fail("Output already exists; choose a new name or pass --overwrite", output=str(output))
-    spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+    spec = json.loads(Path(args.spec).read_text(encoding="utf-8-sig"))  # PowerShell 5.1 writes a BOM
     operations = spec.get("operations", spec) if isinstance(spec, dict) else spec
     if not isinstance(operations, list) or not operations:
         fail("Spec must be a non-empty list of operations or {\"operations\": [...]}")

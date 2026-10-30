@@ -2,7 +2,7 @@
 name: docx-fill
 description: Fill a Word (.docx) template such as a contract, invoice, act or letter from given data, save DOCX and PDF, and render PDF pages to PNG for visual review. Use for filling blanks in a document template, contracts by company requisites, and checking how a generated PDF looks.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Fill a Word template
@@ -12,7 +12,7 @@ Use the bundled [Python helper](scripts/docx_fill.py) instead of unzipping the .
 1. Run `<python> "<skill-directory>/scripts/docx_fill.py" doctor`. It needs `python-docx`, `pymupdf` and a PDF converter (Microsoft Word on Windows, or LibreOffice). If something is missing, read [dependency setup](references/setup.md), say exactly what is missing and offer to install it. Existing authorization to install is sufficient; otherwise ask first. Rerun doctor afterwards.
 2. Collect the data first: read the source pages or files the user named. Copy requisites character for character (IBAN/IIK, BIN, BIK, Kazakh letters such as «і»); never translate, correct or invent them. Data absent from the sources stays blank.
 3. `inspect "<template.docx>"` lists every location with blanks: body paragraphs as `p<N>`, table cells as `t<T>.r<R>.c<C>`, with their text and blank count, plus each table's first column (field labels). This is the whole map of the document; do not read it again another way.
-4. Write a spec JSON in a work folder outside the template folder, for example `work/spec.json`:
+4. Write a spec JSON in a work folder outside the template folder, for example `work/spec.json`; create the folder first:
    ```json
    {"operations": [
      {"at": "p0", "replace": "2026-11/01", "find": "BLANK"},
@@ -27,4 +27,4 @@ Use the bundled [Python helper](scripts/docx_fill.py) instead of unzipping the .
 7. `render "<output/name.pdf>"` saves `page-01.png`, `page-02.png`, … next to the PDF, with a short text preview of each page. Open the PNG of every page the user asked to check (for a contract, the page with the requisites table) with the image-viewing tool. Check that values are readable, nothing overlaps or breaks, and no blank field was left by mistake. If viewing images is unavailable, say the visual check was not performed. `text "<file>"` prints DOCX or PDF text when you need to compare values exactly.
 8. Allow at most one correction round. Do not rewrite the helper or retry an unchanged command.
 
-Finish in the user's language: skill `docx-fill` version 1.0.0, output paths, what was filled, which fields stay blank and why (missing from which source), and what the page images showed. Do not claim a visual check you did not perform.
+Finish in the user's language: skill `docx-fill` version 1.0.1, output paths, what was filled, which fields stay blank and why (missing from which source), and what the page images showed. Do not claim a visual check you did not perform.
