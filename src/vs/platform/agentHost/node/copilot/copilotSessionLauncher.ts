@@ -899,7 +899,13 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 		// still discover agents from `pluginDirectories`; suppressing that too would also drop
 		// skills and instructions, so it is left alone.
 		const customAgents = plan.isEphemeral ? [] : await toSdkSessionCustomAgents(plugins, plan.resolvedAgentName, this._fileService);
-		const skillDirectories = toSdkSkillDirectories(pluginsWithoutDirs.flatMap(p => p.skills));
+		// Explicit agent dependencies must be resolvable for eager context loading,
+		// including skills otherwise discovered only through on-disk plugins.
+		const preloadedSkills = new Set(customAgents.find(agent => agent.name === plan.resolvedAgentName)?.skills ?? []);
+		const skillDirectories = toSdkSkillDirectories([
+			...pluginsWithoutDirs.flatMap(p => p.skills),
+			...plugins.flatMap(p => p.skills).filter(skill => preloadedSkills.has(skill.name)),
+		]);
 		const instructionDirectories = toSdkInstructionDirectories(plugins.flatMap(p => p.instructions));
 		const model = plan.kind === 'create' ? plan.model : plan.fallback.model;
 		// Keyed by the real, un-aliased model id; a model-less "Auto" session
@@ -1014,6 +1020,7 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 			workingDirectory: plan.workingDirectory?.fsPath,
 			customAgents,
 			agent: plan.resolvedAgentName,
+			enableSkills: true,
 			skillDirectories,
 			instructionDirectories,
 			additionalDirectories,

@@ -123,6 +123,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node test/unit/node/index.js --run src/vs/sessions/contrib/providers/agentHost/test/browser/agentHostAgents.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\scripts\test.bat --runGlob=vs/sessions/contrib/accountMenu/test/browser/arniUserProfile.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test bundled media skill with real FFmpeg
         shell: pwsh

@@ -24,6 +24,24 @@ import { IAgentPluginService } from '../../../../workbench/contrib/chat/common/p
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { IArniSkillLibraryService } from './arniSkillLibraryService.js';
+import { PromptHeader } from '../../../../workbench/contrib/chat/common/promptSyntax/promptFileParser.js';
+
+/** An older managed catalog must not replace newer bundled workflow instructions after an app update. */
+export function shouldReplaceBuiltinPrompt(current: string | undefined, candidate: string | undefined): boolean {
+	const parts = (version: string | undefined) => /^\d+\.\d+\.\d+$/.test(version ?? '') ? version!.split('.').map(Number) : [0, 0, 0];
+	const a = parts(current), b = parts(candidate);
+	for (let i = 0; i < 3; i++) {
+		if (a[i] !== b[i]) { return b[i] > a[i]; }
+	}
+	return true;
+}
+
+function builtinPromptVersion(header: PromptHeader | undefined): string | undefined {
+	const metadata = header?.getAttribute('metadata')?.value;
+	if (metadata?.type !== 'map') { return undefined; }
+	const version = metadata.properties.find(property => property.key.value === 'version')?.value;
+	return version?.type === 'scalar' ? version.value : undefined;
+}
 
 /** URI root for built-in skills bundled with the Agents app. */
 export const BUILTIN_SKILLS_URI = FileAccess.asFileUri('vs/sessions/skills');
@@ -80,6 +98,7 @@ export class AgenticPromptsService extends PromptsService {
 			const managed = await this.library.getCurrent();
 			const roots = [BUILTIN_SKILLS_URI, ...(managed ? [joinPath(managed.root, 'skills')] : [])];
 			const skills = new Map<string, IAgentSkill>();
+			const versions = new Map<string, string | undefined>();
 			for (const root of roots) {
 				if (!await this.fileService.exists(root)) { continue; }
 				const stat = await this.fileService.resolve(root);
@@ -95,6 +114,9 @@ export class AgenticPromptsService extends PromptsService {
 						if (!rawName || !rawDescription) { continue; }
 						const name = sanitizeSkillText(rawName, 64);
 						if (name !== basename(child.resource)) { continue; }
+						const version = builtinPromptVersion(parsed.header);
+						if (skills.has(name) && !shouldReplaceBuiltinPrompt(versions.get(name), version)) { continue; }
+						versions.set(name, version);
 						skills.set(name, { uri: skillFileUri, storage: PromptsStorage.builtIn, name,
 							description: sanitizeSkillText(rawDescription, 1024),
 							disableModelInvocation: parsed.header?.disableModelInvocation === true,
@@ -147,6 +169,7 @@ export class AgenticPromptsService extends PromptsService {
 			const managed = await this.library.getCurrent();
 			const roots = [FileAccess.asFileUri('vs/sessions/agents'), ...(managed ? [joinPath(managed.root, 'agents')] : [])];
 			const agents = new Map<string, IBuiltinPromptPath>();
+			const versions = new Map<string, string | undefined>();
 			for (const root of roots) {
 				if (!await this.fileService.exists(root)) { continue; }
 				const stat = await this.fileService.resolve(root);
@@ -155,6 +178,9 @@ export class AgenticPromptsService extends PromptsService {
 					try {
 						const parsed = await this.parseNew(child.resource, token);
 						if (parsed.header?.name && parsed.header.description) {
+							const version = builtinPromptVersion(parsed.header);
+							if (agents.has(child.name) && !shouldReplaceBuiltinPrompt(versions.get(child.name), version)) { continue; }
+							versions.set(child.name, version);
 							agents.set(child.name, { uri: child.resource, storage: PromptsStorage.builtIn, type,
 								name: sanitizeSkillText(parsed.header.name, 64), description: sanitizeSkillText(parsed.header.description, 1024) });
 						}

@@ -285,6 +285,14 @@ suite('stateToProgressAdapter', () => {
 
 	suite('turnsToHistory', () => {
 
+		test('restores the profession from each turn rather than the current session selection', () => {
+			const turns = ['sysadmin', 'video-editor'].map((name, index) => createTurn({
+				id: `turn-${index}`, message: { text: 'Check', origin: { kind: MessageKind.User }, agent: { uri: `file:///workspace/agents/${name}.agent.md` } },
+			}));
+			const history = turnsToHistory(URI.file('/'), turns, 'p');
+			assert.deepStrictEqual(history.filter(item => item.type === 'request').map(item => item.modeInstructions?.name), ['Сисадмин', 'Монтажёр']);
+		});
+
 		test('empty turns produces empty history', () => {
 			const result = turnsToHistory(URI.file('/'), [], 'p');
 			assert.deepStrictEqual(result, []);
@@ -1405,7 +1413,7 @@ suite('stateToProgressAdapter', () => {
 
 			assert.deepStrictEqual({ live, restoredPresentation: restored.presentation, failedPresentation: failed.presentation }, {
 				live: toolNames.map(() => ({
-					message: 'Waiting for answer...',
+					message: 'Ждём вашего ответа…',
 					presentation: ToolInvocationPresentation.HiddenAfterComplete,
 				})),
 				restoredPresentation: ToolInvocationPresentation.HiddenAfterComplete,

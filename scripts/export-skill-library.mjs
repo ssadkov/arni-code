@@ -31,4 +31,4 @@ const library = JSON.stringify({ schemaVersion: 1, revision, files });
 if (Buffer.byteLength(library) > 2 * 1024 * 1024) { throw new Error('Library is too large'); }
 fs.mkdirSync(path.dirname(path.resolve(destination)), { recursive: true });
 fs.writeFileSync(destination, library + '\n');
-console.log(`Exported ${skills.length} skills, 2 profession profiles, ${files.length} files; revision ${revision}`);
+console.log(`Exported ${skills.length} skills, ${ARNI_LIBRARY_AGENTS.length} profession profiles, ${files.length} files; revision ${revision}`);

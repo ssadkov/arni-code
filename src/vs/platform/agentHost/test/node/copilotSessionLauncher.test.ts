@@ -5,6 +5,8 @@
 
 import type { CopilotClient, CopilotSession, ReasoningSummary, Verbosity } from '@github/copilot-sdk';
 import assert from 'assert';
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { mock } from '../../../../base/test/common/mock.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -78,7 +80,7 @@ const noopSessionOpenTelemetry: IAgentHostSessionOpenTelemetry = {
 	sdkResumeFallbackCreated: () => { },
 };
 
-function createTestLauncher(managedSettingsPermissions?: IAgentHostManagedSettingsPermissions, rootValues: Partial<Record<CopilotCliConfigKey, unknown>> = {}, logService: ILogService = new NullLogService(), sessionOpenTelemetry: IAgentHostSessionOpenTelemetry = noopSessionOpenTelemetry): CopilotSessionLauncher {
+function createTestLauncher(managedSettingsPermissions?: IAgentHostManagedSettingsPermissions, rootValues: Partial<Record<CopilotCliConfigKey, unknown>> = {}, logService: ILogService = new NullLogService(), sessionOpenTelemetry: IAgentHostSessionOpenTelemetry = noopSessionOpenTelemetry, fileService: IFileService = {} as IFileService): CopilotSessionLauncher {
 	const configurationService = {
 		getRootValue: (_schema: unknown, key: CopilotCliConfigKey) => rootValues[key],
 	} as Partial<IAgentConfigurationService> as IAgentConfigurationService;
@@ -87,7 +89,7 @@ function createTestLauncher(managedSettingsPermissions?: IAgentHostManagedSettin
 		{ permissions: managedSettingsPermissions ?? {} } as IAgentHostManagedSettingsService,
 		{} as IAgentHostTerminalManager,
 		logService,
-		{} as IFileService,
+		fileService,
 		{ _serviceBrand: undefined, start: async () => { throw new Error('Unexpected proxy start'); }, dispose: () => { } },
 		new ByokLmBridgeRegistry(),
 		{
@@ -634,6 +636,31 @@ suite('CopilotSessionLauncher shared session config', () => {
 			sessions.dispose();
 			await launcher.disposeByokProxyHandle();
 		}
+	});
+
+	test('resolves selected file-plugin agent skills for eager loading on create and resume', async () => {
+		const configs: { agent: string | undefined; skills: string[] | undefined; enabled: boolean | undefined }[] = [];
+		const session = { sessionId: 'preload-test', on: () => () => { }, disconnect: async () => { }, rpc: { options: { update: async () => ({ success: true }) } } } as unknown as CopilotSession;
+		const capture = (config: Parameters<CopilotClient['createSession']>[0]) => { configs.push({ agent: config.agent, skills: config.skillDirectories, enabled: config.enableSkills }); return session; };
+		const client = { createSession: async (config: Parameters<CopilotClient['createSession']>[0]) => capture(config), resumeSession: async (_id: string, config: Parameters<CopilotClient['resumeSession']>[1]) => capture(config) };
+		const files = new class extends mock<IFileService>() {
+			override async readFile() { return { value: VSBuffer.fromString('---\nname: Secretary\nskills:\n  - fill-form\n---\nUse the tested form workflow.') } as Awaited<ReturnType<IFileService['readFile']>>; }
+		};
+		const launcher = createTestLauncher(undefined, {}, new NullLogService(), noopSessionOpenTelemetry, files);
+		const root = URI.file('/tmp/preload-plugin');
+		const agentUri = URI.joinPath(root, 'agents', 'secretary.agent.md');
+		const skillUri = URI.joinPath(root, 'skills', 'fill-form', 'SKILL.md');
+		const plugin: ICopilotPluginInfo = { format: PluginFormat.Copilot, pluginDir: root, hooks: [], mcpServers: [], instructions: [],
+			agents: [{ name: 'Secretary', uri: agentUri, customization: { type: CustomizationType.Agent, id: agentUri.toString(), uri: agentUri.toString(), name: 'Secretary' } }],
+			skills: [{ name: 'fill-form', uri: skillUri, customization: { type: CustomizationType.Skill, id: skillUri.toString(), uri: skillUri.toString(), name: 'fill-form' } }],
+		};
+		const plan = { client, sessionId: 'preload-test', workingDirectory: testWorkingDirectory, resolvedAgentName: 'Secretary', snapshot: { tools: [], plugins: [plugin], mcpServers: {} }, activeClientToolSet: new ActiveClientToolSet(), shellManager: undefined, githubToken: undefined };
+		const sessions = new DisposableStore();
+		try {
+			sessions.add(await launcher.launch({ ...plan, kind: 'create', model: undefined }, testRuntime));
+			sessions.add(await launcher.launch({ ...plan, kind: 'resume', fallback: { model: undefined } }, testRuntime));
+			assert.deepStrictEqual(configs, Array.from({ length: 2 }, () => ({ agent: 'Secretary', skills: [URI.joinPath(root, 'skills', 'fill-form').fsPath], enabled: true })));
+		} finally { sessions.dispose(); await launcher.disposeByokProxyHandle(); }
 	});
 });
 

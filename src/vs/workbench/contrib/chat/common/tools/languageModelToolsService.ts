@@ -299,6 +299,8 @@ export interface IToolResult {
 	toolResultMessage?: string | IMarkdownString;
 	toolResultDetails?: Array<URI | Location> | IToolResultInputOutputDetails | IToolResultOutputDetails;
 	toolResultError?: string | boolean;
+	/** Native tools may stop an agent-host turn after reporting a result that requires a new user action. */
+	stopCurrentTurn?: boolean;
 	toolMetadata?: unknown;
 	/** Whether to ask the user to confirm these tool results. Overrides {@link IToolConfirmationMessages.confirmResults}. */
 	confirmResults?: boolean;
