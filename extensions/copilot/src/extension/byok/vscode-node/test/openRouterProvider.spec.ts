@@ -5,6 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { BYOKModelCapabilities } from '../../common/byokProvider';
+import { Event } from '../../../../util/vs/base/common/event';
 import { DEFAULT_OPENROUTER_MODEL_ID, isOpenRouterBaseUrl, OpenRouterLMProvider, preferredDefaultModelId, rankOpenRouterModelId, resolveArniApiBaseUrl, resolveArniBackendOrigin } from '../openRouterProvider';
 
 /**
@@ -50,7 +51,8 @@ function createProvider(): TestableOpenRouterLMProvider {
 		{ fetch: vi.fn() } as any,
 		logService as any,
 		{ createInstance: vi.fn().mockReturnValue({}) } as any,
-		{ isConfigured: vi.fn().mockReturnValue(false), getConfig: vi.fn(), setConfig: vi.fn() } as any,
+		{ isConfigured: vi.fn().mockReturnValue(false), getConfig: vi.fn(), setConfig: vi.fn(),
+			onDidChangeConfiguration: Event.None, getNonExtensionConfig: () => undefined } as any,
 		{} as any,
 	);
 }
@@ -59,13 +61,13 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 	it('rounds per-million labels without floating point tails', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'test/cheap', name: 'Cheap', context_length: 131072,
 			top_provider: { context_length: 131072 }, pricing: { prompt: '0.0000001', completion: '0.0000004' } });
-		expect(caps?.name).toBe('Cheap · $0.1/$0.4 за 1М вх./вых.');
+		expect(caps?.name).toBe('Cheap · $0.10 / $0.40 за 1М вх./вых.');
 	});
 	it('labels free vision and caching separately from per-token prices', () => {
 		const caps = createProvider().resolveCapabilities({ id: 'test/vision:free', name: 'Vision', arni_provider: 'openrouter', arni_free: true,
 			architecture: { input_modalities: ['text', 'image'] }, context_length: 131072, supported_parameters: ['tools'],
 			top_provider: { context_length: 131072, max_completion_tokens: 4096 }, pricing: { prompt: '0', completion: '0' } });
-		expect(caps?.name).toBe('OpenRouter · Vision · $0/$0 за 1М вх./вых. · Бесплатная · Изображения');
+		expect(caps?.name.replace(/\s/g, ' ')).toBe('OpenRouter · Vision · Бесплатно · 0,00 ₽ · Изображения');
 		expect(caps?.vision).toBe(true);
 	});
 	it('labels AWS from backend metadata and does not infer a route from the model name', () => {
@@ -81,7 +83,7 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 			architecture: { input_modalities: ['text', 'image'] }, context_length: 262144,
 			top_provider: { context_length: 262144, max_completion_tokens: 4096 }, pricing: { prompt: '0.00000053', completion: '0.00000266' } });
 		expect({ name: caps?.name, input: caps?.maxInputTokens, output: caps?.maxOutputTokens, vision: caps?.vision, tools: caps?.toolCalling })
-			.toEqual({ name: 'Qwen3 VL · $0.53/$2.66 за 1М вх./вых.', input: 258048, output: 4096, vision: true, tools: true });
+			.toEqual({ name: 'Qwen3 VL · $0.53 / $2.66 за 1М вх./вых.', input: 258048, output: 4096, vision: true, tools: true });
 	});
 	it('derives maxInputTokens from the model-level context_length, not top_provider', () => {
 		const provider = createProvider();

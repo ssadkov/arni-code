@@ -41,6 +41,14 @@ interface ArniBudget {
 	weekly: ArniBudgetWindow;
 }
 
+type ArniBillingRates = Partial<Record<'RUB' | 'KZT', number | null>>;
+
+interface ArniAccount {
+	budget?: ArniBudget | null;
+	freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number };
+	billingRates?: ArniBillingRates;
+}
+
 interface OpenRouterModelData {
 	id: string;
 	name: string;
@@ -186,6 +194,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	private _reachableApiBase: string | undefined;
 	private _freeStepsItem: vscode.StatusBarItem | undefined;
 	private _activeChatId: string | undefined;
+	private _billingRates: ArniBillingRates | undefined;
+	private _managedAccount: boolean | undefined;
+	private _accountRefresh = 0;
 	private readonly _disposables = new DisposableStore();
 	private readonly _onDidChangeLanguageModelChatInformation = this._disposables.add(new vscode.EventEmitter<void>());
 	public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
@@ -220,12 +231,26 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			this._disposables.add(vscode.authentication.onDidChangeSessions(e => {
 				if (e.provider.id === 'yandex' || e.provider.id === 'vk') {
 					this._arniJwt = undefined;
+					this._activeChatId = undefined;
+					this._managedAccount = undefined;
+					this._accountRefresh++;
 					this._freeStepsItem?.hide();
 					this._onDidChangeLanguageModelChatInformation.fire();
 				}
 			}));
 		} catch {
 			// vscode.authentication is unavailable in unit tests
+		}
+		this._disposables.add(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('arni.billing.displayCurrency')) {
+				this._onDidChangeLanguageModelChatInformation.fire();
+				if (this._arniJwt) { void this.refreshFreeSteps(this._arniJwt); }
+			}
+		}));
+		if (vscode.window?.onDidChangeWindowState) {
+			this._disposables.add(vscode.window.onDidChangeWindowState(state => {
+				if (state.focused && this._arniJwt) { void this.refreshFreeSteps(this._arniJwt); }
+			}));
 		}
 	}
 
@@ -262,8 +287,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			throw new Error('Sign in with Yandex or VK to use OpenRouter models.');
 		}
 		try {
-			const arniChatId = typeof options.modelOptions?.arniChatId === 'string' ? options.modelOptions.arniChatId : undefined;
-			this._activeChatId = arniChatId;
+			const chatId = options.modelOptions?.arniChatId ?? options.modelOptions?._conversationId;
+			const arniChatId = typeof chatId === 'string' && /^[a-zA-Z0-9:._/-]{1,200}$/.test(chatId) ? chatId : undefined;
+			if (arniChatId) { this._activeChatId = arniChatId; }
 			const configuration = { ...model.configuration, apiKey, arniChatId };
 			const result = await super.provideLanguageModelChatResponse({ ...model, configuration }, messages, options, progress, token);
 			void this.refreshFreeSteps(apiKey);
@@ -274,7 +300,19 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		}
 	}
 
-	private showFreeSteps(steps: { used: number; limit: number; remaining: number; resetsAt: string; total: number } | undefined): void {
+	private money(micros: number, fractionDigits = 2): string {
+		const preferred = this._configurationService.getNonExtensionConfig<string>('arni.billing.displayCurrency') ?? 'RUB';
+		const localCurrency = preferred === 'RUB' || preferred === 'KZT' ? preferred : undefined;
+		const rate = localCurrency ? this._billingRates?.[localCurrency] : undefined;
+		const converted = typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
+		const currency = (converted || micros === 0) && localCurrency ? localCurrency : 'USD';
+		const amount = micros / 1_000_000 * (converted ? rate : 1);
+		const locale = { USD: 'en-US', RUB: 'ru-RU', KZT: 'ru-KZ' }[currency];
+		const formatted = new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: fractionDigits }).format(amount);
+		return converted && micros !== 0 ? '≈ ' + formatted : formatted;
+	}
+
+	private showFreeSteps(steps: ArniAccount['freeSteps']): void {
 		if (!steps) {
 			return;
 		}
@@ -290,6 +328,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			this._freeStepsItem.tooltip = steps.remaining > 0
 				? `Бесплатные шаги: ${steps.used} из ${steps.limit} сегодня, осталось ${steps.remaining}. Сброс в ${reset} UTC. Всего использовано ${steps.total}.`
 				: `Дневной лимит бесплатных шагов исчерпан. Сброс в ${reset} UTC. Всего использовано ${steps.total}.`;
+			this._freeStepsItem.command = 'arni.showApiUsage';
 			this._freeStepsItem.show();
 		} catch {
 			// vscode.window is unavailable in unit tests
@@ -302,7 +341,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 				this._freeStepsItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100));
 				this._freeStepsItem.name = vscode.l10n.t('Баланс Arni');
 			}
-			const money = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
+			const money = (micros: number) => this.money(micros);
 			this._freeStepsItem.command = 'arni.showApiUsage';
 			const available = Math.max(0, Math.min(budget.balanceMicros, budget.fiveHour.limitMicros - budget.fiveHour.usedMicros, budget.weekly.limitMicros - budget.weekly.usedMicros));
 			this._freeStepsItem.text = budget.expired
@@ -322,23 +361,24 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		if (!apiKey) { return; }
 		const base = this._reachableApiBase ?? this.getBackendApiCandidates()[0];
 		const selection = await vscode.window.showQuickPick([
-			...(this._activeChatId ? [{ label: vscode.l10n.t('Текущий чат'), chatId: this._activeChatId }] : []),
+			...(this._activeChatId ? [{ label: vscode.l10n.t('Последний чат'), chatId: this._activeChatId }] : []),
 			{ label: vscode.l10n.t('Все запросы аккаунта'), chatId: undefined },
-		], { title: vscode.l10n.t('Расходы API в USD') });
+		], { title: vscode.l10n.t('Расходы API') });
 		if (!selection) { return; }
 		try {
 			const response = await fetch(`${base}/account/usage${selection.chatId ? `?chatId=${encodeURIComponent(selection.chatId)}` : ''}`, { headers: { Authorization: `Bearer ${apiKey}` } });
 			if (!response.ok) { throw new Error(vscode.l10n.t('Не удалось загрузить расходы API ({0})', response.status)); }
 			const data = await response.json() as { totalMicros: number; requestCount: number; requests: { model: string; createdAt: string; costMicros: number | null; accounting: string; promptTokens: number; completionTokens: number; cacheReadTokens: number }[] };
 			await vscode.window.showQuickPick(data.requests.map(row => ({
-				label: `${row.costMicros == null ? '—' : `$${(row.costMicros / 1_000_000).toFixed(6)}`} · ${row.model}`,
+				label: `${row.costMicros == null ? '—' : this.money(row.costMicros, 6)} · ${row.model}`,
 				description: `${new Date(row.createdAt).toLocaleString()} · ${row.accounting}`,
 				detail: vscode.l10n.t('Вход: {0}; выход: {1}; из кэша: {2}', row.promptTokens, row.completionTokens, row.cacheReadTokens),
-			})), { title: vscode.l10n.t('Всего ${0} · {1} запросов; показаны последние 100', (data.totalMicros / 1_000_000).toFixed(6), data.requestCount) });
+			})), { title: vscode.l10n.t('Всего {0} · {1} запросов; показаны последние 100', this.money(data.totalMicros, 6), data.requestCount) });
 		} catch (error) { void vscode.window.showErrorMessage(String(error)); }
 	}
 
 	private async refreshFreeSteps(apiKey: string): Promise<void> {
+		const refresh = ++this._accountRefresh;
 		for (const apiBase of this.getBackendApiCandidates()) {
 			try {
 				const response = await fetch(`${apiBase}/account`, {
@@ -348,14 +388,39 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 					continue;
 				}
 				this._reachableApiBase = apiBase;
-				const data = await response.json() as { user?: { budget?: ArniBudget; freeSteps?: { used: number; limit: number; remaining: number; resetsAt: string; total: number } } };
+				const data = await response.json() as { user?: ArniAccount };
+				if (refresh !== this._accountRefresh) { return; }
+				this._billingRates = data.user?.billingRates;
+				const wasManaged = this._managedAccount;
+				this._managedAccount = Boolean(data.user?.budget);
+				if (wasManaged !== undefined && wasManaged !== this._managedAccount) { this._onDidChangeLanguageModelChatInformation.fire(); }
 				if (data.user?.budget) { this.showBudget(data.user.budget); }
 				else { this.showFreeSteps(data.user?.freeSteps); }
+				const chatId = this._activeChatId;
+				if (chatId) {
+					const cost = await this.getChatCost(apiBase, apiKey, chatId);
+					if (cost !== undefined && refresh === this._accountRefresh && this._activeChatId === chatId && this._freeStepsItem) {
+						const label = vscode.l10n.t('Последний чат: {0}', this.money(cost, 6));
+						this._freeStepsItem.text += ` · ${label}`;
+						this._freeStepsItem.tooltip = `${this._freeStepsItem.tooltip ?? ''}\n${label}`;
+					}
+				}
 				return;
 			} catch (error) {
 				this._logService.warn(`Unable to load free steps from ${apiBase}: ${String(error)}`);
 			}
 		}
+	}
+
+	private async getChatCost(base: string, apiKey: string, chatId: string): Promise<number | undefined> {
+		try {
+			const usage = await fetch(`${base}/account/usage?summary=1&chatId=${encodeURIComponent(chatId)}`, {
+				headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000),
+			});
+			if (!usage.ok) { return undefined; }
+			const data = await usage.json() as { totalMicros: number | null; requestCount: number; pricedRequests?: number };
+			return data.requestCount > 0 && data.pricedRequests === data.requestCount ? data.totalMicros ?? undefined : undefined;
+		} catch { return undefined; }
 	}
 
 	/** Read-only bridge for the always-visible Agents account widget. Never returns credentials. */
@@ -366,12 +431,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const headers = { Authorization: `Bearer ${apiKey}` };
 		const response = await fetch(`${base}/account`, { headers, signal: AbortSignal.timeout(10_000) });
 		if (!response.ok) { throw new Error(`Account HTTP ${response.status}`); }
-		const data = await response.json() as { user: Record<string, unknown> };
-		let chatCostMicros: number | undefined;
-		if (this._activeChatId) {
-			const usage = await fetch(`${base}/account/usage?chatId=${encodeURIComponent(this._activeChatId)}`, { headers, signal: AbortSignal.timeout(10_000) });
-			if (usage.ok) { chatCostMicros = (await usage.json() as { totalMicros: number }).totalMicros; }
-		}
+		const data = await response.json() as { user: ArniAccount };
+		const chatId = this._activeChatId;
+		const chatCostMicros = chatId ? await this.getChatCost(base, apiKey, chatId) : undefined;
 		return { ...data.user, chatCostMicros };
 	}
 
@@ -627,7 +689,8 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			try {
 				const res = await fetch(url, apiBase && apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : undefined);
 				if (res.ok) {
-					const json = await res.json() as { data?: OpenRouterModelData[]; arni_managed?: boolean };
+					const json = await res.json() as { data?: OpenRouterModelData[]; arni_managed?: boolean; billingRates?: ArniBillingRates };
+					if (apiBase) { this._billingRates = json.billingRates; }
 					// The backend already sends only free models; the direct OpenRouter catalog does not.
 					const managed = apiBase && apiKey && json.arni_managed;
 					const models = managed ? json.data : json.data?.filter(isFreeOpenRouterModel);
@@ -676,10 +739,11 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const maxOutputTokens = Math.min(requestedMaxOutputTokens, Math.floor(contextWindow / 2));
 		const price = openRouterModelData.pricing;
 		const rates = price && [price.prompt, price.completion].map(value => Number((Number(value) * 1_000_000).toFixed(6)));
-		const priceLabel = rates?.every(value => Number.isFinite(value) && value >= 0)
-			? vscode.l10n.t(' · ${0}/${1} за 1М вх./вых.', rates[0], rates[1]) : '';
-		const labels = openRouterModelData.arni_provider ? [
-			openRouterModelData.arni_free ? vscode.l10n.t('Бесплатная') : vscode.l10n.t('Платная'),
+		const free = openRouterModelData.arni_free ?? isFreeOpenRouterModel(openRouterModelData);
+		const priceLabel = !free && rates?.every(value => Number.isFinite(value) && value >= 0)
+			? vscode.l10n.t(' · {0} / {1} за 1М вх./вых.', this.money(rates[0] * 1_000_000, 6), this.money(rates[1] * 1_000_000, 6)) : '';
+		const labels = openRouterModelData.arni_provider || free ? [
+			free ? vscode.l10n.t('Бесплатно · {0}', this.money(0)) : vscode.l10n.t('Платная'),
 			...(openRouterModelData.architecture?.input_modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : []),
 			...(openRouterModelData.arni_cache ? [vscode.l10n.t('Кэш')] : []),
 		].join(' · ') : '';

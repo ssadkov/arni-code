@@ -27,6 +27,14 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         };
 
         webviewView.webview.html = getWebviewContent();
+        const currencyListener = vscode.workspace.onDidChangeConfiguration(event => {
+            if (event.affectsConfiguration('arni.billing.displayCurrency')) {
+                void this.refreshFreeSteps();
+            }
+        });
+        webviewView.onDidDispose(() => {
+            currencyListener.dispose();
+        });
 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
@@ -124,10 +132,20 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 enabled: boolean; expired: boolean; balanceMicros: number; validUntil: string;
                 fiveHour: { usedMicros: number; limitMicros: number; requests: number; requestLimit: number; resetsAt: string | null };
                 weekly: { usedMicros: number; limitMicros: number; requests: number; requestLimit: number; resetsAt: string | null };
-            } } };
+            }; billingRates?: Partial<Record<'RUB' | 'KZT', number | null>> } };
             if (data.user?.budget) {
                 const budget = data.user.budget;
-                const money = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
+                const preferred = config.get<string>('billing.displayCurrency') ?? 'RUB';
+                const localCurrency = preferred === 'RUB' || preferred === 'KZT' ? preferred : undefined;
+                const rate = localCurrency ? data.user.billingRates?.[localCurrency] : undefined;
+                const converted = typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
+                const money = (micros: number) => {
+                    const currency = (converted || micros === 0) && localCurrency ? localCurrency : 'USD';
+                    const locale = { USD: 'en-US', RUB: 'ru-RU', KZT: 'ru-KZ' }[currency];
+                    const formatted = new Intl.NumberFormat(locale, { style: 'currency', currency })
+                        .format(micros / 1_000_000 * (converted ? rate : 1));
+                    return converted && micros !== 0 ? '≈ ' + formatted : formatted;
+                };
                 const available = Math.max(0, Math.min(budget.balanceMicros, budget.fiveHour.limitMicros - budget.fiveHour.usedMicros, budget.weekly.limitMicros - budget.weekly.usedMicros));
                 this._view.webview.postMessage({ type: 'budget', value: {
                     text: !budget.enabled || budget.expired ? vscode.l10n.t('Доступ приостановлен или истёк') : vscode.l10n.t('Доступно API: {0}', money(available)),
