@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { arniBudgetAvailability, arniBudgetWindowShare, formatArniUsd, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
+import { arniBudgetAvailability, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
 
 suite('Sessions - Arni budget display', () => {
 
@@ -37,6 +37,17 @@ suite('Sessions - Arni budget display', () => {
 	});
 
 	test('window share follows money or requests, whichever is larger', () => {
-		assert.deepStrictEqual([arniBudgetWindowShare(window(1_000_000, 2_000_000, 30)), arniBudgetWindowShare(window(0, 2_000_000, 120)), arniBudgetWindowShare(window(3_000_000, 2_000_000)), formatArniUsd(420_000)], [0.5, 0.8, 1, '$0.42']);
+		assert.deepStrictEqual([arniBudgetWindowShare(window(1_000_000, 2_000_000, 30)), arniBudgetWindowShare(window(0, 2_000_000, 120)), arniBudgetWindowShare(window(3_000_000, 2_000_000))], [0.5, 0.8, 1]);
+	});
+
+	test('formats converted amounts, USD fallback and zero-cost chat', () => {
+		const rates = { RUB: 100, KZT: 500 };
+		assert.deepStrictEqual([
+			formatArniMoney(420_000, undefined, rates),
+			formatArniMoney(420_000, 'KZT', rates),
+			formatArniMoney(420_000, 'USD', rates),
+			formatArniMoney(420_000, 'RUB', undefined),
+			formatArniMoney(0, 'RUB', undefined),
+		].map(value => value.replace(/\s/g, ' ')), ['≈ 42,00 ₽', '≈ 210,00 ₸', '$0.42', '$0.42', '0,00 ₽']);
 	});
 });

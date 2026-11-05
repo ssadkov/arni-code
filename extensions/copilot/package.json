@@ -2455,7 +2455,7 @@
     "commands": [
       {
         "command": "arni.showApiUsage",
-        "title": "Расходы API в USD",
+        "title": "%arni.showApiUsage%",
         "category": "Arni"
       },
       {
@@ -3215,6 +3215,18 @@
       }
     ],
     "configuration": [
+      {
+        "title": "Arni",
+        "properties": {
+          "arni.billing.displayCurrency": {
+            "type": "string",
+            "enum": ["RUB", "USD", "KZT"],
+            "default": "RUB",
+            "scope": "application",
+            "description": "%arni.billing.displayCurrency%"
+          }
+        }
+      },
       {
         "title": "GitHub Copilot Chat",
         "id": "stable",

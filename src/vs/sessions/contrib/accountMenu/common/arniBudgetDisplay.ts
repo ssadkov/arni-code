@@ -61,6 +61,15 @@ export function arniBudgetWindowShare(window: IArniBudgetWindow): number {
 	return Math.min(1, Math.max(0, money, requests));
 }
 
-export function formatArniUsd(micros: number): string {
-	return `$${(micros / 1_000_000).toFixed(2)}`;
+export type ArniBillingRates = Partial<Record<'RUB' | 'KZT', number | null>>;
+
+export function formatArniMoney(micros: number, preferred: string | undefined, rates: ArniBillingRates | undefined, fractionDigits = 2): string {
+	const localCurrency = preferred === 'KZT' ? 'KZT' : preferred === 'USD' ? undefined : 'RUB';
+	const rate = localCurrency ? rates?.[localCurrency] : undefined;
+	const converted = typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
+	const currency = (converted || micros === 0) && localCurrency ? localCurrency : 'USD';
+	const locale = { USD: 'en-US', RUB: 'ru-RU', KZT: 'ru-KZ' }[currency];
+	const formatted = new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: fractionDigits })
+		.format(micros / 1_000_000 * (converted ? rate : 1));
+	return converted && micros !== 0 ? '≈ ' + formatted : formatted;
 }

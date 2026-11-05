@@ -24,7 +24,7 @@ import { fillInActionBarActions } from '../../../../platform/actions/browser/men
 import { $, addDisposableListener, append, clearNode, disposableWindowInterval, EventType, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { arniBudgetAvailability, arniBudgetWindowShare, formatArniUsd, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
+import { ArniBillingRates, arniBudgetAvailability, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
 import { ActionBar, ActionsOrientation } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Action, IAction, Separator } from '../../../../base/common/actions.js';
@@ -71,6 +71,7 @@ interface IArniAccountSummary {
 	plan: string;
 	freeSteps: { remaining: number; limit: number };
 	budget?: IArniBudget;
+	billingRates?: ArniBillingRates;
 	chatCostMicros?: number;
 }
 
@@ -308,7 +309,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			this.renderState();
 		}));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AgentHostCodexAgentEnabledSettingId) || event.affectsConfiguration(ChatAIDisabledSettingId)) {
+			if (event.affectsConfiguration(AgentHostCodexAgentEnabledSettingId) || event.affectsConfiguration(ChatAIDisabledSettingId) || event.affectsConfiguration('arni.billing.displayCurrency')) {
 				this.clickPanelDisposable.clear();
 				this.renderState();
 			}
@@ -432,7 +433,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		const activeBudget = arni?.budget?.enabled && !arni.budget.expired ? arni.budget : undefined;
 		const availability = activeBudget && arniBudgetAvailability(activeBudget);
 		const limitSuffix = availability?.limit === 'fiveHour' ? ` · ${localize('arni.limitFiveHour', "5 ч")}` : availability?.limit === 'weekly' ? ` · ${localize('arni.limitWeekly', "неделя")}` : '';
-		this.labelElement.textContent = arni ? localize('arni.availableBalanceTitle', "Доступный баланс: {0}{1} · {2}", formatArniUsd(availability?.availableMicros ?? 0), limitSuffix, arni.email) : '';
+		this.labelElement.textContent = arni ? localize('arni.availableBalanceTitle', "Доступный баланс: {0}{1} · {2}", this.formatArniAmount(availability?.availableMicros ?? 0), limitSuffix, arni.email) : '';
 		this.labelElement.classList.toggle('arni-budget-warning', availability?.level === 'warning');
 		this.labelElement.classList.toggle('arni-budget-exhausted', availability?.level === 'exhausted');
 		if (arni) {
@@ -662,12 +663,16 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		}, 500));
 	}
 
+	private formatArniAmount(micros: number, fractionDigits = 2): string {
+		return formatArniMoney(micros, this.configurationService.getValue<string>('arni.billing.displayCurrency'), this.arniAccount?.billingRates, fractionDigits);
+	}
+
 	private renderArniBudgetWindow(parent: HTMLElement, label: string, budgetWindow: IArniBudgetWindow): void {
 		const row = append(parent, $('.arni-budget-window'));
 		const reset = budgetWindow.resetsAt
 			? localize('arni.windowReset', "сброс {0}", safeIntl.DateTimeFormat(language, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).value.format(new Date(budgetWindow.resetsAt)))
 			: localize('arni.windowNotStarted', "начнётся с первого запроса");
-		append(row, $('div')).textContent = localize('arni.windowUsage', "{0}: {1} из {2} · запросы {3} из {4} · {5}", label, formatArniUsd(budgetWindow.usedMicros), formatArniUsd(budgetWindow.limitMicros), budgetWindow.requests, budgetWindow.requestLimit, reset);
+		append(row, $('div')).textContent = localize('arni.windowUsage', "{0}: {1} из {2} · запросы {3} из {4} · {5}", label, this.formatArniAmount(budgetWindow.usedMicros), this.formatArniAmount(budgetWindow.limitMicros), budgetWindow.requests, budgetWindow.requestLimit, reset);
 		const share = arniBudgetWindowShare(budgetWindow);
 		const bar = append(row, $('.arni-budget-bar'));
 		bar.setAttribute('role', 'progressbar');
@@ -685,7 +690,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			const arni = this.arniAccount;
 			const summary = append(panel, $('.arni-account-summary'));
 			append(summary, $('strong')).textContent = arni.email;
-			append(summary, $('strong.arni-account-balance')).textContent = localize('arni.availableBalance', "Доступный баланс: {0}", formatArniUsd(arni.budget?.enabled && !arni.budget.expired ? arniBudgetAvailability(arni.budget).availableMicros : 0));
+			append(summary, $('strong.arni-account-balance')).textContent = localize('arni.availableBalance', "Доступный баланс: {0}", this.formatArniAmount(arni.budget?.enabled && !arni.budget.expired ? arniBudgetAvailability(arni.budget).availableMicros : 0));
 			append(summary, $('div')).textContent = localize('arni.plan', "Тариф: {0}", arni.plan === 'FREE' ? localize('arni.freePlan', "Бесплатный") : arni.plan);
 			append(summary, $('div')).textContent = localize('arni.stepsRemaining', "Бесплатные шаги: {0} из {1}", arni.freeSteps.remaining, arni.freeSteps.limit);
 			if (arni.budget) {
@@ -695,7 +700,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				if (arni.budget.weekly) { this.renderArniBudgetWindow(summary, localize('arni.windowWeekly', "Неделя"), arni.budget.weekly); }
 			}
 			if (arni.chatCostMicros !== undefined) {
-				append(summary, $('div')).textContent = localize('arni.chatSpend', "Последний активный чат: ${0}", (arni.chatCostMicros / 1_000_000).toFixed(6));
+				append(summary, $('div')).textContent = localize('arni.chatSpend', "Последний чат: {0}", this.formatArniAmount(arni.chatCostMicros, 6));
 			}
 			const usage = append(summary, $('button', { type: 'button' }));
 			usage.textContent = localize('arni.showUsage', "Расходы и история запросов");
