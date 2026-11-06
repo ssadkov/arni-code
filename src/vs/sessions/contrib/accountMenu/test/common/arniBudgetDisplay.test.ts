@@ -50,4 +50,14 @@ suite('Sessions - Arni budget display', () => {
 			formatArniMoney(0, 'RUB', undefined),
 		].map(value => value.replace(/\s/g, ' ')), ['≈ 42,00 ₽', '≈ 210,00 ₸', '$0.42', '$0.42', '0,00 ₽']);
 	});
+
+	test('rounds rubles and tenge to the kopeck even when finer digits are asked for', () => {
+		const rates = { RUB: 100, KZT: 500 };
+		assert.deepStrictEqual([
+			formatArniMoney(123_456, 'RUB', rates, 6),
+			formatArniMoney(123_456, 'KZT', rates, 6),
+			formatArniMoney(40, 'RUB', rates, 6),
+			formatArniMoney(123_456, 'USD', rates, 6),
+		].map(value => value.replace(/\s/g, ' ')), ['≈ 12,35 ₽', '≈ 61,73 ₸', '< 0,01 ₽', '$0.123456']);
+	});
 });

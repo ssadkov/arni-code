@@ -19,7 +19,7 @@ import { disposableTimeout } from '../../../../../../../base/common/async.js';
 import { autorun, IObservable } from '../../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../../base/common/uri.js';
 import { localize } from '../../../../../../../nls.js';
-import { IActionListHeaderLink } from '../../../../../../../platform/actionWidget/browser/actionList.js';
+import { ActionListItemKind, IActionListHeaderLink } from '../../../../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetService } from '../../../../../../../platform/actionWidget/browser/actionWidget.js';
 import { IActionWidgetDropdownAction } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { AgentHostAllowSignedOutWhenUsableSettingId } from '../../../../../../../platform/agentHost/common/agentService.js';
@@ -44,6 +44,8 @@ import { getCompactCodicon } from '../../../chatIcons.js';
 import { withChatInputPickerMotion } from '../chatInputPickerActionItem.js';
 import { buildModelPickerItems, createManageModelsAction, getModelPickerAccessibilityProvider, getModelPickerControlModels, ModelPickerSection, shouldShowManageModelsAction } from './modelPickerItems.js';
 import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
+import { ARNI_FREE_ONLY_STORAGE_KEY, getArniModelPickerView } from './arniModelPickerFilter.js';
+import { createModelItem } from './modelPickerItemPrimitives.js';
 import { getCompactModelPickerIcon } from './modelProviderIcons.js';
 import { ITabbedModelPickerContext, TabbedModelPicker } from './modelPickerTabbedWidget.js';
 import { getModelConfigSummary } from './modelPickerModelConfig.js';
@@ -525,10 +527,12 @@ export class ModelPickerWidget extends Disposable {
 			this._configuration.show(this._configButton, group);
 		};
 
-		const models = this._delegate.getModels();
+		const freeOnly = this._storageService.getBoolean(ARNI_FREE_ONLY_STORAGE_KEY, StorageScope.PROFILE, false);
+		const arniView = getArniModelPickerView(this._delegate.getModels(), freeOnly, this._selectedModel?.identifier);
+		const models = [...arniView.models];
 		const presentation = this._delegate.getPresentationOptions();
 		const manifest = this._languageModelsService.getModelsControlManifest();
-		const controlModelsForTier: IStringDictionary<IModelControlEntry> = getModelPickerControlModels(manifest, this._entitlementService.entitlement, models);
+		const controlModelsForTier: IStringDictionary<IModelControlEntry> = { ...getModelPickerControlModels(manifest, this._entitlementService.entitlement, models), ...arniView.featured };
 		const canShowManageModelsAction = presentation.showManageModelsAction && shouldShowManageModelsAction(this._entitlementService);
 		const manageModelsAction = canShowManageModelsAction ? createManageModelsAction(this._commandService) : undefined;
 		const logModelPickerInteraction = (interaction: ChatModelPickerInteraction) => {
@@ -616,6 +620,20 @@ export class ModelPickerWidget extends Disposable {
 				onRequestSetup: () => { this._requestSetup(); },
 			},
 		});
+		if (arniView.showFreeToggle && presentation.useGroupedModelPicker) {
+			items.unshift(createModelItem({
+				id: 'arniFreeOnly',
+				enabled: true,
+				checked: freeOnly,
+				class: undefined,
+				tooltip: localize('chat.modelPicker.arniFreeOnly.tooltip', "Показывать только бесплатные модели"),
+				label: localize('chat.modelPicker.arniFreeOnly', "Только бесплатные"),
+				run: () => {
+					this._storageService.store(ARNI_FREE_ONLY_STORAGE_KEY, !freeOnly, StorageScope.PROFILE, StorageTarget.USER);
+					this.show(anchorElement);
+				},
+			}), { kind: ActionListItemKind.Separator });
+		}
 
 		// Collect all hover disposables so they are properly cleaned up when the
 		// picker is hidden. The ActionListWidget only tracks the disposable for the
