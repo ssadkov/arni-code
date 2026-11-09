@@ -76,6 +76,11 @@ const CUSTOMIZATION_ENTRY_POINTS_DISABLED = ContextKeyExpr.equals(`config.${Chat
 
 export const CUSTOMIZATION_ITEMS: ICustomizationItemConfig[] = [
 	{
+		id: 'arni.openProjectRules',
+		label: localize('projectRules', "Правила проекта"),
+		icon: Codicon.book,
+	},
+	{
 		id: 'sessions.customization.plugins',
 		label: localize('plugins', "Подключаемые модули"),
 		icon: pluginIcon,
@@ -412,14 +417,14 @@ export class CustomizationsToolbarContribution extends Disposable implements IWo
 		}));
 
 		for (const [index, config] of CUSTOMIZATION_ITEMS.entries()) {
-			if (!config.section) {
-				continue;
-			}
-			const section = config.section;
 			// Register the custom ActionViewItem for this action
 			this._register(actionViewItemService.register(Menus.SidebarCustomizations, config.id, (action, options) => {
 				return instantiationService.createInstance(CustomizationLinkViewItem, action, options, config);
 			}, undefined));
+			if (!config.section) {
+				continue;
+			}
+			const section = config.section;
 
 			const sectionVisibleWhen = ContextKeyExpr.has(customizationSectionVisibleKey(section));
 			const combinedWhen = config.when
