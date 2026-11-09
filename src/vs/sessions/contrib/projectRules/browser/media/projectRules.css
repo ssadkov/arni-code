@@ -1,0 +1,60 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.arni-project-rules {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--vscode-spacing-size160);
+	padding: var(--vscode-spacing-size240);
+	color: var(--vscode-foreground);
+	overflow: auto;
+}
+
+.arni-project-rules > * {
+	width: 100%;
+	max-width: 800px;
+	box-sizing: border-box;
+}
+
+.arni-project-rules h1 {
+	margin: 0 0 var(--vscode-spacing-size120);
+	font-size: var(--vscode-fontSize-heading2);
+	font-weight: var(--vscode-fontWeight-semiBold);
+}
+
+.arni-project-rules p {
+	margin: var(--vscode-spacing-size80) 0;
+	line-height: 1.5;
+}
+
+.arni-project-rules .project-rules-project {
+	font-weight: var(--vscode-fontWeight-semiBold);
+	overflow-wrap: anywhere;
+}
+
+.arni-project-rules .project-rules-label,
+.arni-project-rules .project-rules-status {
+	color: var(--vscode-descriptionForeground);
+}
+
+.arni-project-rules .project-rules-content {
+	flex: 1;
+	min-height: 180px;
+	border: 1px solid var(--vscode-input-border, var(--vscode-widget-border, transparent));
+	border-radius: var(--vscode-cornerRadius-small);
+	overflow: hidden;
+}
+
+.arni-project-rules .project-rules-footer {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--vscode-spacing-size120);
+}
+
+.arni-project-rules .project-rules-footer .monaco-button {
+	width: auto;
+}
