@@ -69,7 +69,13 @@ export function formatArniMoney(micros: number, preferred: string | undefined, r
 	const converted = typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
 	const currency = (converted || micros === 0) && localCurrency ? localCurrency : 'USD';
 	const locale = { USD: 'en-US', RUB: 'ru-RU', KZT: 'ru-KZ' }[currency];
-	const formatted = new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: fractionDigits })
-		.format(micros / 1_000_000 * (converted ? rate : 1));
+	const amount = micros / 1_000_000 * (converted ? rate : 1);
+	// Rubles and tenge are shown to the kopeck; only dollars keep the finer digits.
+	const digits = currency === 'USD' ? fractionDigits : 2;
+	const format = new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: Math.min(2, digits), maximumFractionDigits: digits });
+	if (currency !== 'USD' && amount > 0 && amount < 0.005) {
+		return '< ' + format.format(0.01);
+	}
+	const formatted = format.format(amount);
 	return converted && micros !== 0 ? '≈ ' + formatted : formatted;
 }

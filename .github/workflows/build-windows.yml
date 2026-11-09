@@ -217,7 +217,26 @@ jobs:
 
       - name: Build Windows installer
         if: env.BUILD_INSTALLER == 'true'
-        run: npm run gulp vscode-win32-x64-user-setup
+        shell: pwsh
+        run: |
+          # Inno Setup cannot read deeply nested Copilot dependencies through
+          # long absolute paths. Give the packaged app a temporary short root.
+          if (Test-Path 'R:\') { throw 'Drive R is already in use' }
+          $source = (Resolve-Path '../ArniCode-win32-x64').Path
+          subst R: $source
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create short installer path' }
+          try {
+            $env:ARNI_WIN32_BUILD_PATH = 'R:\'
+            npm run gulp vscode-win32-x64-user-setup
+            if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed' }
+          } finally {
+            Remove-Item Env:ARNI_WIN32_BUILD_PATH -ErrorAction SilentlyContinue
+            subst R: /D
+          }
+
+      - name: Verify packaged branding
+        if: env.BUILD_INSTALLER == 'true'
+        run: python scripts/verify-brand-icons.py '../ArniCode-win32-x64/Arni Code.exe' '.build/win32-x64/user-setup/ArniCodeSetup.exe'
 
       - name: Build portable archive
         if: env.BUILD_ARCHIVE == 'true'
