@@ -27,7 +27,7 @@ import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { ArniBillingRates, arniBudgetAvailability, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
 import { ActionBar, ActionsOrientation } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { Action, IAction, Separator } from '../../../../base/common/actions.js';
+import { Action, IAction, Separator, toAction } from '../../../../base/common/actions.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -85,6 +85,16 @@ const PERSONALIZE_ACTION_IDS: readonly string[] = [
 	'workbench.action.openSettings',
 ];
 const SIGN_OUT_ACTION_ID = 'workbench.action.agenticSignOut';
+const ARNI_UPDATE_ACTION_LABELS: Readonly<Record<string, string>> = {
+	'update.check': localize('arni.update.check', 'Проверить обновления'),
+	'update.checking': localize('arni.update.checking', 'Проверка обновлений…'),
+	'update.downloadNow': localize('arni.update.download', 'Скачать обновление'),
+	'update.downloading': localize('arni.update.downloading', 'Загрузка обновления…'),
+	'update.install': localize('arni.update.install', 'Установить обновление'),
+	'update.updating': localize('arni.update.installing', 'Установка обновления…'),
+	'update.cancelling': localize('arni.update.cancelling', 'Отмена обновления…'),
+	'update.restart': localize('arni.update.restart', 'Перезапустить и обновить'),
+};
 const accountDateFormatter = safeIntl.DateTimeFormat(language, { month: 'short', day: 'numeric' });
 const accountTimeFormatter = safeIntl.DateTimeFormat(language, { hour: 'numeric', minute: 'numeric' });
 
@@ -1012,7 +1022,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 
 		const pushSeparator = () => {
 			// Collapse runs and skip leading separators so groups whose only
-			// items get filtered (e.g. update.*) don't leave orphans behind.
+			// items get filtered don't leave orphans behind.
 			if (other.length === 0 || other[other.length - 1] instanceof Separator) {
 				return;
 			}
@@ -1038,10 +1048,13 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				personalizeMap.set(action.id, action);
 				continue;
 			}
-			if (action.id.startsWith('update.')) {
-				continue;
-			}
-			other.push(action);
+			const updateLabel = ARNI_UPDATE_ACTION_LABELS[action.id];
+			other.push(updateLabel ? toAction({
+				id: action.id,
+				label: updateLabel,
+				enabled: action.enabled,
+				run: () => action.run(),
+			}) : action);
 		}
 
 		// Trim trailing separator left after filtering.

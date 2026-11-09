@@ -200,6 +200,9 @@ jobs:
             Write-Warning "VK Authentication extension directory not found."
           }
 
+      - name: Test packaged SDK filters
+        run: node --test build/lib/test/copilot.test.ts
+
       - name: Build Arni Code (production)
         run: npm run gulp vscode-win32-x64-min
         env:
@@ -207,6 +210,9 @@ jobs:
 
       - name: Verify bundled billing client
         run: node scripts/verify-billing-package.mjs ../ArniCode-win32-x64/resources/app artifacts/windows/build-manifest-win32-x64.json x64
+
+      - name: Verify packaged extension SDK startup
+        run: node scripts/test-packaged-extension-sdk.mjs ../ArniCode-win32-x64/resources/app '../ArniCode-win32-x64/Arni Code.exe'
 
       - name: Verify native CLI
         shell: pwsh
@@ -280,6 +286,10 @@ jobs:
             $sizeMB = [math]::Round($_.Length / 1MB, 2)
             Write-Host "  $($_.Name) ($sizeMB MB)"
           }
+
+      - name: Create Windows update manifest
+        if: env.BUILD_INSTALLER == 'true'
+        run: node scripts/create-windows-update.mjs artifacts/windows
 
       - name: Upload installer
         if: env.BUILD_INSTALLER == 'true'

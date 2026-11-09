@@ -10,7 +10,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { suite, test } from 'node:test';
 import { create } from 'tar';
+import Vinyl from 'vinyl';
 import { copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getMxcExcludeFilter, prepareBuiltInCopilotRipgrepShim } from '../copilot.ts';
+import { cleanNodeModules } from '../util.ts';
 
 /**
  * Builds a fake `@github/copilot-win32-x64@1.0.73` tarball on disk and returns
@@ -32,6 +34,20 @@ function createPinnedCopilotWin32Tarball(dir: string): { tarball: string; integr
 }
 
 suite('copilot', () => {
+	test('keeps the extension SDK entrypoint through the production module filter', async () => {
+		const sdk = path.resolve('extensions/copilot/node_modules/@github/copilot/sdk/index.js');
+		const excluded = path.resolve('extensions/copilot/node_modules/@github/copilot/prebuilds/win32-x64/runtime.node');
+		const kept: string[] = [];
+		await new Promise<void>((resolve, reject) => {
+			const stream = cleanNodeModules(path.join(import.meta.dirname, '../../.moduleignore'));
+			stream.on('data', (file: Vinyl) => kept.push(file.path));
+			stream.on('error', reject);
+			stream.on('end', resolve);
+			stream.write(new Vinyl({ path: sdk, contents: Buffer.from('export const sdk = true;') }));
+			stream.end(new Vinyl({ path: excluded, contents: Buffer.from('excluded native') }));
+		});
+		assert.deepStrictEqual(kept, [sdk]);
+	});
 	test('keeps the public copilot platform package include list scoped to the selected package', () => {
 		const files = getCopilotRuntimePrebuildFiles('linux', 'x64');
 
