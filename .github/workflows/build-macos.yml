@@ -248,6 +248,13 @@ jobs:
           set -e
           SIGNED=false
           for attempt in 1 2 3; do
+            if [ "$attempt" -gt 1 ]; then
+              # sign.ts inserts these before signing. A timestamp failure can
+              # leave them behind, so restore the pre-sign state for a retry.
+              for key in NSAppleEventsUsageDescription NSLocalNetworkUsageDescription; do
+                plutil -remove "$key" "$APP_DIR/$APP_NAME/Contents/Info.plist" >/dev/null 2>&1 || true
+              done
+            fi
             if node build/darwin/sign.ts "$(dirname "$GITHUB_WORKSPACE")"; then
               SIGNED=true
               break
