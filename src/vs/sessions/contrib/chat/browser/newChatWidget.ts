@@ -50,7 +50,7 @@ import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chat
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatConfiguration, ChatModeKind } from '../../../../workbench/contrib/chat/common/constants.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { TOTAL_SESSIONS_KEY } from '../../sessions/browser/sessionsLifecycleTracker.js';
 import { INewSessionComposerService, NewSessionWorkspacePreselectionSource } from './newSessionComposerService.js';
 import { Menus } from '../../../browser/menus.js';
@@ -71,7 +71,6 @@ import { INotificationService } from '../../../../platform/notification/common/n
 
 /** Minimum number of started sessions required before showing tips and promotions. */
 const MIN_SESSIONS_FOR_FIRST_RUN_NOTICES = 2;
-const STARTER_GALLERY_DISMISSED_KEY = 'sessions.starterProjects.dismissed';
 
 export class NewChatWidget extends Disposable {
 
@@ -344,7 +343,11 @@ export class NewChatWidget extends Disposable {
 			await this._onWorkspaceSelected(this._workspacePicker.selectedFolderUri);
 			this._newChatInput.focus();
 		}));
-		this._register(this.sessionsManagementService.onDidChangeSessionTypes(() => this._restoreNoWorkspaceDraft()));
+		this._register(this.sessionsManagementService.onDidChangeSessionTypes(() => {
+			if (!this._restoreNoWorkspaceDraft()) {
+				this._seedDefaultChat();
+			}
+		}));
 
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (!e.affectsConfiguration('chat.tips.enabled')) {
@@ -463,11 +466,9 @@ export class NewChatWidget extends Disposable {
 
 		this._renderFeedbackBanner(chatWidgetContent);
 		if (!isWeb) {
-			// Until the user has a couple of sessions, the home is the starter
-			// gallery alone: one place to describe an idea, with no folder picker
-			// or composer pointing at some other folder next to it.
-			let starterStarted = false;
-			const gallery = this._starterGallery = this._register(this.instantiationService.createInstance(StarterProjectGallery, chatWidgetContent, async (folderUri: URI, prompt: string, professionId: string) => {
+			// The home is a plain chat. Ready ideas open on request ("Идеи для
+			// начала" or the New Project command) and only prefill the composer.
+			const gallery = this._starterGallery = this._register(this.instantiationService.createInstance(StarterProjectGallery, chatWidgetContent, async (folderUri: URI, prompt: string, professionId: string, submit: boolean) => {
 				const selectedModel = this._newChatInput.selectedModelState.get().currentModel?.identifier;
 				const result = await this._createNewSession(folderUri);
 				if (!result.session) {
@@ -483,15 +484,30 @@ export class NewChatWidget extends Disposable {
 				if (selectedModel && !this._newChatInput.selectModel(selectedModel)) {
 					throw new Error(localize('starterProjects.modelUnavailable', "Выбранная модель больше недоступна. Выберите модель и повторите запуск."));
 				}
-				this._newChatInput.prefillInput(prompt);
-				starterStarted = true;
+				// Show the composer before filling it: while the gallery covers it the
+				// editor has no width and would lay the text out one letter per line.
 				this.newSessionComposerService.setStarterProjectsRequested(false);
 				updateGalleryVisibility();
-				if (!await this._newChatInput.submit()) {
+				this._newChatInput.prefillInput(prompt);
+				if (submit && !await this._newChatInput.submit()) {
 					this.notificationService.warn(localize('starterProjects.sendLater', "Проект создан, задание подготовлено. Проверьте выбранного агента и отправьте задание."));
 				}
+			}, async (prompt: string, professionId: string) => {
+				const session = this._openQuickChat();
+				if (!session) {
+					throw new Error(localize('starterProjects.chatUnavailable', "Чат пока недоступен. Попробуйте через несколько секунд."));
+				}
+				try {
+					await selectStarterProfession(session, professionId, this.chatModeService, this.sessionsProvidersService);
+				} catch {
+					// The idea still works with the default agent; the user sees which one is selected.
+				}
+				// Show the composer before filling it: while the gallery covers it the
+				// editor has no width and would lay the text out one letter per line.
+				this.newSessionComposerService.setStarterProjectsRequested(false);
+				updateGalleryVisibility();
+				this._newChatInput.prefillInput(prompt);
 			}, () => {
-				this.storageService.store(STARTER_GALLERY_DISMISSED_KEY, true, StorageScope.APPLICATION, StorageTarget.USER);
 				this.newSessionComposerService.setStarterProjectsRequested(false);
 				updateGalleryVisibility();
 				this.focusInput();
@@ -504,21 +520,14 @@ export class NewChatWidget extends Disposable {
 					: localize('starterProjects.chooseModel', "Выбрать модель");
 			}));
 			const updateGalleryVisibility = () => {
-				// The New Project command brings the gallery back at any time.
-				gallery.element.hidden = !this.newSessionComposerService.starterProjectsRequested.get() && (starterStarted
-					|| this._isQuickChatComposer.get()
-					|| this._hasEnoughSessionsForFirstRunNotices()
-					|| this.storageService.getBoolean(STARTER_GALLERY_DISMISSED_KEY, StorageScope.APPLICATION, false));
+				// The gallery shows only when asked for: the "Идеи для начала" link
+				// or the New Project command.
+				gallery.element.hidden = !this.newSessionComposerService.starterProjectsRequested.get();
 				chatWidgetContent.classList.toggle('starter-first-run', !gallery.element.hidden);
 			};
 			updateGalleryVisibility();
-			this._register(this.storageService.onDidChangeValue(StorageScope.APPLICATION, TOTAL_SESSIONS_KEY, this._store)(updateGalleryVisibility));
 			this._register(autorun(reader => {
-				this._isQuickChatComposer.read(reader);
 				const requested = this.newSessionComposerService.starterProjectsRequested.read(reader);
-				if (requested) {
-					starterStarted = false;
-				}
 				updateGalleryVisibility();
 				if (requested) {
 					gallery.focus();
@@ -537,6 +546,9 @@ export class NewChatWidget extends Disposable {
 		updateFirstScreenCopy();
 		this._register(this._workspacePicker.onDidChangeSelection(() => updateFirstScreenCopy()));
 		this._newChatInput.render(chatWidgetContent, parent);
+		if (!isWeb) {
+			this._renderStartLinks(chatWidgetContent);
+		}
 
 		// The tip lives in the input's notice slot, so the presenter is created
 		// after the input has rendered it.
@@ -597,7 +609,10 @@ export class NewChatWidget extends Disposable {
 		// picker fires onDidSelectWorkspace and our listener handles it.
 		// Skip if an active session already exists (restored by openNewSession
 		// from a new-session draft when navigating back from another session).
-		this._seedWorkspaceDraft();
+		// The screen starts as a plain chat unless the user chose a folder.
+		if (!this._seedDefaultChat()) {
+			this._seedWorkspaceDraft();
+		}
 
 		// Re-seed the selected target when the composer swaps out of quick-chat
 		// mode without another active draft.
@@ -641,6 +656,48 @@ export class NewChatWidget extends Disposable {
 		if (!this._restoreNoWorkspaceDraft() && restoredFolderUri) {
 			void this._createNewSession(restoredFolderUri);
 		}
+	}
+
+	/**
+	 * The new-session screen starts as a plain chat. Only a folder the user
+	 * chose (or one handed in by a caller) keeps a folder session; a folder the
+	 * picker restored on its own gives way to the chat. Runs again when session
+	 * types arrive, since the chat target may not exist yet on a cold start.
+	 */
+	private _seedDefaultChat(): boolean {
+		if (isWeb || this._isQuickChatComposer.get() || this.newSessionComposerService.starterProjectsRequested.get()) {
+			return false;
+		}
+		switch (this._workspacePicker.preselectionSource) {
+			case NewSessionWorkspacePreselectionSource.None:
+			case NewSessionWorkspacePreselectionSource.CheckedWorkspace:
+			case NewSessionWorkspacePreselectionSource.RecentWorkspace:
+			case NewSessionWorkspacePreselectionSource.ExistingSessions:
+				break;
+			default:
+				return false;
+		}
+		if (!this.sessionsManagementService.isQuickChatTargetAvailable()) {
+			return false;
+		}
+		this.selectNoWorkspace();
+		return true;
+	}
+
+	/** Links under the plain-chat composer: ready ideas and switching to a folder. */
+	private _renderStartLinks(container: HTMLElement): void {
+		const links = dom.append(container, dom.$('.arni-start-links'));
+		const ideas = dom.append(links, dom.$('button.arni-start-link')) as HTMLButtonElement;
+		ideas.type = 'button';
+		ideas.textContent = localize('arniStart.ideas', "Идеи для начала");
+		this._register(dom.addDisposableListener(ideas, dom.EventType.CLICK, () => this.newSessionComposerService.setStarterProjectsRequested(true)));
+		const folder = dom.append(links, dom.$('button.arni-start-link')) as HTMLButtonElement;
+		folder.type = 'button';
+		folder.textContent = localize('arniStart.folder', "Работать в папке");
+		this._register(dom.addDisposableListener(folder, dom.EventType.CLICK, () => this._workspacePicker.showPicker(true, folder)));
+		this._register(autorun(reader => {
+			links.classList.toggle('hidden', !this._isQuickChatComposer.read(reader) || this.newSessionComposerService.starterProjectsRequested.read(reader));
+		}));
 	}
 
 	private _restoreNoWorkspaceDraft(): boolean {

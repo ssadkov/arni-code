@@ -6,6 +6,7 @@
 import assert from 'assert';
 import { timeout } from '../../../../../base/common/async.js';
 import { IDisposable } from '../../../../../base/common/lifecycle.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { mock, upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -20,10 +21,12 @@ import { StarterProjectGallery } from '../../browser/starterProjectGallery.js';
 suite('StarterProjectGallery', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('creates a fresh folder per start and hands the prompt to the agent', async () => {
+	test('project ideas get a folder with rules, task ideas open a chat, nothing is sent unasked', async () => {
 		const hoverTips: string[] = [];
 		const existingFolders = new Set<string>();
-		const startedProjects: { readonly folder: string; readonly prompt: string; readonly professionId: string }[] = [];
+		const startedProjects: { readonly folder: string; readonly prompt: string; readonly professionId: string; readonly submit: boolean }[] = [];
+		const startedTasks: { readonly prompt: string; readonly professionId: string }[] = [];
+		const writtenFiles = new Map<string, string>();
 		let existingFolderRequests = 0;
 		const hoverService = new class extends mock<IHoverService>() {
 			override setupDelayedHover(_target: HTMLElement, options: Parameters<IHoverService['setupDelayedHover']>[1]): IDisposable {
@@ -52,7 +55,8 @@ suite('StarterProjectGallery', () => {
 		const container = document.createElement('div');
 		const gallery = disposables.add(new StarterProjectGallery(
 			container,
-			async (folder, prompt, professionId) => { startedProjects.push({ folder: folder.path, prompt, professionId }); },
+			async (folder, prompt, professionId, submit) => { startedProjects.push({ folder: folder.path, prompt, professionId, submit }); },
+			async (prompt, professionId) => { startedTasks.push({ prompt, professionId }); },
 			() => existingFolderRequests++,
 			upcastPartial<IFileDialogService>({}),
 			upcastPartial<IFileService>({
@@ -60,6 +64,10 @@ suite('StarterProjectGallery', () => {
 				createFolder: async folder => {
 					existingFolders.add(folder.path);
 					return upcastPartial<IFileStatWithMetadata>({ resource: folder });
+				},
+				writeFile: async (file, content) => {
+					writtenFiles.set(file.path, (content as VSBuffer).toString());
+					return upcastPartial<IFileStatWithMetadata>({ resource: file });
 				},
 			}),
 			hoverService,
@@ -79,24 +87,33 @@ suite('StarterProjectGallery', () => {
 		await timeout(0);
 		gallery.element.querySelector<HTMLButtonElement>('.starter-project-existing')!.click();
 
-		assert.ok(startedProjects.every(project => project.professionId === 'programmer'));
 		const researcher = visibleCards[1];
 		researcher.click();
 		await timeout(0);
-		assert.strictEqual(startedProjects.pop()?.professionId, 'researcher');
+		const rules = writtenFiles.get('/home/test/Arni Projects/landing-page/AGENTS.md') ?? '';
 		assert.deepStrictEqual({
 			visibleCards: visibleCards.length,
 			hoverTips: hoverTips.filter(tip => tip.length > 0).length,
-			started: startedProjects.map(project => ({ folder: project.folder, mentionsIdea: project.prompt.includes('лендинг') || project.prompt.includes('сайт для кофейни') })),
+			started: startedProjects.map(project => ({ folder: project.folder, professionId: project.professionId, submit: project.submit, prompt: project.prompt })),
+			tasks: startedTasks,
+			rulesFiles: [...writtenFiles.keys()],
+			rulesMentionIndexHtml: rules.includes('index.html'),
 			existingFolderRequests,
 		}, {
 			visibleCards: 6,
 			hoverTips: 15,
 			started: [
-				{ folder: '/home/test/Arni Projects/landing-page', mentionsIdea: true },
-				{ folder: '/home/test/Arni Projects/landing-page-2', mentionsIdea: true },
-				{ folder: '/home/test/Arni Projects/my-project', mentionsIdea: true },
+				{ folder: '/home/test/Arni Projects/landing-page', professionId: 'programmer', submit: false, prompt: 'Сделай лендинг для ' },
+				{ folder: '/home/test/Arni Projects/landing-page-2', professionId: 'programmer', submit: false, prompt: 'Сделай лендинг для ' },
+				{ folder: '/home/test/Arni Projects/my-project', professionId: 'programmer', submit: true, prompt: 'сайт для кофейни' },
 			],
+			tasks: [{ prompt: 'Сравни источники по теме: ', professionId: 'researcher' }],
+			rulesFiles: [
+				'/home/test/Arni Projects/landing-page/AGENTS.md',
+				'/home/test/Arni Projects/landing-page-2/AGENTS.md',
+				'/home/test/Arni Projects/my-project/AGENTS.md',
+			],
+			rulesMentionIndexHtml: true,
 			existingFolderRequests: 1,
 		});
 	});

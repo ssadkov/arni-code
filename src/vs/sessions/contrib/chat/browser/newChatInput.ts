@@ -1854,6 +1854,9 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 		const editor = this._editor;
 		const model = editor?.getModel();
 		if (editor && model) {
+			// The composer may have just become visible (e.g. the starter gallery
+			// was covering it), so measure it again before laying out the text.
+			editor.layout();
 			model.setValue(text);
 			const lastLine = model.getLineCount();
 			const maxColumn = model.getLineMaxColumn(lastLine);
