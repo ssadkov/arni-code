@@ -200,6 +200,24 @@ jobs:
             Write-Warning "VK Authentication extension directory not found."
           }
 
+      - name: Build Google Authentication extension
+        shell: pwsh
+        run: |
+          $googleDir = "extensions\google-authentication"
+          if (Test-Path $googleDir) {
+            Push-Location $googleDir
+            npm install
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (Test-Path "esbuild.js") {
+              node esbuild.js --production
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            Pop-Location
+            Write-Host "Google Authentication extension built successfully."
+          } else {
+            Write-Warning "Google Authentication extension directory not found."
+          }
+
       - name: Test packaged SDK filters
         run: node --test build/lib/test/copilot.test.ts
 

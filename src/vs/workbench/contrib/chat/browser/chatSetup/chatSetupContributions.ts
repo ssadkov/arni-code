@@ -411,6 +411,29 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			}
 		}
 
+		class SignInWithGoogleAccountsAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.chat.signInWithArniGoogle',
+					title: localize2('signInWithGoogleAccounts', "Войти через Google"),
+					menu: {
+						id: MenuId.AccountsContext,
+						group: '2_copilot',
+						order: 3,
+						when: ContextKeyExpr.and(
+							ChatContextKeys.Setup.hidden.negate(),
+							ChatContextKeys.Setup.disabledInWorkspace.negate(),
+							ArniAccountSignedInContext.negate(),
+						)
+					}
+				});
+			}
+
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(ICommandService).executeCommand('google.signIn');
+			}
+		}
+
 		class ChatSetupSignInTitleBarAction extends Action2 {
 
 			static readonly ID = SIGN_IN_TITLE_BAR_ACTION_ID;
@@ -581,6 +604,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 		registerAction2(ChatSetupTriggerForceSignInDialogAction);
 		registerAction2(SignInWithYandexAccountsAction);
 		registerAction2(SignInWithVkAccountsAction);
+		registerAction2(SignInWithGoogleAccountsAction);
 		registerAction2(ChatSetupSignInTitleBarAction);
 		registerAction2(ToggleSignInTitleBarAction);
 		registerAction2(ChatSetupTriggerAnonymousWithoutDialogAction);

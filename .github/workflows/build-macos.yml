@@ -177,7 +177,7 @@ jobs:
         if: ${{ !inputs.recover_signed_run }}
         run: |
           set -e
-          for dir in extensions/arni-agent extensions/yandex-authentication extensions/vk-authentication; do
+          for dir in extensions/arni-agent extensions/yandex-authentication extensions/vk-authentication extensions/google-authentication; do
             echo "Building $dir"
             (cd "$dir" && npm install && if [ -f esbuild.js ]; then node esbuild.js --production; fi)
           done

@@ -20,7 +20,7 @@ import { IProductService } from '../../platform/product/common/productService.js
 import { IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import { IAuthenticationService } from '../../workbench/services/authentication/common/authentication.js';
-import { hasArniProductSignIn } from '../../workbench/services/authentication/common/arniProductAuth.js';
+import { hasArniProductSignIn, isArniProductAuthProvider } from '../../workbench/services/authentication/common/arniProductAuth.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
 import { IWorkbenchLayoutService } from '../../workbench/services/layout/browser/layoutService.js';
 import { IKeybindingService } from '../../platform/keybinding/common/keybinding.js';
@@ -244,7 +244,7 @@ class SessionsSetUpWidget extends Disposable {
 		const disposables = new DisposableStore();
 
 		disposables.add(this.authenticationService.onDidChangeSessions(async e => {
-			if (e.providerId === 'yandex' || e.providerId === 'vk') {
+			if (isArniProductAuthProvider(e.providerId)) {
 				const hasSignIn = await this._hasArniSignIn();
 				if (!hasSignIn) {
 					this.storageService.remove(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION);

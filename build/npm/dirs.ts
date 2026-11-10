@@ -56,6 +56,7 @@ export const dirs = [
 	'extensions/arni-agent',
 	'extensions/yandex-authentication',
 	'extensions/vk-authentication',
+	'extensions/google-authentication',
 	'remote',
 	'remote/web',
 	'test/automation',

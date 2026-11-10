@@ -1,0 +1,64 @@
+{
+    "name": "google-authentication",
+    "displayName": "Google Authentication",
+    "description": "Google sign-in provider for Arni Code",
+    "publisher": "arnion",
+    "version": "1.0.0",
+    "license": "MIT",
+    "icon": "resources/google-icon.svg",
+    "engines": {
+        "vscode": "*"
+    },
+    "categories": [
+        "Other"
+    ],
+    "main": "./dist/extension.js",
+    "activationEvents": [
+        "onAuthenticationRequest:google",
+        "onCommand:google.signIn",
+        "onCommand:google.signOut"
+    ],
+    "contributes": {
+        "authentication": [
+            {
+                "id": "google",
+                "label": "Google"
+            }
+        ],
+        "commands": [
+            {
+                "command": "google.signIn",
+                "title": "Arni: Sign In with Google"
+            },
+            {
+                "command": "google.signOut",
+                "title": "Arni: Sign Out from Google"
+            }
+        ],
+        "configuration": {
+            "title": "Google Authentication",
+            "properties": {
+                "google.clientId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Overrides the Google OAuth client id (Desktop app type) baked into the build."
+                },
+                "google.clientSecret": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Overrides the Google OAuth client secret. Google issues one to Desktop app clients; it is not treated as confidential."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "build": "node esbuild.js",
+        "compile": "tsc -p ./"
+    },
+    "devDependencies": {
+        "@types/node": "^20.x",
+        "@types/vscode": "^1.93.0",
+        "esbuild": "^0.20.0",
+        "typescript": "^5.x"
+    }
+}

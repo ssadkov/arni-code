@@ -49,6 +49,7 @@ const fallbackProviders = {
 	microsoft: { id: '', name: '' },
 	yandex: { id: 'yandex', name: 'Яндекс ID' },
 	vk: { id: 'vk', name: 'VK' },
+	arniGoogle: { id: 'google', name: 'Google' },
 };
 
 const configuredProviders = product.defaultChatAgent?.provider;
@@ -63,6 +64,7 @@ const defaultChat = {
 		microsoft: configuredProviders?.microsoft ?? fallbackProviders.microsoft,
 		yandex: (configuredProviders as any)?.yandex ?? fallbackProviders.yandex,
 		vk: (configuredProviders as any)?.vk ?? fallbackProviders.vk,
+		arniGoogle: fallbackProviders.arniGoogle,
 	},
 	chatRefreshTokenCommand: product.defaultChatAgent?.chatRefreshTokenCommand ?? '',
 	termsStatementUrl: product.defaultChatAgent?.termsStatementUrl ?? '',
@@ -83,6 +85,7 @@ export interface IChatSetupDialogProviders {
 	readonly microsoft: { readonly name: string };
 	readonly yandex?: { readonly name: string };
 	readonly vk?: { readonly name: string };
+	readonly arniGoogle?: { readonly name: string };
 }
 
 export interface IChatSetupDialogFooterContent {
@@ -116,6 +119,7 @@ function entersProviderAuthentication(strategy: ChatSetupStrategy): boolean {
 		case ChatSetupStrategy.SetupWithMicrosoftProvider:
 		case ChatSetupStrategy.SetupWithYandexProvider:
 		case ChatSetupStrategy.SetupWithVkProvider:
+		case ChatSetupStrategy.SetupWithArniGoogleProvider:
 			return true;
 		default:
 			return false;
@@ -237,10 +241,11 @@ export function getChatSetupDialogButtons(entitlement: ChatEntitlement, options:
 	const button = (label: string, strategy: ChatSetupStrategy, ...classes: string[]): IChatSetupDialogButton => ({ label, strategy, classes });
 
 	if (!options?.forceAnonymous && (entitlement === ChatEntitlement.Unknown || options?.forceSignInDialog)) {
-		// Arni Code product sign-in: Yandex and VK only. GitHub / Google / Apple are not offered.
+		// Arni Code product sign-in: Yandex, VK and Google (via the Arni extension) only. GitHub / Google / Apple are not offered.
 		const yandexProviderButton = providers.yandex ? button(localize('signInWithYandex', "Войти через Яндекс"), ChatSetupStrategy.SetupWithYandexProvider, 'continue-button', 'yandex') : undefined;
 		const vkProviderButton = providers.vk ? button(localize('signInWithVk', "Войти через VK"), ChatSetupStrategy.SetupWithVkProvider, 'continue-button', 'vk') : undefined;
-		const providerButtons = [...(yandexProviderButton ? [yandexProviderButton] : []), ...(vkProviderButton ? [vkProviderButton] : [])];
+		const googleProviderButton = providers.arniGoogle ? button(localize('signInWithArniGoogle', "Войти через Google"), ChatSetupStrategy.SetupWithArniGoogleProvider, 'continue-button', 'google') : undefined;
+		const providerButtons = [yandexProviderButton, vkProviderButton, googleProviderButton].filter((providerButton): providerButton is IChatSetupDialogButton => !!providerButton);
 		if (providerButtons.length === 0) {
 			return [button(localize('setupAIButton', "Use AI Features"), ChatSetupStrategy.DefaultSetup)];
 		}
@@ -410,6 +415,9 @@ export class ChatSetup {
 					break;
 				case ChatSetupStrategy.SetupWithVkProvider:
 					success = await this.signInWithExtensionProvider('vk', 'vk.signIn');
+					break;
+				case ChatSetupStrategy.SetupWithArniGoogleProvider:
+					success = await this.signInWithExtensionProvider('google', 'google.signIn');
 					break;
 				case ChatSetupStrategy.DefaultSetup:
 					success = await this.controller.value.setup({ ...options, forceAnonymous: options?.forceAnonymous, cancellationToken: setupCancellation.token });

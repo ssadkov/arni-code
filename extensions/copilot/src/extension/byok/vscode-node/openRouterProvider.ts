@@ -229,7 +229,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		}
 		try {
 			this._disposables.add(vscode.authentication.onDidChangeSessions(e => {
-				if (e.provider.id === 'yandex' || e.provider.id === 'vk') {
+				if ((OpenRouterLMProvider._arniAuthProviders as readonly string[]).includes(e.provider.id)) {
 					this._arniJwt = undefined;
 					this._activeChatId = undefined;
 					this._managedAccount = undefined;
@@ -563,9 +563,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		return reachable && bases.includes(reachable) ? [reachable, ...bases.filter(base => base !== reachable)] : bases;
 	}
 
-	private static readonly _arniAuthProviders = ['yandex', 'vk'] as const;
+	private static readonly _arniAuthProviders = ['yandex', 'vk', 'google'] as const;
 
-	private async exchangeArniSession(provider: 'yandex' | 'vk', accessToken: string): Promise<string | undefined> {
+	private async exchangeArniSession(provider: (typeof OpenRouterLMProvider._arniAuthProviders)[number], accessToken: string): Promise<string | undefined> {
 		let response: Response | undefined;
 		for (const apiBase of this.getBackendApiCandidates()) {
 			try {

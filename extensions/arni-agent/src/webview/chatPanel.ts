@@ -6,6 +6,24 @@ import * as vscode from 'vscode';
 import { getWebviewContent } from './getWebviewContent';
 import { ArniProvider } from '../providers/arniProvider';
 
+const ARNI_AUTH_PROVIDERS = ['yandex', 'vk', 'google'] as const;
+type ArniAuthProvider = typeof ARNI_AUTH_PROVIDERS[number];
+
+/** Returns the first Arni product session the user already has, without prompting. */
+async function findSignedInSession(): Promise<{ provider: ArniAuthProvider; session: vscode.AuthenticationSession } | undefined> {
+    for (const provider of ARNI_AUTH_PROVIDERS) {
+        try {
+            const session = await vscode.authentication.getSession(provider, [], { createIfNone: false, silent: true });
+            if (session) {
+                return { provider, session };
+            }
+        } catch {
+            // Provider extension is not available in this build.
+        }
+    }
+    return undefined;
+}
+
 export class ChatPanelProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
 
@@ -64,18 +82,21 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         let arniJwt = await this._secrets.get('arni.jwtToken');
         if (arniJwt) return arniJwt;
 
-        // 2. Получаем сессию Яндекса (через системный провайдер, который мы починили)
-        let session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
-        if (!session) {
+        // 2. Берём сессию того провайдера, через который пользователь уже вошёл.
+        // Вход только через Яндекс предлагается, когда входа ещё нет совсем.
+        let signedIn = await findSignedInSession();
+        if (!signedIn) {
             try {
-                session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
+                const session = await vscode.authentication.getSession('yandex', [], { createIfNone: true });
+                signedIn = session ? { provider: 'yandex', session } : undefined;
             } catch (e) {
                 return undefined;
             }
         }
-        if (!session) return undefined;
+        if (!signedIn) return undefined;
+        const { provider, session } = signedIn;
 
-        // 3. Обмениваем токен Яндекса на универсальный JWT нашего бэкенда
+        // 3. Обмениваем токен провайдера на универсальный JWT нашего бэкенда
         const config = vscode.workspace.getConfiguration('arni');
         const backendUrl = config.get<string>('backendUrl') || 'https://api.arnion.ru';
         
@@ -83,7 +104,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             const response = await fetch(`${backendUrl}/api/auth/exchange`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider: 'yandex', token: session.accessToken })
+                body: JSON.stringify({ provider, token: session.accessToken })
             });
 
             if (!response.ok) {
@@ -111,8 +132,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         try {
             let token = await this._secrets.get('arni.jwtToken');
             if (!token) {
-                const session = await vscode.authentication.getSession('yandex', [], { createIfNone: false });
-                if (!session) {
+                if (!await findSignedInSession()) {
                     return;
                 }
                 token = await this.getArniToken();

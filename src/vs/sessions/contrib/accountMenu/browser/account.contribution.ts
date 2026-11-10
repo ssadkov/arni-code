@@ -36,7 +36,7 @@ import { ChatEntitlement, ChatEntitlementService, getChatPlanName, getQuotaReset
 import { ChatStatusDashboard, IChatStatusDashboardOptions } from '../../../../workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
-import { ARNI_PRODUCT_AUTH_PROVIDERS, ArniAccountSignedInContext, hasArniProductSignIn } from '../../../../workbench/services/authentication/common/arniProductAuth.js';
+import { ARNI_PRODUCT_AUTH_PROVIDERS, ArniAccountSignedInContext, hasArniProductSignIn, isArniProductAuthProvider } from '../../../../workbench/services/authentication/common/arniProductAuth.js';
 import { getAccountProfileImageUrl, getAccountTitleBarBadgeKey, getAccountTitleBarState, IAccountTitleBarState, resolveAccountInfo } from '../../../browser/accountTitleBarState.js';
 import { observeAllowSignedOutWhenUsable } from '../../../browser/sessionsAuthGate.js';
 import { IsPhoneLayoutContext, SessionsWelcomeVisibleContext } from '../../../common/contextkeys.js';
@@ -130,7 +130,7 @@ registerUpdateTitleBarMenuPlacement(Menus.TitleBarLeftLayout, {
 	),
 });
 
-// Sign In — Yandex / VK only
+// Sign In — Yandex, VK and Google only
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
@@ -164,6 +164,24 @@ registerAction2(class extends Action2 {
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
 		await accessor.get(ICommandService).executeCommand('vk.signIn');
+	}
+});
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.agenticSignInGoogle',
+			title: localize2('signInGoogle', "Войти через Google"),
+			menu: {
+				id: AccountMenu,
+				when: signedOutAccountMenuWhen,
+				group: '1_account',
+				order: 3,
+			}
+		});
+	}
+	async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand('google.signIn');
 	}
 });
 
@@ -424,7 +442,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		const shouldShowDotBadge = !!badgeKey && badgeKey !== this.dismissedBadgeKey;
 		const loadedAvatarUrl = !this.isAccountLoading ? this.loadedAvatarUrl : undefined;
 		const hasLoadedAvatar = !!loadedAvatarUrl;
-		const titleBarIcon = this.arniAccount || ['yandex', 'vk'].includes(this.accountProviderId ?? '') ? Codicon.account : state.dotBadge ? Codicon.account : state.icon;
+		const titleBarIcon = this.arniAccount || isArniProductAuthProvider(this.accountProviderId ?? '') ? Codicon.account : state.dotBadge ? Codicon.account : state.icon;
 
 		this.avatarElement.classList.toggle('visible', hasLoadedAvatar);
 		this.avatarElement.alt = this.getAvatarAltText(hasLoadedAvatar);
@@ -461,7 +479,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 	}
 
 	private async refreshArniAccount(): Promise<void> {
-		if (this.arniAccountRefreshing || !['yandex', 'vk'].includes(this.accountProviderId ?? '')) { return; }
+		if (this.arniAccountRefreshing || !isArniProductAuthProvider(this.accountProviderId ?? '')) { return; }
 		this.arniAccountRefreshing = true;
 		const request = this.accountRequestCounter;
 		try {
@@ -766,7 +784,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			if (partitioned.signOut) {
 				copilotActionBar.push(partitioned.signOut, { icon: true, label: false });
 			}
-			if (!['yandex', 'vk'].includes(this.accountProviderId ?? '')) { this.appendCopilotUsage(copilotAccount, panelStore); }
+			if (!isArniProductAuthProvider(this.accountProviderId ?? '')) { this.appendCopilotUsage(copilotAccount, panelStore); }
 		} else if (partitioned.signIn) {
 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
 				'aria-label': localize('accountSectionLabel', "Аккаунт")
@@ -879,7 +897,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			this.clickPanelDisposable.clear();
 		});
 
-		if (!this.arniAccount && !['yandex', 'vk'].includes(this.accountProviderId ?? '') && shouldShowAccountPanelSummary(this.lastState, this.shouldShowCopilotDashboardHover(), this.isAccountLoading)) {
+		if (!this.arniAccount && !isArniProductAuthProvider(this.accountProviderId ?? '') && shouldShowAccountPanelSummary(this.lastState, this.shouldShowCopilotDashboardHover(), this.isAccountLoading)) {
 			const contentSection = append(panel, $('.sessions-account-titlebar-panel-content'));
 			const summary = append(contentSection, $('.sessions-account-titlebar-panel-summary'));
 			summary.textContent = this.lastState.ariaLabel;

@@ -136,9 +136,19 @@
         "completionsMenuCommand": "arni.openAgent"
     },
     "trustedExtensionAuthAccess": {
+        "arnion.yandex-authentication": [
+            "yandex"
+        ],
+        "arnion.vk-authentication": [
+            "vk"
+        ],
+        "arnion.google-authentication": [
+            "google"
+        ],
         "arnion.arni-agent": [
             "yandex",
             "vk",
+            "google",
             "github"
         ]
     },
@@ -199,6 +209,8 @@
         "yandex-authentication",
         "arnion.vk-authentication",
         "vk-authentication",
+        "arnion.google-authentication",
+        "google-authentication",
         "arnion.arni-agent",
         "arni-agent",
         "github.copilot-chat",

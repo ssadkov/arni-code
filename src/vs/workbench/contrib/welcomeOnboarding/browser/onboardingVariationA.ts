@@ -531,6 +531,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this._logAction('signIn', undefined, 'vk');
 			this._handleSignIn('vk');
 		}));
+
+		const googleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'google', localize('onboarding.signIn.google', "Войти через Google")));
+		this.stepDisposables.add(addDisposableListener(googleBtn, EventType.CLICK, () => {
+			this._logAction('signIn', undefined, 'google');
+			this._handleSignIn('google');
+		}));
 	}
 
 	private static readonly GHE_INPUT_ACTION_PADDING = 28;
@@ -645,7 +651,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		}
 	}
 
-	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'yandex' | 'vk', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
+	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'yandex' | 'vk' | 'google', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
 		const isCompact = options?.iconOnly || options?.textOnly;
 		const btn = append(parent, $<HTMLButtonElement>(isCompact ? 'button.onboarding-a-signin-icon-btn' : 'button.onboarding-a-signin-btn'));
 		btn.type = 'button';
@@ -676,7 +682,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	 * Signs in with an Arni Code product provider (Yandex ID or VK) through its
 	 * authentication extension and moves to the next step once a session exists.
 	 */
-	private async _handleSignIn(provider: 'yandex' | 'vk' = 'yandex'): Promise<void> {
+	private async _handleSignIn(provider: 'yandex' | 'vk' | 'google' = 'yandex'): Promise<void> {
 		try {
 			await this.commandService.executeCommand(`${provider}.signIn`);
 			const sessions = await this.authenticationService.getSessions(provider);

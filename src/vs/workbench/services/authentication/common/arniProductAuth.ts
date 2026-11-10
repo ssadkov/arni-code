@@ -10,9 +10,10 @@ import { IAuthenticationService } from './authentication.js';
 export const ARNI_PRODUCT_AUTH_PROVIDERS: readonly { id: string; label: string }[] = [
 	{ id: 'yandex', label: 'Yandex' },
 	{ id: 'vk', label: 'VK' },
+	{ id: 'google', label: 'Google' },
 ];
 
-/** True when a Yandex or VK session exists. Bound in workbench and Agents window. */
+/** True when an Arni product session (Yandex, VK or Google) exists. Bound in workbench and Agents window. */
 export const ArniAccountSignedInContext = new RawContextKey<boolean>('arniAccountSignedIn', false);
 
 export function isArniProductAuthProvider(providerId: string): boolean {
@@ -20,7 +21,7 @@ export function isArniProductAuthProvider(providerId: string): boolean {
 }
 
 /**
- * True when the user has a Yandex or VK session. That is enough to use
+ * True when the user has a Yandex, VK or Google session. That is enough to use
  * Agents and product models without a GitHub Copilot account.
  */
 export async function hasArniProductSignIn(
