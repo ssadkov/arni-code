@@ -2035,8 +2035,8 @@ suite('CopilotAgent', () => {
 				https_proxy: process.platform === 'win32' ? proxy : undefined,
 				ALL_PROXY: undefined,
 				all_proxy: undefined,
-				NO_PROXY: noProxy,
-				no_proxy: process.platform === 'win32' ? noProxy : undefined,
+				NO_PROXY: `${noProxy},::1`,
+				no_proxy: process.platform === 'win32' ? `${noProxy},::1` : undefined,
 			},
 			environmentRestored: before,
 		});
@@ -5099,7 +5099,7 @@ suite('CopilotAgent', () => {
 					resolveProxyCalls: 2,
 					httpProxy: proxyResolver.resolvedProxy,
 					httpsProxy: proxyResolver.resolvedProxy,
-					noProxy: '127.0.0.1,localhost',
+					noProxy: '127.0.0.1,localhost,::1',
 					lowercaseNoProxy: undefined,
 				});
 			} finally {

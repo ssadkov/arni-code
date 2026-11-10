@@ -157,7 +157,7 @@ function invokeWithTemporaryProxyEnvironment<T>(proxy: string | undefined, noPro
 	}
 	const keys = [
 		...(proxy ? COPILOT_PROXY_ENV_KEYS : []),
-		...(noProxy ? COPILOT_NO_PROXY_ENV_KEYS : []),
+		...(noProxy || proxy ? COPILOT_NO_PROXY_ENV_KEYS : []),
 	];
 	const previousValues = keys.map(key => process.env[key]);
 	for (const key of keys) {
@@ -168,8 +168,8 @@ function invokeWithTemporaryProxyEnvironment<T>(proxy: string | undefined, noPro
 			process.env[key] = proxy;
 		}
 	}
-	if (noProxy) {
-		process.env['NO_PROXY'] = noProxy;
+	if (noProxy || proxy) {
+		process.env['NO_PROXY'] = proxy ? withLoopbackNoProxy(noProxy) : noProxy;
 	}
 	try {
 		// The SDK snapshots process.env while constructing the native request.
@@ -212,6 +212,25 @@ function isUnregisteredProviderModelError(error: unknown): boolean {
  */
 const COPILOT_PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'] as const;
 const COPILOT_NO_PROXY_ENV_KEYS = ['no_proxy', 'NO_PROXY'] as const;
+/**
+ * Loopback hosts that must bypass any forwarded proxy: the BYOK models are
+ * served by a loopback proxy in this process, and a system proxy (for example
+ * a local VPN client) cannot reach it and answers 503.
+ */
+const LOOPBACK_NO_PROXY_HOSTS = ['localhost', '127.0.0.1', '::1'] as const;
+
+/**
+ * Appends the loopback hosts to a `NO_PROXY` list, keeping the user's entries.
+ */
+function withLoopbackNoProxy(noProxy: string | undefined): string {
+	const hosts = (noProxy ?? '').split(',').map(host => host.trim()).filter(Boolean);
+	for (const host of LOOPBACK_NO_PROXY_HOSTS) {
+		if (!hosts.includes(host)) {
+			hosts.push(host);
+		}
+	}
+	return hosts.join(',');
+}
 /**
  * Proxy env vars we set when injecting the resolved CAPI proxy.
  */
@@ -5224,17 +5243,17 @@ export class CopilotAgent extends Disposable implements IAgent {
 		this._appliedNoProxy = noProxy;
 		const omittedKeys = [
 			...(proxy ? COPILOT_PROXY_ENV_KEYS : []),
-			...(noProxy ? COPILOT_NO_PROXY_ENV_KEYS : []),
+			...(noProxy || proxy ? COPILOT_NO_PROXY_ENV_KEYS : []),
 		];
 		const env = createCopilotCliEnvironment(process.env, omittedKeys);
 		if (proxy) {
 			for (const key of COPILOT_PROXY_SET_ENV_KEYS) {
 				env[key] = proxy;
 			}
-			this._logService.info('[Copilot] Resolved CAPI proxy and forwarded HTTP_PROXY/HTTPS_PROXY to Copilot SDK');
+			this._logService.info('[Copilot] Resolved CAPI proxy and forwarded HTTP_PROXY/HTTPS_PROXY to Copilot SDK; loopback bypasses it');
 		}
-		if (noProxy) {
-			env['NO_PROXY'] = noProxy;
+		if (noProxy || proxy) {
+			env['NO_PROXY'] = proxy ? withLoopbackNoProxy(noProxy) : noProxy;
 		}
 		const kerberosSpn = this._readKerberosSpn(process.env);
 		this._appliedProxyKerberosSpn = kerberosSpn;
