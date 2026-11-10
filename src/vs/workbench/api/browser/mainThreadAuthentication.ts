@@ -32,6 +32,7 @@ import { IQuickInputService } from '../../../platform/quickinput/common/quickInp
 import { ISecretStorageService } from '../../../platform/secrets/common/secrets.js';
 import { mcpOAuthClientSecretStorageKey } from '../../contrib/mcp/common/mcpTypes.js';
 import { IProductService } from '../../../platform/product/common/productService.js';
+import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IMcpEnterpriseManagedAuthIdpConfig, mcpEnterpriseManagedAuthIdpSection } from '../../contrib/mcp/common/mcpConfiguration.js';
 
@@ -371,6 +372,17 @@ export class MainThreadAuthentication extends Disposable implements MainThreadAu
 		);
 	}
 
+	/**
+	 * Whether `trustedExtensionAuthAccess` in product.json grants the extension
+	 * access to the provider.
+	 */
+	private isProductTrusted(providerId: string, extensionId: string): boolean {
+		const trusted = this.productService.trustedExtensionAuthAccess;
+		const extensionKey = ExtensionIdentifier.toKey(extensionId);
+		const trustedIds = Array.isArray(trusted) ? trusted : trusted?.[providerId];
+		return !!trustedIds?.some(id => ExtensionIdentifier.toKey(id) === extensionKey);
+	}
+
 	private async loginPrompt(provider: IAuthenticationProvider, extensionName: string, recreatingSession: boolean, options?: AuthenticationInteractiveOptions): Promise<boolean> {
 		let message: string;
 
@@ -492,7 +504,9 @@ export class MainThreadAuthentication extends Disposable implements MainThreadAu
 			// We only want to show the "recreating session" prompt if we are using forceNewSession & there are sessions
 			// that we will be "forcing through".
 			const recreatingSession = !!(options.forceNewSession && sessions.length);
-			const isAllowed = await this.loginPrompt(provider, extensionName, recreatingSession, uiOptions);
+			// Extensions the product trusts with this provider sign in without a
+			// consent dialog: the provider's own sign-in flow is the user's consent.
+			const isAllowed = this.isProductTrusted(providerId, extensionId) || await this.loginPrompt(provider, extensionName, recreatingSession, uiOptions);
 			if (!isAllowed) {
 				throw new Error('User did not consent to login.');
 			}

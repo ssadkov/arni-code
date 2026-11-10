@@ -598,6 +598,19 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		return undefined;
 	}
 
+	private async pickArniAuthProvider(): Promise<(typeof OpenRouterLMProvider._arniAuthProviders)[number] | undefined> {
+		const labels: Record<(typeof OpenRouterLMProvider._arniAuthProviders)[number], string> = {
+			yandex: vscode.l10n.t('Войти через Яндекс'),
+			vk: vscode.l10n.t('Войти через VK'),
+			google: vscode.l10n.t('Войти через Google'),
+		};
+		const picked = await vscode.window.showQuickPick(
+			OpenRouterLMProvider._arniAuthProviders.map(provider => ({ label: labels[provider], provider })),
+			{ placeHolder: vscode.l10n.t('Войдите, чтобы пользоваться Arni') }
+		);
+		return picked?.provider;
+	}
+
 	private async resolveArniApiKey(silent: boolean, storedApiKey?: string): Promise<string | undefined> {
 		if (this._arniJwt) {
 			return this._arniJwt;
@@ -628,7 +641,13 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			}
 
 			if (!silent) {
-				const providersToPrompt = signedInProviders.length > 0 ? signedInProviders : OpenRouterLMProvider._arniAuthProviders;
+				// Nobody is signed in (or the provider has not registered yet): let the
+				// user pick a provider instead of starting a Yandex sign-in unasked.
+				const chosen = signedInProviders.length > 0 ? undefined : await this.pickArniAuthProvider();
+				if (signedInProviders.length === 0 && !chosen) {
+					return storedApiKey;
+				}
+				const providersToPrompt = chosen ? [chosen] : signedInProviders;
 				for (const provider of providersToPrompt) {
 					const session = await vscode.authentication.getSession(provider, [], { createIfNone: true });
 					if (session) {
