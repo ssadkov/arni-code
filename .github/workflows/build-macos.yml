@@ -65,7 +65,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.build_arch == 'arm64' && '[{"arch":"arm64","runner":"macos-15"}]' || inputs.build_arch == 'x64' && '[{"arch":"x64","runner":"macos-15-intel"}]' || '[{"arch":"arm64","runner":"macos-15"},{"arch":"x64","runner":"macos-15-intel"}]') }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       VSCODE_ARCH: ${{ matrix.arch }}
       APP_DIR: ${{ github.workspace }}/../ArniCode-darwin-${{ matrix.arch }}
