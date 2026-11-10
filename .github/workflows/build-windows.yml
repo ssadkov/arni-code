@@ -202,6 +202,8 @@ jobs:
 
       - name: Build Google Authentication extension
         shell: pwsh
+        env:
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
           $googleDir = "extensions\google-authentication"
           if (Test-Path $googleDir) {

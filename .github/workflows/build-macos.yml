@@ -175,6 +175,8 @@ jobs:
 
       - name: Build bundled Arni extensions
         if: ${{ !inputs.recover_signed_run }}
+        env:
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
           set -e
           for dir in extensions/arni-agent extensions/yandex-authentication extensions/vk-authentication extensions/google-authentication; do

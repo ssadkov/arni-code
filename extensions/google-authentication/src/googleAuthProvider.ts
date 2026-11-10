@@ -29,9 +29,10 @@ const SCOPES = ['openid', 'email', 'profile'];
 
 // Desktop app OAuth client of the Arni Google Cloud project. Google issues a
 // secret to installed-app clients too and documents that it is not
-// confidential; PKCE protects the code exchange.
-const DEFAULT_CLIENT_ID = '';
-const DEFAULT_CLIENT_SECRET = '';
+// confidential; PKCE protects the code exchange. The secret is still kept out
+// of the public repo and injected by esbuild from GOOGLE_DESKTOP_CLIENT_SECRET.
+const DEFAULT_CLIENT_ID = '937163510569-akm09120grr44goe12r19ric3956ij6e.apps.googleusercontent.com';
+const DEFAULT_CLIENT_SECRET = process.env.GOOGLE_DESKTOP_CLIENT_SECRET || '';
 
 // Refresh a little before Google's one-hour expiry so a request that starts
 // now does not carry a token that dies on the way.

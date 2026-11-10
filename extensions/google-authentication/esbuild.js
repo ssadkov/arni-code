@@ -23,6 +23,11 @@ async function main() {
     platform: 'node',
     outfile: 'dist/extension.js',
     external: ['vscode'],
+    // The client secret is not committed: GitHub secret scanning flags it in a
+    // public repo. CI passes it from a repository secret at build time.
+    define: {
+      'process.env.GOOGLE_DESKTOP_CLIENT_SECRET': JSON.stringify(process.env.GOOGLE_DESKTOP_CLIENT_SECRET || ''),
+    },
     logLevel: 'info'
   });
 
