@@ -5070,14 +5070,17 @@ export class CopilotAgent extends Disposable implements IAgent {
 					// session launched before the renderer reported them (slow start,
 					// sign-in after launch) knows none, so every BYOK model is
 					// "not registered". Relaunch it with the current models and retry.
-					if (!entry || current.target || !isUnregisteredProviderModelError(err) || !this._byokModels.some(m => m.id === model.id)) {
+					// This applies to a chat that is already live too: its session
+					// keeps the model list it was launched with.
+					if (!entry || !isUnregisteredProviderModelError(err) || !this._byokModels.some(m => m.id === model.id)) {
 						throw err;
 					}
 					this._logService.info(`[Copilot:${current.configurationId}] Model ${model.id} is not registered in the session; relaunching with current BYOK models`);
 					await this._destroyLiveSession(entry, true);
+					// Re-resolve: the destroyed session must not be reused as the target.
 					entry = entry.sessionId === current.configurationId
 						? await this._resumeSession(current.configurationId, current.chat)
-						: await this._ensureResolvedChatSession(current);
+						: await this._ensureResolvedChatSession(this._resolveChatContext(chat, operationContext));
 					await entry?.setModel(model.id, reasoningEffort, contextTier);
 				}
 				if (entry) {
