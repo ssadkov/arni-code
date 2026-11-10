@@ -33,11 +33,25 @@ suite('Arni model picker filter', () => {
 	const free = model('openrouter/nvidia/nemotron-3-ultra-550b-a55b:free');
 	const recommended = model('openrouter/anthropic/claude-sonnet-5.5');
 	const other = model('openrouter/acme/obscure-model');
+	const bedrock = model('openrouter/global.anthropic.claude-sonnet-4-6');
 
-	function summary(models: ILanguageModelChatMetadataAndIdentifier[], freeOnly: boolean, selected?: string) {
-		const view = getArniModelPickerView(models, freeOnly, selected);
+	function summary(models: ILanguageModelChatMetadataAndIdentifier[], freeOnly: boolean, selected?: string, recommendedIds?: string[]) {
+		const view = getArniModelPickerView(models, freeOnly, selected, recommendedIds);
 		return { models: view.models.map(item => item.metadata.id), featured: Object.keys(view.featured), toggle: view.showFreeToggle };
 	}
+
+	test('leads with the models the backend recommends, free and paid alike', () => {
+		const backend = ['nvidia/nemotron-3-ultra-550b-a55b:free', 'global.anthropic.claude-sonnet-4-6'];
+		assert.deepStrictEqual({
+			mixed: summary([free, bedrock, recommended, other], false, undefined, backend),
+			freeOnly: summary([free, bedrock, other], true, undefined, backend),
+			emptyFallsBack: summary([free, bedrock, recommended], false, undefined, []),
+		}, {
+			mixed: { models: [free.metadata.id, bedrock.metadata.id, recommended.metadata.id, other.metadata.id], featured: [free.metadata.id, bedrock.metadata.id], toggle: true },
+			freeOnly: { models: [free.metadata.id], featured: [free.metadata.id], toggle: true },
+			emptyFallsBack: { models: [free.metadata.id, bedrock.metadata.id, recommended.metadata.id], featured: [recommended.metadata.id], toggle: true },
+		});
+	});
 
 	test('leads with recommended paid models, filters to free on demand, and leaves other catalogs alone', () => {
 		assert.deepStrictEqual({
