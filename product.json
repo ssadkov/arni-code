@@ -145,6 +145,11 @@
         "arnion.google-authentication": [
             "google"
         ],
+        "github.copilot-chat": [
+            "yandex",
+            "vk",
+            "google"
+        ],
         "arnion.arni-agent": [
             "yandex",
             "vk",
