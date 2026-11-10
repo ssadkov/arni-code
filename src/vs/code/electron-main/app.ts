@@ -551,9 +551,16 @@ export class CodeApplication extends Disposable {
 		app.on('activate', async (event, hasVisibleWindows) => {
 			this.logService.trace('app#activate');
 
-			// Mac only event: open new window when we get activated
+			// Mac only event: the Agents window is the product home, so a Dock
+			// click with every window minimized restores it instead of opening
+			// an empty editor window.
 			if (!hasVisibleWindows) {
-				await this.windowsMainService?.openEmptyWindow({ context: OpenContext.DOCK });
+				const agentsWindow = this.windowsMainService?.getWindows().find(window => window.config?.isSessionsWindow);
+				if (agentsWindow) {
+					agentsWindow.focus();
+					return;
+				}
+				await this.windowsMainService?.openAgentsWindow({ context: OpenContext.DOCK, cli: this.environmentMainService.args });
 			}
 		});
 
