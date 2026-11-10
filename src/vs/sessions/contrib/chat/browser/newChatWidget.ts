@@ -511,6 +511,10 @@ export class NewChatWidget extends Disposable {
 				this.newSessionComposerService.setStarterProjectsRequested(false);
 				updateGalleryVisibility();
 				this.focusInput();
+			}, () => {
+				this.newSessionComposerService.setStarterProjectsRequested(false);
+				updateGalleryVisibility();
+				this._workspacePicker.showPicker(true);
 			}));
 			this._register(dom.addDisposableListener(gallery.modelPickerButton, dom.EventType.CLICK, () => this._newChatInput.openModelPicker(gallery.modelPickerButton)));
 			this._register(autorun(reader => {

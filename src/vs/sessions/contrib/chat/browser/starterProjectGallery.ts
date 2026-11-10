@@ -241,6 +241,9 @@ export class StarterProjectGallery extends Disposable {
 		private readonly _startProject: (folderUri: URI, prompt: string, professionId: string, submit: boolean) => Promise<void>,
 		/** Opens a chat without a folder with `prompt` in the composer. */
 		private readonly _startTask: (prompt: string, professionId: string) => Promise<void>,
+		/** Hides the gallery and returns to the plain chat. */
+		private readonly _close: () => void,
+		/** Hides the gallery and opens the folder picker. */
 		private readonly _useExistingFolder: () => void,
 		@IFileDialogService private readonly _fileDialogService: IFileDialogService,
 		@IFileService private readonly _fileService: IFileService,
@@ -257,6 +260,14 @@ export class StarterProjectGallery extends Disposable {
 		this.element = dom.append(container, dom.$('section.starter-project-gallery'));
 		this._register(toDisposable(() => this.element.remove()));
 		this.element.setAttribute('aria-label', localize('starterProjects.heading', "Идеи для начала"));
+		const backButton = dom.append(this.element, dom.$('button.starter-project-link.starter-project-back')) as HTMLButtonElement;
+		backButton.type = 'button';
+		backButton.textContent = localize('starterProjects.back', "← К чату");
+		this._register(dom.addDisposableListener(backButton, dom.EventType.CLICK, () => {
+			if (!this._busy) {
+				this._close();
+			}
+		}));
 		dom.append(this.element, dom.$('h2.starter-project-gallery-title')).textContent = localize('starterProjects.heading', "Идеи для начала");
 		dom.append(this.element, dom.$('p.starter-project-gallery-description')).textContent = localize('starterProjects.intro', "Выберите идею — задача появится в поле ввода, допишите её и отправьте. Для проектов Arni создаст папку с правилами.");
 
@@ -309,12 +320,18 @@ export class StarterProjectGallery extends Disposable {
 		this._moreButton = dom.append(this.element, dom.$('button.starter-project-link.starter-project-more')) as HTMLButtonElement;
 		this._moreButton.type = 'button';
 		this._moreButton.textContent = localize('starterProjects.more', "Все идеи");
+		let expanded = false;
 		this._register(dom.addDisposableListener(this._moreButton, dom.EventType.CLICK, () => {
+			expanded = !expanded;
 			for (const card of extraCards) {
-				card.hidden = false;
+				card.hidden = !expanded;
 			}
-			this._moreButton.hidden = true;
-			extraCards[0]?.focus();
+			this._moreButton.textContent = expanded
+				? localize('starterProjects.less', "Свернуть")
+				: localize('starterProjects.more', "Все идеи");
+			if (expanded) {
+				extraCards[0]?.focus();
+			}
 		}));
 
 		this._status = dom.append(this.element, dom.$('p.starter-project-status'));

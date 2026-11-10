@@ -661,7 +661,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			btn.classList.add('primary');
 		}
 
-		if (!options?.textOnly && providerClass !== 'vk') {
+		if (!options?.textOnly) {
 			const mark = append(btn, $('span.onboarding-a-provider-mark'));
 			mark.classList.add(providerClass);
 			mark.setAttribute('aria-hidden', 'true');

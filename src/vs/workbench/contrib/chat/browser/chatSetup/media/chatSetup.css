@@ -31,6 +31,10 @@
 		background-image: url('./yandex.svg');
 	}
 
+	.dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.vk::before {
+		background-image: url('./vk.svg');
+	}
+
 	/* Link Buttons */
 
 	.dialog-buttons-row > .dialog-buttons > .monaco-button.link-button {

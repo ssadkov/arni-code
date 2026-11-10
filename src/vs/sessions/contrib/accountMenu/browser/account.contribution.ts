@@ -454,7 +454,10 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			this.avatarElement.removeAttribute('src');
 		}
 
-		this.iconElement.className = `sessions-account-titlebar-widget-icon ${ThemeIcon.asClassName(titleBarIcon)}`;
+		const providerMark = this.getArniProviderMark();
+		this.iconElement.className = providerMark
+			? `sessions-account-titlebar-widget-icon arni-provider-mark ${providerMark}`
+			: `sessions-account-titlebar-widget-icon ${ThemeIcon.asClassName(titleBarIcon)}`;
 		this.iconElement.classList.toggle('hidden', hasLoadedAvatar);
 		const arni = this.arniAccount;
 		this.container.classList.toggle('arni-account-visible', !!arni);
@@ -761,7 +764,12 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				avatar.referrerPolicy = 'no-referrer';
 			} else {
 				const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-				accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.account));
+				const providerMark = this.getArniProviderMark();
+				if (providerMark) {
+					accountIcon.classList.add('arni-provider-mark', providerMark);
+				} else {
+					accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.account));
+				}
 			}
 			const title = append(copilotIdentity, $('div.sessions-account-titlebar-panel-provider-name'));
 			title.textContent = this.getPanelHeaderLabel();
@@ -1086,6 +1094,11 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			.filter((a): a is IAction => !!a);
 
 		return { signIn, signOut, personalize, other };
+	}
+
+	/** The Arni sign-in provider (yandex, vk, google) whose logo stands for the account, if any. */
+	private getArniProviderMark(): string | undefined {
+		return this.accountProviderId && isArniProductAuthProvider(this.accountProviderId) ? this.accountProviderId : undefined;
 	}
 
 	private getPanelHeaderLabel(): string {

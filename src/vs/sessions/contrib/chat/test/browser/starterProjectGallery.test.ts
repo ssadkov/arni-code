@@ -28,6 +28,7 @@ suite('StarterProjectGallery', () => {
 		const startedTasks: { readonly prompt: string; readonly professionId: string }[] = [];
 		const writtenFiles = new Map<string, string>();
 		let existingFolderRequests = 0;
+		let closeRequests = 0;
 		const hoverService = new class extends mock<IHoverService>() {
 			override setupDelayedHover(_target: HTMLElement, options: Parameters<IHoverService['setupDelayedHover']>[1]): IDisposable {
 				const resolved = typeof options === 'function' ? options() : options;
@@ -57,6 +58,7 @@ suite('StarterProjectGallery', () => {
 			container,
 			async (folder, prompt, professionId, submit) => { startedProjects.push({ folder: folder.path, prompt, professionId, submit }); },
 			async (prompt, professionId) => { startedTasks.push({ prompt, professionId }); },
+			() => closeRequests++,
 			() => existingFolderRequests++,
 			upcastPartial<IFileDialogService>({}),
 			upcastPartial<IFileService>({
@@ -86,6 +88,13 @@ suite('StarterProjectGallery', () => {
 		gallery.element.querySelector<HTMLButtonElement>('.starter-project-create')!.click();
 		await timeout(0);
 		gallery.element.querySelector<HTMLButtonElement>('.starter-project-existing')!.click();
+		gallery.element.querySelector<HTMLButtonElement>('.starter-project-back')!.click();
+		const countVisible = () => gallery.element.querySelectorAll('.starter-project-card:not([hidden])').length;
+		const more = gallery.element.querySelector<HTMLButtonElement>('.starter-project-more')!;
+		more.click();
+		const expanded = { cards: countVisible(), label: more.textContent };
+		more.click();
+		const collapsed = { cards: countVisible(), label: more.textContent };
 
 		const researcher = visibleCards[1];
 		researcher.click();
@@ -99,6 +108,9 @@ suite('StarterProjectGallery', () => {
 			rulesFiles: [...writtenFiles.keys()],
 			rulesMentionIndexHtml: rules.includes('index.html'),
 			existingFolderRequests,
+			closeRequests,
+			expanded,
+			collapsed,
 		}, {
 			visibleCards: 6,
 			hoverTips: 15,
@@ -115,6 +127,9 @@ suite('StarterProjectGallery', () => {
 			],
 			rulesMentionIndexHtml: true,
 			existingFolderRequests: 1,
+			closeRequests: 1,
+			expanded: { cards: 15, label: 'Свернуть' },
+			collapsed: { cards: 6, label: 'Все идеи' },
 		});
 	});
 });

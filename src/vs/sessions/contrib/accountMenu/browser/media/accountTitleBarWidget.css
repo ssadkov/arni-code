@@ -727,3 +727,24 @@
 .agent-sessions-workbench.monaco-reduce-motion .sessions-account-titlebar-widget-badge {
 	transition-duration: 0ms !important;
 }
+
+/* The account shows the logo of the service the user signed in with. */
+.agent-sessions-workbench .arni-provider-mark {
+	width: 16px;
+	height: 16px;
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: contain;
+}
+
+.agent-sessions-workbench .arni-provider-mark.yandex {
+	background-image: url('../../../../../workbench/contrib/chat/browser/chatSetup/media/yandex.svg');
+}
+
+.agent-sessions-workbench .arni-provider-mark.vk {
+	background-image: url('../../../../../workbench/contrib/chat/browser/chatSetup/media/vk.svg');
+}
+
+.agent-sessions-workbench .arni-provider-mark.google {
+	background-image: url('../../../../../workbench/contrib/chat/browser/chatSetup/media/google.svg');
+}

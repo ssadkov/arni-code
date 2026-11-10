@@ -549,6 +549,10 @@
 	background-image: url('../../../chat/browser/chatSetup/media/yandex.svg');
 }
 
+.onboarding-a-provider-mark.vk {
+	background-image: url('../../../chat/browser/chatSetup/media/vk.svg');
+}
+
 /* Personalize step */
 .onboarding-a-personalize {
 	display: flex;
