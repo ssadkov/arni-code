@@ -200,6 +200,14 @@ function isCopilotConnectionClosedError(error: unknown): boolean {
 }
 
 /**
+ * Whether the runtime rejected a model switch because the session's provider
+ * config does not list the model ("Provider model '…' is not registered").
+ */
+function isUnregisteredProviderModelError(error: unknown): boolean {
+	return /Provider model '[^']*' is not registered/.test(getErrorMessage(error));
+}
+
+/**
  * Proxy env vars recognized by the Copilot runtime.
  */
 const COPILOT_PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'] as const;
@@ -5033,8 +5041,26 @@ export class CopilotAgent extends Disposable implements IAgent {
 			if (provisional) {
 				provisional.model = model;
 			} else {
-				const entry = current.target ?? await this._ensureResolvedChatSession(current);
-				await entry?.setModel(model.id, resolveCopilotReasoningEffort(model, this._configurationService, this._logService, current.configurationId), getCopilotContextTier(model, longContextWindow, freeLongContext));
+				let entry = current.target ?? await this._ensureResolvedChatSession(current);
+				const reasoningEffort = resolveCopilotReasoningEffort(model, this._configurationService, this._logService, current.configurationId);
+				const contextTier = getCopilotContextTier(model, longContextWindow, freeLongContext);
+				try {
+					await entry?.setModel(model.id, reasoningEffort, contextTier);
+				} catch (err) {
+					// The session advertises the BYOK models it was launched with. A
+					// session launched before the renderer reported them (slow start,
+					// sign-in after launch) knows none, so every BYOK model is
+					// "not registered". Relaunch it with the current models and retry.
+					if (!entry || current.target || !isUnregisteredProviderModelError(err) || !this._byokModels.some(m => m.id === model.id)) {
+						throw err;
+					}
+					this._logService.info(`[Copilot:${current.configurationId}] Model ${model.id} is not registered in the session; relaunching with current BYOK models`);
+					await this._destroyLiveSession(entry, true);
+					entry = entry.sessionId === current.configurationId
+						? await this._resumeSession(current.configurationId, current.chat)
+						: await this._ensureResolvedChatSession(current);
+					await entry?.setModel(model.id, reasoningEffort, contextTier);
+				}
 				if (entry) {
 					recorded = this._pinLaunchAutoTier(model, entry, current.configurationId);
 				}
