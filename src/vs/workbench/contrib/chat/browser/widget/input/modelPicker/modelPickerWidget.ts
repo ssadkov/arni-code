@@ -25,6 +25,7 @@ import { IActionWidgetDropdownAction } from '../../../../../../../platform/actio
 import { AgentHostAllowSignedOutWhenUsableSettingId } from '../../../../../../../platform/agentHost/common/agentService.js';
 import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
 import { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../../../../platform/product/common/productService.js';
 import { ITelemetryService } from '../../../../../../../platform/telemetry/common/telemetry.js';
@@ -44,7 +45,7 @@ import { getCompactCodicon } from '../../../chatIcons.js';
 import { withChatInputPickerMotion } from '../chatInputPickerActionItem.js';
 import { buildModelPickerItems, createManageModelsAction, getModelPickerAccessibilityProvider, getModelPickerControlModels, ModelPickerSection, shouldShowManageModelsAction } from './modelPickerItems.js';
 import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
-import { ARNI_FREE_ONLY_STORAGE_KEY, getArniModelPickerView } from './arniModelPickerFilter.js';
+import { ARNI_FREE_ONLY_STORAGE_KEY, ARNI_RECOMMENDED_MODELS_CONTEXT_KEY, getArniModelPickerView } from './arniModelPickerFilter.js';
 import { createModelItem } from './modelPickerItemPrimitives.js';
 import { getCompactModelPickerIcon } from './modelProviderIcons.js';
 import { ITabbedModelPickerContext, TabbedModelPicker } from './modelPickerTabbedWidget.js';
@@ -178,6 +179,7 @@ export class ModelPickerWidget extends Disposable {
 		@IStorageService private readonly _storageService: IStorageService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 	) {
 		super();
 		this._configuration = this._instantiationService.createInstance(ModelPickerConfiguration, {
@@ -528,7 +530,8 @@ export class ModelPickerWidget extends Disposable {
 		};
 
 		const freeOnly = this._storageService.getBoolean(ARNI_FREE_ONLY_STORAGE_KEY, StorageScope.PROFILE, false);
-		const arniView = getArniModelPickerView(this._delegate.getModels(), freeOnly, this._selectedModel?.identifier);
+		const recommendedIds = this._contextKeyService.getContextKeyValue<string[]>(ARNI_RECOMMENDED_MODELS_CONTEXT_KEY);
+		const arniView = getArniModelPickerView(this._delegate.getModels(), freeOnly, this._selectedModel?.identifier, Array.isArray(recommendedIds) ? recommendedIds : undefined);
 		const models = [...arniView.models];
 		const presentation = this._delegate.getPresentationOptions();
 		const manifest = this._languageModelsService.getModelsControlManifest();

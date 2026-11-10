@@ -54,6 +54,8 @@ interface OpenRouterModelData {
 	name: string;
 	arni_provider?: 'bedrock' | 'openrouter';
 	arni_free?: boolean;
+	/** The backend recommends this model; the picker leads with it. */
+	arni_recommended?: boolean;
 	arni_cache?: 'explicit' | 'automatic';
 	pricing?: { prompt?: string; completion?: string };
 	supported_parameters?: string[];
@@ -104,6 +106,9 @@ export function resolveArniBackendOrigin(backendUrl: string | undefined): string
 export function resolveArniApiBaseUrl(backendUrl: string | undefined): string {
 	return `${resolveArniBackendOrigin(backendUrl)}/api`;
 }
+
+/** Context key with the catalog ids the backend marks `arni_recommended`; mirrored in the workbench model picker. */
+const ARNI_RECOMMENDED_MODELS_CONTEXT_KEY = 'arni.recommendedModels';
 
 /** Free OpenRouter coding/agent models, preferred first for Arni's default picker. */
 export const PREFERRED_FREE_OPENROUTER_MODELS = [
@@ -724,6 +729,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 						if (apiBase) {
 							this._reachableApiBase = apiBase;
 						}
+						this.publishRecommendedModels(models);
 						return models;
 					}
 				}
@@ -734,6 +740,17 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		}
 		this._logService.warn('Using the built-in list of free OpenRouter models');
 		return FALLBACK_OPENROUTER_MODELS;
+	}
+
+	/**
+	 * Tells the workbench model picker which models to lead with. Best effort:
+	 * a failure only costs the picker its ordering hint, never the catalog.
+	 */
+	private publishRecommendedModels(models: readonly OpenRouterModelData[]): void {
+		const ids = models.filter(model => model.arni_recommended).map(model => model.id);
+		Promise.resolve()
+			.then(() => vscode.commands.executeCommand('setContext', ARNI_RECOMMENDED_MODELS_CONTEXT_KEY, ids))
+			.catch(error => this._logService.warn(`Could not publish recommended models: ${String(error)}`));
 	}
 
 	protected override getModelsBaseUrl(): string | undefined {
