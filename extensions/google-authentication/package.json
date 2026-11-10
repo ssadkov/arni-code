@@ -5,7 +5,6 @@
     "publisher": "arnion",
     "version": "1.0.0",
     "license": "MIT",
-    "icon": "resources/google-icon.svg",
     "engines": {
         "vscode": "*"
     },
