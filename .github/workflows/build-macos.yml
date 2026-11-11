@@ -46,6 +46,11 @@ on:
         required: false
         default: false
         type: boolean
+      draft:
+        description: 'Create the release as a draft: invisible to users and the update feed until published'
+        required: false
+        default: false
+        type: boolean
       release_tag:
         description: 'Release tag (e.g. v1.0.0) to attach to. Empty = date-based tag; ignored on tag push'
         required: false
@@ -72,6 +77,7 @@ jobs:
       APP_NAME: Arni Code.app
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
       PRERELEASE: ${{ github.event_name != 'push' && inputs.prerelease }}
+      DRAFT: ${{ github.event_name != 'push' && inputs.draft }}
       SIGNING_ENABLED: ${{ secrets.MACOS_CERTIFICATE != '' }}
       # Postinstall scripts (ripgrep) and gulp download from the GitHub API;
       # anonymous calls from shared macOS runners hit the rate limit (403).
@@ -444,6 +450,8 @@ jobs:
           case "$TAG" in v*) ;; *) TAG="v$TAG" ;; esac
           RELEASE_FLAGS=(--latest)
           if [ "$PRERELEASE" = true ]; then RELEASE_FLAGS=(--prerelease --latest=false); fi
+          # A draft gets --latest only when it is published: gh release edit <tag> --draft=false --latest
+          if [ "$DRAFT" = true ]; then RELEASE_FLAGS=(--draft); fi
 
           # The Windows build publishes to the same tag, so whichever job comes
           # second uploads into the release the first one created.
