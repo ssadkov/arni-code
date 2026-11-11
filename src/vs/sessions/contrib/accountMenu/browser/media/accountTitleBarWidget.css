@@ -112,6 +112,28 @@
 	cursor: pointer;
 }
 
+.agent-sessions-workbench .arni-product-version {
+	display: block;
+	width: 100%;
+	margin: 0;
+	border: 0;
+	border-top: 1px solid var(--vscode-widget-border);
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	font: inherit;
+	font-size: var(--vscode-fontSize-label2);
+	line-height: 1.3;
+	text-align: left;
+	padding: var(--vscode-spacing-size80) var(--vscode-spacing-size120);
+	cursor: pointer;
+}
+
+.agent-sessions-workbench .arni-product-version:hover,
+.agent-sessions-workbench .arni-product-version:focus-visible {
+	color: var(--vscode-foreground);
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
 .agent-sessions-workbench .arni-budget-window {
 	display: grid;
 	gap: var(--vscode-spacing-size40);

@@ -49,6 +49,7 @@ import { IChatDashboardService } from '../../../browser/chatDashboardService.js'
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IProductService } from '../../../../platform/product/common/productService.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
 import { AICustomizationManagementCommands } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.js';
 import { AICustomizationManagementSection } from '../../../../workbench/contrib/chat/common/aiCustomizationWorkspaceService.js';
@@ -100,6 +101,21 @@ const accountTimeFormatter = safeIntl.DateTimeFormat(language, { hour: 'numeric'
 
 export function shouldShowAccountPanelSummary(state: Pick<IAccountTitleBarState, 'source' | 'kind'>, hasCopilotDashboard: boolean, isAccountLoading: boolean): boolean {
 	return !hasCopilotDashboard && !isAccountLoading && !(state.source === 'copilot' && state.kind === 'prominent');
+}
+
+/** Quiet product version. Activating it opens the full About dialog. */
+export function renderAccountProductVersion(panel: HTMLElement, productName: string, version: string, store: Pick<DisposableStore, 'add'>, onOpen: () => void): void {
+	const label = `${productName} ${version}`.trim();
+	const about = append(panel, $('button.arni-product-version', {
+		type: 'button',
+		title: localize('arni.aboutProductVersion', "About"),
+		'aria-label': localize('arni.aboutProductVersionLabel', "About {0}", label),
+	}));
+	about.textContent = label;
+	store.add(addDisposableListener(about, EventType.CLICK, event => {
+		event.preventDefault();
+		onOpen();
+	}));
 }
 
 /** Render personal actions as visible text entries, alongside the remaining account menu commands. */
@@ -310,6 +326,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		@ICodexAccountService private readonly codexAccountService: ICodexAccountService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICommandService private readonly commandService: ICommandService,
+		@IProductService private readonly productService: IProductService,
 	) {
 		super(undefined, action, options);
 		this.lastCodexAccount = this.codexAccountService.account;
@@ -910,6 +927,12 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			const summary = append(contentSection, $('.sessions-account-titlebar-panel-summary'));
 			summary.textContent = this.lastState.ariaLabel;
 		}
+
+		renderAccountProductVersion(panel, this.productService.nameShort, this.productService.version, panelStore, () => {
+			this.hoverService.hideHover(true);
+			this.clickPanelDisposable.clear();
+			void this.commandService.executeCommand('workbench.action.showAboutDialog');
+		});
 
 		return panel;
 	}

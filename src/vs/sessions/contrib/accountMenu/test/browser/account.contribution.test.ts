@@ -20,7 +20,7 @@ import { TestThemeService } from '../../../../../platform/theme/test/common/test
 import { ChatPetAccessoryId, ChatPetAccessoryIds, ChatPetAchievementId, ChatPetAchievementIds } from '../../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
 import { ChatPetVariant, IChatPetService } from '../../../../../workbench/contrib/chat/browser/chatPetService.js';
 import { Menus } from '../../../../browser/menus.js';
-import { getArniAvailableBalance, renderAccountPanelActions, shouldShowAccountPanelSummary } from '../../browser/account.contribution.js';
+import { getArniAvailableBalance, renderAccountPanelActions, renderAccountProductVersion, shouldShowAccountPanelSummary } from '../../browser/account.contribution.js';
 import { getSessionsChatPetAchievementBadges, SessionsChatPetAchievementBadges } from '../../browser/chatPetAchievementBadges.js';
 
 suite('Sessions - Account Menu', () => {
@@ -49,6 +49,17 @@ suite('Sessions - Account Menu', () => {
 		link!.click();
 		await Promise.resolve();
 		assert.deepStrictEqual({ opened, closed }, { opened: true, closed: true });
+	});
+
+	test('shows the product version and opens About from it', () => {
+		const panel = mainWindow.document.createElement('div');
+		let opened = false;
+		renderAccountProductVersion(panel, 'Arni Code', '1.0.21', store, () => { opened = true; });
+		const about = panel.querySelector<HTMLButtonElement>('button.arni-product-version');
+		assert.strictEqual(about?.textContent, 'Arni Code 1.0.21');
+		assert.strictEqual(about?.getAttribute('aria-label'), 'About Arni Code 1.0.21');
+		about!.click();
+		assert.strictEqual(opened, true);
 	});
 
 	test('labels the signed-out Yandex account action', () => {
