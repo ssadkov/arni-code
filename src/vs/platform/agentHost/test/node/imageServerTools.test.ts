@@ -38,9 +38,13 @@ suite('Image Server Tool', () => {
 
 	test('display names the target file', () => {
 		const display = getServerToolDisplay(ImageServerToolName.GenerateImage, { path: 'images/cat.png' });
-		assert.deepStrictEqual({ invocation: display?.invocationMessage, past: display?.pastTenseMessage }, {
+		const file = URI.file(join(root, 'images', 'cat.png')).toString();
+		const done = (success: boolean) => getServerToolDisplay(ImageServerToolName.GenerateImage, { path: 'images/cat.png' }, { text: `Saved images/cat.png.\nFile: ${file}`, success })?.pastTenseMessage;
+		assert.deepStrictEqual({ invocation: display?.invocationMessage, past: display?.pastTenseMessage, linked: done(true), failed: done(false) }, {
 			invocation: 'Generating image images/cat.png',
 			past: 'Generated image images/cat.png',
+			linked: { markdown: `Generated image [images/cat.png](${file})` },
+			failed: 'Generated image images/cat.png',
 		});
 	});
 
@@ -82,7 +86,7 @@ suite('Image Server Tool', () => {
 		const group = createImageServerToolGroup(accessor);
 		const result = await group.execute(stateManager(root), context, ImageServerToolName.GenerateImage, { prompt: 'a logo with the word Arni', path: 'out/logo.png', kind: 'text' });
 		assert.deepStrictEqual({ result, saved: Array.from(await fs.readFile(join(root, 'out', 'logo.png'))).length, keys: keys.length }, {
-			result: 'Saved out/logo.png (16:9, Stable Diffusion 3.5 Large). Charged $0.08 to the user\'s API budget.',
+			result: `Saved out/logo.png (16:9, Stable Diffusion 3.5 Large). Charged $0.08 to the user's API budget.\nFile: ${URI.file(join(await fs.realpath(root), 'out', 'logo.png')).toString()}`,
 			saved: png.length,
 			keys: 1,
 		});

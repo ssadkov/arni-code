@@ -76,16 +76,21 @@ export function createImageServerToolGroup(accessor?: IImageServerToolAccessor):
 		isEnabledForSession(): boolean {
 			return true;
 		},
-		getDisplay(toolName, args): IServerToolDisplay | undefined {
+		getDisplay(toolName, args, result): IServerToolDisplay | undefined {
 			if (toolName !== ImageServerToolName.GenerateImage) {
 				return undefined;
 			}
 			const path = (args as { path?: unknown } | undefined)?.path;
-			const target = typeof path === 'string' && path.trim() ? ` ${path.trim()}` : '';
+			const label = typeof path === 'string' && path.trim() ? path.trim() : undefined;
+			const target = label ? ` ${label}` : '';
+			// A link to the saved file, so the user opens the image from the step instead of searching the tree.
+			const file = result?.success !== false ? readSavedFile(result?.text) : undefined;
 			return {
 				displayName: localize('agentHost.image.displayName', "Generate Image"),
 				invocationMessage: localize('agentHost.image.invocation', "Generating image{0}", target),
-				pastTenseMessage: localize('agentHost.image.pastTense', "Generated image{0}", target),
+				pastTenseMessage: file
+					? { markdown: localize('agentHost.image.pastTenseLink', "Generated image [{0}]({1})", escapeLinkText(label ?? file.path), file.toString()) }
+					: localize('agentHost.image.pastTense', "Generated image{0}", target),
 			};
 		},
 		async execute(stateManager, context, toolName, rawArgs): Promise<string> {
@@ -106,7 +111,7 @@ export function createImageServerToolGroup(accessor?: IImageServerToolAccessor):
 			// Once paid, save even if the turn was cancelled meanwhile; re-check the path first.
 			await fs.mkdir(dirname(await imageTarget(root, request.path)), { recursive: true });
 			await fs.writeFile(target, image.bytes, { flag: 'wx' });
-			return formatImageResult(request, image);
+			return formatImageResult(request, image, target);
 		},
 	};
 }
@@ -175,8 +180,24 @@ export async function imageTarget(root: string, path: string): Promise<string> {
 	throw new Error(`${path} already exists. Choose a new file name.`);
 }
 
-export function formatImageResult(request: IImageRequest, image: IGeneratedImage): string {
+const savedFilePrefix = 'File: ';
+
+export function formatImageResult(request: IImageRequest, image: IGeneratedImage, file: string): string {
 	const model = imageModels[request.kind];
 	const cost = image.costMicros === null ? `about $${model.priceUsd}` : `$${(image.costMicros / 1_000_000).toFixed(2)}`;
-	return `Saved ${request.path} (${request.aspectRatio}, ${model.label}). Charged ${cost} to the user's API budget.`;
+	return `Saved ${request.path} (${request.aspectRatio}, ${model.label}). Charged ${cost} to the user's API budget.\n${savedFilePrefix}${URI.file(file).toString()}`;
+}
+
+/** The saved image's file URI from a tool result, if the result came from {@link formatImageResult}. */
+function readSavedFile(text: string | undefined): URI | undefined {
+	const line = text?.split('\n').find(value => value.startsWith(savedFilePrefix));
+	if (!line) {
+		return undefined;
+	}
+	const uri = URI.parse(line.slice(savedFilePrefix.length).trim());
+	return uri.scheme === 'file' ? uri : undefined;
+}
+
+function escapeLinkText(value: string): string {
+	return value.replace(/[\\[\]]/g, match => `\\${match}`);
 }
