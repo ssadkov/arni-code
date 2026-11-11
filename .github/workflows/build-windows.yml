@@ -26,6 +26,11 @@ on:
         required: false
         default: false
         type: boolean
+      draft:
+        description: 'Create the release as a draft: invisible to users and the update feed until published'
+        required: false
+        default: false
+        type: boolean
       release_tag:
         description: 'Release tag (e.g. v1.0.0). Empty = date-based tag for manual runs; ignored on tag push'
         required: false
@@ -46,6 +51,7 @@ jobs:
       BUILD_ARCHIVE: ${{ github.event_name == 'push' || inputs.build_archive }}
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
       PRERELEASE: ${{ github.event_name != 'push' && inputs.prerelease }}
+      DRAFT: ${{ github.event_name != 'push' && inputs.draft }}
 
     steps:
       - name: Checkout repository
@@ -376,6 +382,8 @@ jobs:
             Write-Host "Creating release '$tag'."
             $releaseFlags = @('--latest')
             if ($env:PRERELEASE -eq 'true') { $releaseFlags = @('--prerelease', '--latest=false') }
+            # A draft gets --latest only when it is published: gh release edit <tag> --draft=false --latest
+            if ($env:DRAFT -eq 'true') { $releaseFlags = @('--draft') }
             gh release create $tag @($files.FullName) --title $tag --target $env:GITHUB_SHA --generate-notes @releaseFlags
           }
 
