@@ -9,6 +9,7 @@ import type { IServerToolDisplay, IServerToolDisplayResult, IServerToolGroup } f
 import { createAgentMergeServerToolGroup, type IAgentMergeToolAccessor } from './agentMergeServerTools.js';
 import { createArtifactServerToolGroup, type IArtifactServerToolAccessor } from './artifactServerTools.js';
 import { createWebSearchServerToolGroup, type IWebSearchServerToolAccessor } from './webSearchServerTools.js';
+import { createImageServerToolGroup, type IImageServerToolAccessor } from './imageServerTools.js';
 
 /**
  * Builds the server-tool groups contributed to every agent host session, in
@@ -26,13 +27,14 @@ import { createWebSearchServerToolGroup, type IWebSearchServerToolAccessor } fro
  * When omitted (the pure display path) the session group's `execute` is inert,
  * but its definitions and display remain available.
  */
-export function buildServerToolGroups(sessionAccessor?: ISessionServerToolAccessor, agentMergeAccessor?: IAgentMergeToolAccessor, artifactAccessor?: IArtifactServerToolAccessor, webSearchAccessor?: IWebSearchServerToolAccessor): readonly IServerToolGroup[] {
+export function buildServerToolGroups(sessionAccessor?: ISessionServerToolAccessor, agentMergeAccessor?: IAgentMergeToolAccessor, artifactAccessor?: IArtifactServerToolAccessor, webSearchAccessor?: IWebSearchServerToolAccessor, imageAccessor?: IImageServerToolAccessor): readonly IServerToolGroup[] {
 	return [
 		feedbackServerToolGroup,
 		createSessionServerToolGroup(sessionAccessor),
 		createAgentMergeServerToolGroup(agentMergeAccessor),
 		createArtifactServerToolGroup(artifactAccessor),
 		createWebSearchServerToolGroup(webSearchAccessor),
+		createImageServerToolGroup(imageAccessor),
 	];
 }
 

@@ -38,6 +38,7 @@ import { AgentSideEffects } from './agentSideEffects.js';
 import { ARNI_API_RESOURCE } from '../common/arniApi.js';
 import { AgentServerToolHost, IAgentHostServerToolService } from './shared/agentServerToolHost.js';
 import { createArniWebSearchAccessor } from './shared/arniWebSearch.js';
+import { createArniImageAccessor } from './shared/arniImageGeneration.js';
 import { buildServerToolGroups } from './shared/serverToolGroups.js';
 import type { ISessionServerToolAccessor } from './shared/sessionServerTools.js';
 import { type IAgentServiceFoundation } from './agentServiceFoundation.js';
@@ -161,10 +162,12 @@ export function createAgentServiceComposition(
 				workspaceConversionService.value.requestSessionWorkspaceUpdate(chat, turnId, workspaceFolder, isolation, initiatingClientId);
 			},
 		};
-		const webSearch = createArniWebSearchAccessor(accessor.get(IRequestService), () => authenticationService.getAuthToken({ resource: ARNI_API_RESOURCE }));
+		const readArniToken = () => authenticationService.getAuthToken({ resource: ARNI_API_RESOURCE });
+		const webSearch = createArniWebSearchAccessor(accessor.get(IRequestService), readArniToken);
+		const images = createArniImageAccessor(accessor.get(IRequestService), readArniToken);
 		const serverToolHost = new AgentServerToolHost(
 			stateManager,
-			buildServerToolGroups(sessionServerToolAccessor, agentMergeTools, callbackAdapter.artifactServerToolAccessor, webSearch),
+			buildServerToolGroups(sessionServerToolAccessor, agentMergeTools, callbackAdapter.artifactServerToolAccessor, webSearch, images),
 		);
 		services.set(IAgentHostServerToolService, serverToolHost);
 		workspaceConversionService.value = owned.add(instantiationService.createInstance(SessionWorkspaceConversionService));

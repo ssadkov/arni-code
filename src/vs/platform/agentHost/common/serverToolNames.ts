@@ -53,3 +53,8 @@ export const LEGACY_ARTIFACT_SERVER_TOOL_NAMES: ReadonlyMap<string, string> = ne
 export const enum WebSearchServerToolName {
 	SearchWeb = 'search_web',
 }
+
+/** Paid image generation through the shared Arni API, saved as a PNG in the session's working directory. */
+export const enum ImageServerToolName {
+	GenerateImage = 'generate_image',
+}
