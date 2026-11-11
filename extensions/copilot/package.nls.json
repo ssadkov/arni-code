@@ -2,7 +2,7 @@
   "arni.showApiUsage": "Расходы API",
   "arni.billing.displayCurrency": "Валюта отображения баланса, тарифов моделей и расходов Arni.",
 	"arni.tools.generateImage.name": "Generate image",
-	"arni.tools.generateImage.description": "Generate a PNG asset for your project with Amazon Bedrock ($0.04 per image).",
+	"arni.tools.generateImage.description": "Generate a PNG asset for your project with Amazon Bedrock ($0.04 Core / $0.08 SD 3.5 Large).",
 	"github.copilot.badge.signUp": "Sign up for GitHub Copilot",
 	"github.copilot.badge.star": "Star Copilot on GitHub",
 	"github.copilot.badge.youtube": "Check out GitHub on Youtube",
