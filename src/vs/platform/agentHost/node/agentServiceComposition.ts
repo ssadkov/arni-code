@@ -10,6 +10,7 @@ import { dirname, joinPath } from '../../../base/common/resources.js';
 import { IInstantiationService, ServicesAccessor } from '../../instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../instantiation/common/serviceCollection.js';
 import { ILogService } from '../../log/common/log.js';
+import { IRequestService } from '../../request/common/request.js';
 import { IAgentHostChangesetOperationService } from '../common/agentHostChangesetOperationService.js';
 import { IAgentHostChangesetService } from '../common/agentHostChangesetService.js';
 import { IAgentHostCheckpointService } from '../common/agentHostCheckpointService.js';
@@ -34,7 +35,9 @@ import { AgentMergeTools } from './agentMergeTools.js';
 import { AgentService, type IAgentServiceCollaborators, type IAgentServiceCore, type IAgentServiceOptions } from './agentService.js';
 import { AgentSessionRegistry } from './agentSessionRegistry.js';
 import { AgentSideEffects } from './agentSideEffects.js';
+import { ARNI_API_RESOURCE } from '../common/arniApi.js';
 import { AgentServerToolHost, IAgentHostServerToolService } from './shared/agentServerToolHost.js';
+import { createArniWebSearchAccessor } from './shared/arniWebSearch.js';
 import { buildServerToolGroups } from './shared/serverToolGroups.js';
 import type { ISessionServerToolAccessor } from './shared/sessionServerTools.js';
 import { type IAgentServiceFoundation } from './agentServiceFoundation.js';
@@ -158,9 +161,10 @@ export function createAgentServiceComposition(
 				workspaceConversionService.value.requestSessionWorkspaceUpdate(chat, turnId, workspaceFolder, isolation, initiatingClientId);
 			},
 		};
+		const webSearch = createArniWebSearchAccessor(accessor.get(IRequestService), () => authenticationService.getAuthToken({ resource: ARNI_API_RESOURCE }));
 		const serverToolHost = new AgentServerToolHost(
 			stateManager,
-			buildServerToolGroups(sessionServerToolAccessor, agentMergeTools, callbackAdapter.artifactServerToolAccessor),
+			buildServerToolGroups(sessionServerToolAccessor, agentMergeTools, callbackAdapter.artifactServerToolAccessor, webSearch),
 		);
 		services.set(IAgentHostServerToolService, serverToolHost);
 		workspaceConversionService.value = owned.add(instantiationService.createInstance(SessionWorkspaceConversionService));

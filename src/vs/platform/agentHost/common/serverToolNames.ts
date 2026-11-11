@@ -45,3 +45,11 @@ export const LEGACY_ARTIFACT_SERVER_TOOL_NAMES: ReadonlyMap<string, string> = ne
 	['remove_artifact', ArtifactServerToolName.RemoveArtifactOrReference as string],
 	['list_artifacts', ArtifactServerToolName.ListArtifactsAndReferences as string],
 ]);
+
+/**
+ * Public-web search. Named `search_web` rather than `web_search` so it does not
+ * collide with the Copilot CLI's built-in tool of that name.
+ */
+export const enum WebSearchServerToolName {
+	SearchWeb = 'search_web',
+}

@@ -8,6 +8,7 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import type { ILogService } from '../../log/common/log.js';
 import type { AuthenticateParams, AuthenticateResult, IAgent, IAgentHostAuthTokenRequest } from '../common/agent.js';
+import { ARNI_API_RESOURCE } from '../common/arniApi.js';
 
 export interface IAgentHostAuthTokenChangeEvent {
 	readonly resource: string;
@@ -98,6 +99,11 @@ export class AgentHostAuthenticationService extends Disposable implements IAgent
 		const scopes = this._normalizeScopes(params.scopes);
 		const key = this._key(params.resource, scopes);
 		const previousToken = this._tokens.get(key)?.token;
+		if (params.resource === ARNI_API_RESOURCE && params.token) {
+			// The shared web-search API uses the user's Arni session. No model
+			// provider owns this resource, so store it for the search tool.
+			authenticated = true;
+		}
 		if (!authenticated && !rejected) {
 			authenticated = this._tokens.get(key)?.token === params.token;
 		}

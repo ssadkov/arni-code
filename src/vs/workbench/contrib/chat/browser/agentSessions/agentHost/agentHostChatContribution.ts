@@ -45,6 +45,7 @@ import { AgentHostPromptCacheNotification } from './agentHostPromptCacheNotifica
 import { IAgentHostActiveClientService } from './agentHostActiveClientService.js';
 import { IAgentHostProtectedResourcesService } from './agentHostProtectedResourcesService.js';
 import { AICustomizationManagementSection } from '../../../common/aiCustomizationWorkspaceService.js';
+import { publishArniWebSearchToken } from './agentHostWebSearchAuth.js';
 
 const LOCAL_AGENT_HOST_SESSION_TYPE_PREFIX = 'agent-host-';
 
@@ -167,6 +168,7 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 				const wasInitialized = this._initialized;
 				this._initialize();
 				this._enable();
+				void this._publishWebSearchToken();
 				const current = this._agentHostService.rootState.value;
 				if (wasInitialized && current && !(current instanceof Error)) {
 					this._handleRootStateChange(current);
@@ -259,6 +261,14 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 		if (changed) {
 			this._onDidChangeArniSignIn.fire();
 		}
+		void this._publishWebSearchToken();
+	}
+
+	private _publishWebSearchToken(): Promise<void> {
+		return publishArniWebSearchToken(this._authenticationService, this._agentHostService, this._logService)
+			.catch(error => {
+				this._logService.warn(`[AgentHost] Failed to publish the web search session: ${error instanceof Error ? error.name : 'unknown'}`);
+			});
 	}
 
 	private _shouldRegisterAgent(provider: AgentProvider): boolean {
