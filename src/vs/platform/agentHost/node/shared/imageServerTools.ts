@@ -60,7 +60,7 @@ export const imageServerToolDefinitions: IAgentServerToolDefinition[] = [
 	{
 		name: ImageServerToolName.GenerateImage,
 		title: 'Generate Image',
-		description: 'Generate one PNG image with Amazon Bedrock and save it in the working directory. Each call is charged to the user\'s API budget, so call it once per image the user asked for and do not retry a failed call with the same arguments. Draw diagrams and charts with code instead.',
+		description: 'Generate one PNG image with Amazon Bedrock and save it in the working directory. Each call is charged to the user\'s API budget, so call it once per image the user asked for and do not retry a failed call with the same arguments. If the tool reports a sign-in, budget or availability problem, tell the user and stop instead of drawing the picture with code. Draw diagrams and charts with code instead of this tool.',
 		inputSchema: generateImageInputSchema,
 		annotations: { readOnlyHint: false },
 		enabledForEphemeralSessions: false,

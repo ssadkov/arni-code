@@ -193,6 +193,14 @@ suite('AgentHostRequestService', () => {
 		});
 	});
 
+	test('honors disabled redirects for authenticated API requests', async () => {
+		const proxyResolver = new TestProxyResolver();
+		const service = createService(proxyResolver);
+		const context = await service.request({ url: 'https://api.arnion.ru/api/web-search', followRedirects: 0, callSite: 'agentHostRequestService.test' }, CancellationToken.None);
+		await streamToBuffer(context.stream);
+		assert.strictEqual(proxyResolver.lastInit?.redirect, 'manual');
+	});
+
 	test('forwards cancellation to resolver fetch', async () => {
 		const proxyResolver = new TestProxyResolver();
 		proxyResolver.fetchImpl = (_input, init) => new Promise((_resolve, reject) => {

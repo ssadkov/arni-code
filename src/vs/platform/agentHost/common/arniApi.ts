@@ -8,3 +8,11 @@ export const ARNI_API_RESOURCE = 'https://api.arnion.ru';
 
 /** Origins tried in order. The Russian proxy is first; Vercel is the direct fallback. */
 export const ARNI_API_ORIGINS = ['https://api.arnion.ru', 'https://arni-backend.vercel.app'] as const;
+
+/** Implemented in the Node extension host so exchanging a session does not depend on renderer CORS. */
+export const ARNI_EXCHANGE_WEB_SEARCH_SESSION_COMMAND = 'arni.exchangeWebSearchSession';
+
+export interface IArniSessionExchangeResult {
+	readonly status: number;
+	readonly token?: string;
+}

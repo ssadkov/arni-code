@@ -23,6 +23,7 @@ import { byokKnownModelsToAPIInfoWithEffort } from './byokModelInfo';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { ArniImageTool } from './arniImageTool';
 import { IArniBudgetError, isNonRetryableBYOKError, parseArniBudgetError } from '../common/byokErrorPolicy';
+import { ARNI_EXCHANGE_WEB_SEARCH_SESSION_COMMAND, exchangeArniWebSearchSession } from './arniWebSearchSession';
 
 interface ArniBudgetWindow {
 	usedMicros: number;
@@ -229,6 +230,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			this._disposables.add(vscode.commands.registerCommand(JOIN_PRO_WAITLIST_COMMAND, () => this.joinProWaitlist()));
 			this._disposables.add(vscode.commands.registerCommand('arni.showApiUsage', () => this.showApiUsage()));
 			this._disposables.add(vscode.commands.registerCommand('arni.getAccountSummary', () => this.getAccountSummary()));
+			this._disposables.add(vscode.commands.registerCommand(ARNI_EXCHANGE_WEB_SEARCH_SESSION_COMMAND, (provider: string, token: string) => exchangeArniWebSearchSession(provider, token)));
 		} catch {
 			// vscode.commands is unavailable in unit tests
 		}

@@ -47,7 +47,7 @@ export function detectAvailableProfiles(
 			fsProvider,
 			shellEnv,
 			logService,
-			configurationService.getValue(TerminalSettingId.UseWslProfiles) !== false,
+			configurationService.getValue(TerminalSettingId.UseWslProfiles) === true,
 			profiles && isObject(profiles) ? { ...profiles } : configurationService.getValue<{ [key: string]: IUnresolvedTerminalProfile }>(TerminalSettingId.ProfilesWindows),
 			isString(defaultProfile) ? defaultProfile : configurationService.getValue<string>(TerminalSettingId.DefaultProfileWindows),
 			testPwshSourcePaths,
@@ -349,12 +349,14 @@ async function getWslProfiles(wslPath: string, defaultProfileName: string | unde
 	const distroOutput = await new Promise<string>((resolve, reject) => {
 		// wsl.exe output is encoded in utf16le (ie. A -> 0x4100) by default, force it in case the
 		// user changed https://github.com/microsoft/vscode/issues/276253
-		cp.exec('wsl.exe -l -q', { encoding: 'utf16le', env: { ...process.env, WSL_UTF8: '0' }, timeout: 1000 }, (err, stdout) => {
+		const child = cp.execFile(wslPath, ['-l', '-q'], { encoding: 'utf16le', env: { ...process.env, WSL_UTF8: '0' }, timeout: 1000, windowsHide: true }, (err, stdout) => {
 			if (err) {
 				return reject('Problem occurred when getting wsl distros');
 			}
 			resolve(stdout);
 		});
+		// Profile discovery must never accept input from WSL's installation prompt.
+		child.stdin?.end();
 	});
 	if (!distroOutput) {
 		return [];

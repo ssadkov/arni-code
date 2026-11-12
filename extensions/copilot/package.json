@@ -79,6 +79,7 @@
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:arni.exchangeWebSearchSession",
     "onLanguageModelChat:copilot",
     "onUri",
     "onCommand:_github.copilot.chat.reportModelFeedbackSurvey",

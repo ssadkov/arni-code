@@ -123,6 +123,7 @@ export class AgentHostRequestService extends AbstractRequestService {
 				body: options.data,
 				signal,
 				cache: options.disableCache ? 'no-store' : undefined,
+				redirect: options.followRedirects === 0 ? 'manual' : undefined,
 			});
 			const stream = response.body
 				? responseBodyToStream(response.body, cancellation, cancellationListener)

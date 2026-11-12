@@ -388,9 +388,9 @@ const terminalPlatformConfiguration: IConfigurationNode = {
 			}
 		},
 		[TerminalSettingId.UseWslProfiles]: {
-			description: localize('terminal.integrated.useWslProfiles', 'Controls whether or not WSL distros are shown in the terminal dropdown'),
+			description: localize('terminal.integrated.useWslProfiles', 'Controls whether WSL distributions are automatically detected and shown in the terminal dropdown. Detection runs WSL, which may require installation or an update on this computer.'),
 			type: 'boolean',
-			default: true
+			default: false
 		},
 		[TerminalSettingId.InheritEnv]: {
 			scope: ConfigurationScope.APPLICATION,
