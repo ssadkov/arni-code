@@ -380,6 +380,10 @@
 	color: var(--vscode-foreground);
 }
 
+.agent-sessions-workbench .sessions-account-titlebar-panel-provider-icon.arni-provider-mark {
+	border: none;
+}
+
 .agent-sessions-workbench .sessions-account-titlebar-panel-provider-avatar.hidden,
 .agent-sessions-workbench .sessions-account-titlebar-panel-provider-icon.hidden {
 	display: none;
