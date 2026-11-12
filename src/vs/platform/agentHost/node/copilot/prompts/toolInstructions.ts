@@ -9,6 +9,7 @@ import { BrowserChatToolReferenceName, browserChatToolReferenceNames } from '../
 import type { SchemaValue } from '../../../common/agentHostSchema.js';
 import { CopilotCliConfigKey, copilotCliConfigSchema } from '../../../common/copilotCliConfig.js';
 import { CLIENT_TOOL_SEARCH_REFERENCE_NAME } from '../../../common/toolSearchConstants.js';
+import { WebSearchServerToolName } from '../../../common/serverToolNames.js';
 
 /**
  * Model-agnostic guidance for the `tool_instructions` system-prompt section.
@@ -88,9 +89,16 @@ const browserToolInstructions: ToolInstructionLine = ({ hasTool }) => {
 };
 
 /**
+ * Small models answer news questions from memory unless told to search. `search_web` is an
+ * agent-host server tool registered for every Copilot session, so this line is not gated.
+ */
+export const COPILOT_AGENT_HOST_WEB_SEARCH_TOOL_INSTRUCTION = `For news, prices, rates or anything that may have changed after your training data, call ${WebSearchServerToolName.SearchWeb} first instead of answering from memory.`;
+const webSearchToolInstructions: ToolInstructionLine = () => COPILOT_AGENT_HOST_WEB_SEARCH_TOOL_INSTRUCTION;
+
+/**
  * The registered tool-instruction lines, in render order.
  */
-const TOOL_INSTRUCTION_LINES: readonly ToolInstructionLine[] = [largeOutputToolInstructions, subagentToolInstructions, browserToolInstructions];
+const TOOL_INSTRUCTION_LINES: readonly ToolInstructionLine[] = [largeOutputToolInstructions, webSearchToolInstructions, subagentToolInstructions, browserToolInstructions];
 
 /** Tool-search guidance mirrored from the Copilot extension prompt. */
 const toolSearchToolInstructions: ToolInstructionLine = ({ hasTool }) =>
