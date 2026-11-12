@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import type { SectionOverride } from '@github/copilot-sdk';
-import { COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION, COPILOT_AGENT_HOST_SUBAGENT_TOOL_INSTRUCTIONS, resolveToolInstructionsOverride, toolSearchInstructionLines, universalToolInstructions, type IToolInstructionContext } from '../../node/copilot/prompts/toolInstructions.js';
+import { COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION, COPILOT_AGENT_HOST_SUBAGENT_TOOL_INSTRUCTIONS, COPILOT_AGENT_HOST_WEB_SEARCH_TOOL_INSTRUCTION, resolveToolInstructionsOverride, toolSearchInstructionLines, universalToolInstructions, type IToolInstructionContext } from '../../node/copilot/prompts/toolInstructions.js';
 import type { SchemaValues } from '../../common/agentHostSchema.js';
 import { CopilotCliConfigKey, copilotCliConfigSchema } from '../../common/copilotCliConfig.js';
 import { CLIENT_TOOL_SEARCH_REFERENCE_NAME } from '../../common/toolSearchConstants.js';
@@ -35,7 +35,7 @@ suite('toolInstructions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	const LARGE_OUTPUT_LINE = COPILOT_AGENT_HOST_LARGE_OUTPUT_TOOL_INSTRUCTION;
-	const UNCONDITIONAL_TOOL_INSTRUCTIONS = LARGE_OUTPUT_LINE;
+	const UNCONDITIONAL_TOOL_INSTRUCTIONS = `${LARGE_OUTPUT_LINE}\n${COPILOT_AGENT_HOST_WEB_SEARCH_TOOL_INSTRUCTION}`;
 
 	suite('universalToolInstructions', () => {
 		test('joins applicable lines in order and drops gated-out ones', () => {
