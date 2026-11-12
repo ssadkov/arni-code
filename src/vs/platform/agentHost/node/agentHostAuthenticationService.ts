@@ -52,6 +52,23 @@ export class AgentHostAuthenticationService extends Disposable implements IAgent
 
 	async authenticate(params: AuthenticateParams, providers: Iterable<IAgent>): Promise<AuthenticateResult> {
 		this._logService.trace(`[AgentHostAuthenticationService] authenticate called: resource=${params.resource}`);
+		if (params.resource === ARNI_API_RESOURCE) {
+			// This credential belongs to the shared search service, not a model provider.
+			// Apply it before any await so a later revocation cannot be overtaken by an older update.
+			const scopes = this._normalizeScopes(params.scopes);
+			const key = this._key(params.resource, scopes);
+			const previousToken = this._tokens.get(key)?.token;
+			if (params.token) {
+				this._tokens.set(key, { resource: params.resource, scopes, token: params.token });
+			} else {
+				this._tokens.delete(key);
+			}
+			const token = this._tokens.get(key)?.token;
+			if (previousToken !== token) {
+				this._onDidChangeAuthToken.fire({ resource: params.resource, scopes, token });
+			}
+			return { authenticated: !!token };
+		}
 		const providerList = [...providers];
 		// Multiple providers may share the same protected resource (e.g.
 		// both Copilot CLI and Claude consume the Copilot-scoped OAuth credential).
@@ -99,11 +116,6 @@ export class AgentHostAuthenticationService extends Disposable implements IAgent
 		const scopes = this._normalizeScopes(params.scopes);
 		const key = this._key(params.resource, scopes);
 		const previousToken = this._tokens.get(key)?.token;
-		if (params.resource === ARNI_API_RESOURCE && params.token) {
-			// The shared web-search API uses the user's Arni session. No model
-			// provider owns this resource, so store it for the search tool.
-			authenticated = true;
-		}
 		if (!authenticated && !rejected) {
 			authenticated = this._tokens.get(key)?.token === params.token;
 		}
@@ -124,6 +136,7 @@ export class AgentHostAuthenticationService extends Disposable implements IAgent
 	async replay(provider: IAgent): Promise<void> {
 		const protectedResources = new Set(provider.getProtectedResources().map(resource => resource.resource));
 		for (const stored of this._tokens.values()) {
+			if (stored.resource === ARNI_API_RESOURCE) { continue; }
 			const params: AuthenticateParams = { resource: stored.resource, scopes: stored.scopes, token: stored.token };
 			if (protectedResources.has(stored.resource)) {
 				try {

@@ -1378,6 +1378,16 @@ suite('CopilotSessionLauncher resume config', () => {
 		store.dispose();
 	});
 
+	test('Arni models use shared web search instead of Copilot-hosted search', async () => {
+		const store = new DisposableStore();
+		try {
+			const config = await buildResumeConfig(createLauncher(store, {}), { id: 'openrouter/global.anthropic.claude-sonnet-4-6' });
+			assert.deepStrictEqual(config.excludedTools, [`builtin:${SEMANTIC_SEARCH_TOOL_NAME}`, 'builtin:web_search']);
+		} finally {
+			store.dispose();
+		}
+	});
+
 	test('forwards a configured override on resume and leaves the effort untouched otherwise', async () => {
 		const store = new DisposableStore();
 		const model: ModelSelection = { id: 'gpt-5', config: { thinkingLevel: 'medium' } };
