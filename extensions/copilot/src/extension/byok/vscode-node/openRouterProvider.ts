@@ -58,6 +58,8 @@ interface OpenRouterModelData {
 	/** The backend recommends this model; the picker leads with it. */
 	arni_recommended?: boolean;
 	arni_cache?: 'explicit' | 'automatic';
+	/** Red means the API will hand this free model's requests to another free model. */
+	arni_traffic?: 'green' | 'yellow' | 'red' | 'unknown';
 	pricing?: { prompt?: string; completion?: string };
 	supported_parameters?: string[];
 	architecture?: {
@@ -146,6 +148,16 @@ export function preferredDefaultModelId(models: readonly OpenRouterTrafficModel[
 		}
 	}
 	return DEFAULT_OPENROUTER_MODEL_ID;
+}
+
+/**
+ * A usage row's model. When the API replaced a busy free model, the row names both,
+ * so the user sees why the answer came from a model they did not pick.
+ */
+export function routedModelLabel(model: string, requestedModel: string | null | undefined): string {
+	return requestedModel && requestedModel !== model && requestedModel.endsWith(':free')
+		? vscode.l10n.t('{0} (вместо {1})', model, requestedModel)
+		: model;
 }
 
 /** Direct OpenRouter catalog. It refuses requests from Russia, so it is only a fallback. */
@@ -381,9 +393,9 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		try {
 			const response = await fetch(`${base}/account/usage${selection.chatId ? `?chatId=${encodeURIComponent(selection.chatId)}` : ''}`, { headers: { Authorization: `Bearer ${apiKey}` } });
 			if (!response.ok) { throw new Error(vscode.l10n.t('Не удалось загрузить расходы API ({0})', response.status)); }
-			const data = await response.json() as { totalMicros: number; requestCount: number; requests: { model: string; createdAt: string; costMicros: number | null; accounting: string; promptTokens: number; completionTokens: number; cacheReadTokens: number }[] };
+			const data = await response.json() as { totalMicros: number; requestCount: number; requests: { model: string; requestedModel?: string | null; createdAt: string; costMicros: number | null; accounting: string; promptTokens: number; completionTokens: number; cacheReadTokens: number }[] };
 			await vscode.window.showQuickPick(data.requests.map(row => ({
-				label: `${row.costMicros == null ? '—' : this.money(row.costMicros, 6)} · ${row.model}`,
+				label: `${row.costMicros == null ? '—' : this.money(row.costMicros, 6)} · ${routedModelLabel(row.model, row.requestedModel)}`,
 				description: `${new Date(row.createdAt).toLocaleString()} · ${row.accounting}`,
 				detail: vscode.l10n.t('Вход: {0}; выход: {1}; из кэша: {2}', row.promptTokens, row.completionTokens, row.cacheReadTokens),
 			})), { title: vscode.l10n.t('Всего {0} · {1} запросов; показаны последние 100', this.money(data.totalMicros, 6), data.requestCount) });
@@ -790,6 +802,8 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			free ? vscode.l10n.t('Бесплатно · {0}', this.money(0)) : vscode.l10n.t('Платная'),
 			...(openRouterModelData.architecture?.input_modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : []),
 			...(openRouterModelData.arni_cache ? [vscode.l10n.t('Кэш')] : []),
+			// The API answers a red free model with another free model; say so before the user picks it.
+			...(free && openRouterModelData.arni_traffic === 'red' ? [vscode.l10n.t('Перегружена, ответит другая')] : []),
 		].join(' · ') : '';
 		const source = openRouterModelData.arni_provider === 'bedrock' ? 'AWS Bedrock' : openRouterModelData.arni_provider === 'openrouter' ? 'OpenRouter' : undefined;
 		const name = source ? vscode.l10n.t('{0} · {1}', source, openRouterModelData.name) : openRouterModelData.name;

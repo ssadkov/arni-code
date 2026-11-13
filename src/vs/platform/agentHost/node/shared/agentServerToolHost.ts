@@ -54,6 +54,8 @@ export interface IServerToolExecutionContext {
 	readonly sessionUri: URI;
 	readonly chatUri: URI;
 	readonly turnId?: string;
+	/** The provider's own session id, when the provider passed it. See {@link IAgentServerToolHost.executeTool}. */
+	readonly providerSessionId?: string;
 }
 
 /**
@@ -244,7 +246,7 @@ export class AgentServerToolHost implements IAgentHostServerToolService {
 			?? false;
 	}
 
-	executeTool(chatUri: URI, toolName: string, rawArgs: unknown): string | Promise<string> {
+	executeTool(chatUri: URI, toolName: string, rawArgs: unknown, providerSessionId?: string): string | Promise<string> {
 		const group = this._groupByToolName.get(toolName);
 		if (!group) {
 			throw new Error(`Unknown server tool: ${toolName}`);
@@ -253,14 +255,15 @@ export class AgentServerToolHost implements IAgentHostServerToolService {
 		if (!this._isEnabledForSession(group, chatUri, name, toolName)) {
 			throw new Error(`Server tool "${toolName}" is disabled.`);
 		}
-		return group.execute(this._stateManager, this._executionContext(chatUri), name, rawArgs);
+		return group.execute(this._stateManager, this._executionContext(chatUri, providerSessionId), name, rawArgs);
 	}
 
-	private _executionContext(chatUri: URI): IServerToolExecutionContext {
+	private _executionContext(chatUri: URI, providerSessionId?: string): IServerToolExecutionContext {
 		return {
 			sessionUri: parseRequiredSessionUriFromChatUri(chatUri),
 			chatUri,
 			turnId: this._stateManager.getActiveTurnId(chatUri),
+			...(providerSessionId ? { providerSessionId } : {}),
 		};
 	}
 

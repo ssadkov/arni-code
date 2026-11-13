@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BYOKModelCapabilities } from '../../common/byokProvider';
 import { Event } from '../../../../util/vs/base/common/event';
-import { DEFAULT_OPENROUTER_MODEL_ID, isOpenRouterBaseUrl, OpenRouterLMProvider, preferredDefaultModelId, rankOpenRouterModelId, resolveArniApiBaseUrl, resolveArniBackendOrigin } from '../openRouterProvider';
+import { DEFAULT_OPENROUTER_MODEL_ID, isOpenRouterBaseUrl, OpenRouterLMProvider, preferredDefaultModelId, rankOpenRouterModelId, resolveArniApiBaseUrl, routedModelLabel, resolveArniBackendOrigin } from '../openRouterProvider';
 
 /**
  * Tests for issue #324671:
@@ -69,6 +69,28 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 			top_provider: { context_length: 131072, max_completion_tokens: 4096 }, pricing: { prompt: '0', completion: '0' } });
 		expect(caps?.name.replace(/\s/g, ' ')).toBe('OpenRouter · Vision · Бесплатно · 0,00 ₽ · Изображения');
 		expect(caps?.vision).toBe(true);
+	});
+	it('warns in the picker that a red free model is answered by another one', () => {
+		const label = (arni_traffic: string) => createProvider().resolveCapabilities({ id: 'test/busy:free', name: 'Busy', arni_provider: 'openrouter', arni_free: true, arni_traffic,
+			context_length: 131072, supported_parameters: ['tools'], top_provider: { context_length: 131072 }, pricing: { prompt: '0', completion: '0' } })?.name.replace(/\s/g, ' ');
+		expect([label('red'), label('green')]).toEqual([
+			'OpenRouter · Busy · Бесплатно · 0,00 ₽ · Перегружена, ответит другая',
+			'OpenRouter · Busy · Бесплатно · 0,00 ₽',
+		]);
+	});
+	it('names both models in the usage history when a busy free model was replaced', () => {
+		// 2026-11-13: Gemma 4 was busy and the API answered with ERNIE; the history showed only ERNIE.
+		expect([
+			routedModelLabel('baidu/ernie-5.5-flash-preview:free', 'google/gemma-4-26b-a4b-it:free'),
+			routedModelLabel('google/gemma-4-26b-a4b-it:free', 'google/gemma-4-26b-a4b-it:free'),
+			routedModelLabel('stability.sd3-5-large-v1:0', 'stability.sd3-5-large-v1:0'),
+			routedModelLabel('global.anthropic.claude-sonnet-4-6', undefined),
+		]).toEqual([
+			'baidu/ernie-5.5-flash-preview:free (вместо google/gemma-4-26b-a4b-it:free)',
+			'google/gemma-4-26b-a4b-it:free',
+			'stability.sd3-5-large-v1:0',
+			'global.anthropic.claude-sonnet-4-6',
+		]);
 	});
 	it('labels AWS from backend metadata and does not infer a route from the model name', () => {
 		const data = { id: 'qwen/test', name: 'Qwen', context_length: 131072, top_provider: { context_length: 131072 } };

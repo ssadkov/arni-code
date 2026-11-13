@@ -30,7 +30,7 @@ export function createArniImageAccessor(requestService: IRequestService, readUse
 		isEnabled(): boolean {
 			return true;
 		},
-		async generate(request: IImageRequest, requestKey: string): Promise<IGeneratedImage> {
+		async generate(request: IImageRequest, requestKey: string, chatId?: string): Promise<IGeneratedImage> {
 			const token = readUserToken()?.trim();
 			if (!token) {
 				throw new Error('Image generation requires an Arni sign-in.');
@@ -39,7 +39,7 @@ export function createArniImageAccessor(requestService: IRequestService, readUse
 			// The idempotency key makes a retry on the other origin return the same paid image.
 			for (const origin of ARNI_API_ORIGINS) {
 				try {
-					return await generateAtOrigin(requestService, origin, token, request, requestKey);
+					return await generateAtOrigin(requestService, origin, token, request, requestKey, chatId);
 				} catch (error) {
 					if (!(error instanceof ImageApiError) || !error.retryable) {
 						throw error;
@@ -52,7 +52,10 @@ export function createArniImageAccessor(requestService: IRequestService, readUse
 	};
 }
 
-async function generateAtOrigin(requestService: IRequestService, origin: string, token: string, request: IImageRequest, requestKey: string): Promise<IGeneratedImage> {
+/** Same rule the API applies to `X-Arni-Chat-Id`; anything else is left out rather than rejected. */
+const CHAT_ID_PATTERN = /^[a-zA-Z0-9:._/-]{1,200}$/;
+
+async function generateAtOrigin(requestService: IRequestService, origin: string, token: string, request: IImageRequest, requestKey: string, chatId: string | undefined): Promise<IGeneratedImage> {
 	let body: string;
 	let status: number | undefined;
 	try {
@@ -67,6 +70,7 @@ async function generateAtOrigin(requestService: IRequestService, origin: string,
 				'Content-Type': 'application/json',
 				'Authorization': `Bearer ${token}`,
 				'Idempotency-Key': requestKey,
+				...(chatId && CHAT_ID_PATTERN.test(chatId) ? { 'X-Arni-Chat-Id': chatId } : {}),
 			},
 			data: JSON.stringify({ prompt: request.prompt, model: imageModels[request.kind].id, aspect_ratio: request.aspectRatio, n: 1 }),
 		}, CancellationToken.None);
