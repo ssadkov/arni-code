@@ -41,8 +41,11 @@ export interface IGeneratedImage {
 /** Host service that generates one image through the shared Arni API. */
 export interface IImageServerToolAccessor {
 	readonly isEnabled: () => boolean;
-	/** `requestKey` makes a retried call return the already paid image instead of charging again. */
-	readonly generate: (request: IImageRequest, requestKey: string) => Promise<IGeneratedImage>;
+	/**
+	 * `requestKey` makes a retried call return the already paid image instead of charging again.
+	 * `chatId` puts the charge on the chat's spend, next to its model requests.
+	 */
+	readonly generate: (request: IImageRequest, requestKey: string, chatId?: string) => Promise<IGeneratedImage>;
 }
 
 const generateImageInputSchema: ToolDefinition['inputSchema'] = {
@@ -107,7 +110,7 @@ export function createImageServerToolGroup(accessor?: IImageServerToolAccessor):
 			}
 			const root = URI.parse(workingDirectory).fsPath;
 			const target = await imageTarget(root, request.path);
-			const image = await accessor.generate(request, imageRequestKey(root, request));
+			const image = await accessor.generate(request, imageRequestKey(root, request), context.providerSessionId);
 			// Once paid, save even if the turn was cancelled meanwhile; re-check the path first.
 			await fs.mkdir(dirname(await imageTarget(root, request.path)), { recursive: true });
 			await fs.writeFile(target, image.bytes, { flag: 'wx' });

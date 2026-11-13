@@ -2100,7 +2100,8 @@ export class CopilotAgentSession extends Disposable {
 			defer: 'never' as const,
 			handler: async (args: Record<string, unknown>): Promise<ToolResultObject> => {
 				try {
-					const text = host.executeTool(this._chatChannelUri.toString(), def.name, args);
+					// The SDK session id is the chat id on this chat's Arni model requests, so a paid tool can bill the same chat.
+					const text = host.executeTool(this._chatChannelUri.toString(), def.name, args, this.sessionId);
 					return { textResultForLlm: await text, resultType: 'success' };
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);

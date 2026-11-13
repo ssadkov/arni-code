@@ -66,8 +66,11 @@ export interface IAgentServerToolHost {
 	 * Executes a server tool for the exact chat that invoked it, dispatching any
 	 * resulting actions, and returns the textual tool result for the agent.
 	 *
+	 * @param providerSessionId the provider's own session id for this chat, the
+	 * id the Arni API already records on the chat's model requests. Tools that
+	 * charge the user send it so the cost lands on the same chat.
 	 * @throws if {@link toolName} is not a known server tool or the arguments
 	 * are invalid.
 	 */
-	executeTool(chatUri: URI, toolName: string, rawArgs: unknown): string | Promise<string>;
+	executeTool(chatUri: URI, toolName: string, rawArgs: unknown, providerSessionId?: string): string | Promise<string>;
 }

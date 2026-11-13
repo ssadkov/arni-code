@@ -82,13 +82,16 @@ suite('Image Server Tool', () => {
 
 	test('execute saves the PNG in the working directory and reports the charge', async () => {
 		const keys: string[] = [];
-		const accessor: IImageServerToolAccessor = { isEnabled: () => true, generate: async (_request, key) => { keys.push(key); return { bytes: png, costMicros: 80_000 }; } };
+		const chats: (string | undefined)[] = [];
+		const accessor: IImageServerToolAccessor = { isEnabled: () => true, generate: async (_request, key, chatId) => { keys.push(key); chats.push(chatId); return { bytes: png, costMicros: 80_000 }; } };
 		const group = createImageServerToolGroup(accessor);
-		const result = await group.execute(stateManager(root), context, ImageServerToolName.GenerateImage, { prompt: 'a logo with the word Arni', path: 'out/logo.png', kind: 'text' });
-		assert.deepStrictEqual({ result, saved: Array.from(await fs.readFile(join(root, 'out', 'logo.png'))).length, keys: keys.length }, {
+		const result = await group.execute(stateManager(root), { ...context, providerSessionId: 'sdk-session-1' }, ImageServerToolName.GenerateImage, { prompt: 'a logo with the word Arni', path: 'out/logo.png', kind: 'text' });
+		assert.deepStrictEqual({ result, saved: Array.from(await fs.readFile(join(root, 'out', 'logo.png'))).length, keys: keys.length, chats }, {
 			result: `Saved out/logo.png (16:9, Stable Diffusion 3.5 Large). Charged $0.08 to the user's API budget.\nFile: ${URI.file(join(await fs.realpath(root), 'out', 'logo.png')).toString()}`,
 			saved: png.length,
 			keys: 1,
+			// 2026-11-13: images were billed without a chat, so "Последний чат" showed 0 after a paid image.
+			chats: ['sdk-session-1'],
 		});
 	});
 
@@ -106,16 +109,18 @@ suite('Image Server Tool', () => {
 			{ status: 200, body: VSBuffer.fromString(JSON.stringify({ id: 'img-1', model: 'stability.sd3-5-large-v1:0', costMicros: 80_000 })) },
 			{ status: 200, body: VSBuffer.wrap(png) },
 		]);
-		const image = await createArniImageAccessor(requests, () => 'user-jwt').generate(parseImageRequest({ prompt: 'logo', path: 'a.png', kind: 'text', aspect_ratio: '1:1' }), 'k'.repeat(64));
+		const image = await createArniImageAccessor(requests, () => 'user-jwt').generate(parseImageRequest({ prompt: 'logo', path: 'a.png', kind: 'text', aspect_ratio: '1:1' }), 'k'.repeat(64), 'sdk-session-1');
 		assert.deepStrictEqual({
 			urls: requests.seen.map(request => request.url),
 			key: requests.seen[0].headers?.['Idempotency-Key'],
+			chat: requests.seen[0].headers?.['X-Arni-Chat-Id'],
 			auth: requests.seen[1].headers?.Authorization,
 			body: requests.seen[0].data,
 			cost: image.costMicros,
 		}, {
 			urls: ['https://api.arnion.ru/api/images/generations', 'https://api.arnion.ru/api/images/img-1'],
 			key: 'k'.repeat(64),
+			chat: 'sdk-session-1',
 			auth: 'Bearer user-jwt',
 			body: JSON.stringify({ prompt: 'logo', model: 'stability.sd3-5-large-v1:0', aspect_ratio: '1:1', n: 1 }),
 			cost: 80_000,
