@@ -15,7 +15,7 @@ import { IExperimentationService } from '../../../platform/telemetry/common/null
 import { ITokenizerProvider } from '../../../platform/tokenizer/node/tokenizer';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { BYOKModelCapabilities } from '../common/byokProvider';
-import { ARNI_PROXY_MAX_BODY_BYTES, fitImagesToRequestBudget } from '../common/requestImageBudget';
+import { ARNI_PROXY_IMAGE_BUDGET, fitImagesToRequestBudget } from '../common/requestImageBudget';
 import { OpenAIEndpoint } from '../node/openAIEndpoint';
 import { AbstractOpenAICompatibleLMProvider, LanguageModelChatConfiguration, OpenAICompatibleLanguageModelChatInformation } from './abstractLanguageModelChatProvider';
 import { IBYOKStorageService } from './byokStorageService';
@@ -128,28 +128,36 @@ export const DEFAULT_OPENROUTER_MODEL_ID = PREFERRED_FREE_OPENROUTER_MODELS[0];
 export interface OpenRouterTrafficModel {
 	readonly id: string;
 	readonly arni_default?: boolean;
+	readonly arni_free?: boolean;
 	readonly arni_traffic?: 'green' | 'yellow' | 'red' | 'unknown';
 }
 
+function isFreeCatalogModel(model: OpenRouterTrafficModel): boolean {
+	return model.arni_free === true || model.id.endsWith(':free');
+}
+
 /**
- * The model a new chat should start on. Without traffic lights this stays the
- * historical default. A red light moves to the next preferred model that is not red.
+ * The model a new chat should start on, and what the Agents window shows while a chat's own
+ * model loads. Never a paid model: older backends marked the account's Bedrock model as the
+ * default, so chats started, or silently continued, on MiniMax M2.5 (2026-11-15).
+ * Without traffic lights this stays the historical default. A red light moves to the next
+ * preferred model that is not red, then to any free model that is not red.
  */
 export function preferredDefaultModelId(models: readonly OpenRouterTrafficModel[]): string {
-	const managedDefault = models.find(model => model.arni_default)?.id;
+	const managedDefault = models.find(model => model.arni_default && isFreeCatalogModel(model))?.id;
 	if (managedDefault) {
 		return managedDefault;
 	}
 	if (!models.some(model => model.arni_traffic)) {
 		return DEFAULT_OPENROUTER_MODEL_ID;
 	}
+	const live = (model: OpenRouterTrafficModel | undefined) => !!model && isFreeCatalogModel(model) && model.arni_traffic !== 'red';
 	for (const id of PREFERRED_FREE_OPENROUTER_MODELS) {
-		const model = models.find(item => item.id === id);
-		if (model && model.arni_traffic !== 'red') {
+		if (live(models.find(item => item.id === id))) {
 			return id;
 		}
 	}
-	return DEFAULT_OPENROUTER_MODEL_ID;
+	return models.find(live)?.id ?? DEFAULT_OPENROUTER_MODEL_ID;
 }
 
 /**
@@ -900,11 +908,11 @@ export class OpenRouterEndpoint extends OpenAIEndpoint {
 
 	override createRequestBody(options: ICreateEndpointBodyOptions): IEndpointBody {
 		const body = super.createRequestBody(options);
-		// The Arni proxy (Vercel) refuses bodies above 4.5 MB; OpenRouter itself has no such limit.
+		// The Arni proxy limits body size and total image size; OpenRouter itself does not.
 		if (!isOpenRouterBaseUrl(this.urlOrRequestMetadata)) {
-			const removed = fitImagesToRequestBudget(body, ARNI_PROXY_MAX_BODY_BYTES);
+			const removed = fitImagesToRequestBudget(body, ARNI_PROXY_IMAGE_BUDGET);
 			if (removed) {
-				this.logService.warn(`[Arni] Removed ${removed} earlier image(s) from the request to stay under the proxy size limit.`);
+				this.logService.warn(`[Arni] Removed ${removed} earlier image(s) from the request to stay under the proxy size limits.`);
 			}
 		}
 		return body;
