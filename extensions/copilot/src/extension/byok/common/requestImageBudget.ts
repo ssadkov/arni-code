@@ -5,11 +5,26 @@
 
 import type { IEndpointBody } from '../../../platform/networking/common/networking';
 
+/** Request limits that a proxy enforces on images in a Chat Completions body. */
+export interface IRequestImageBudget {
+	/** Serialized JSON body size, in bytes. */
+	readonly maxBodyBytes: number;
+	/** Decoded size of all embedded images together, in bytes. */
+	readonly maxImageBytes: number;
+	/** Number of images in one request. */
+	readonly maxImages: number;
+}
+
 /**
- * The Arni API runs on Vercel, which rejects request bodies above 4.5 MB with
- * `413 FUNCTION_PAYLOAD_TOO_LARGE`. Leave room for headers and rounding.
+ * The Arni API (`/api/chat/completions`) rejects a body above 3.8 MB with 413, and
+ * images above 2.5 MB in total or more than 20 with 400 `images_too_large`.
+ * Stay a little under each, so rounding and headers never tip a request over.
  */
-export const ARNI_PROXY_MAX_BODY_BYTES = 4_000_000;
+export const ARNI_PROXY_IMAGE_BUDGET: IRequestImageBudget = {
+	maxBodyBytes: 3_600_000,
+	maxImageBytes: 2_400_000,
+	maxImages: 20,
+};
 
 /** Text the model sees in place of an image dropped from the history. */
 export const OMITTED_IMAGE_TEXT = '[An image from earlier in this chat was removed so the request fits the size limit. View the file again if you need it.]';
@@ -25,14 +40,25 @@ function byteLength(value: unknown): number {
 	return encoder.encode(JSON.stringify(value)).byteLength;
 }
 
+/** Decoded size of a `data:` URL image; other URLs carry no bytes in the body. */
+function decodedImageBytes(part: IImagePart): number {
+	const url = part.image_url?.url;
+	if (typeof url !== 'string' || !url.startsWith('data:')) {
+		return 0;
+	}
+	const data = url.slice(url.indexOf(',') + 1);
+	const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+	return Math.floor(data.length * 3 / 4) - padding;
+}
+
 /**
  * Replaces Chat Completions image parts with {@link OMITTED_IMAGE_TEXT}, oldest first,
- * until the serialized body fits {@link maxBytes}. Every image is resent with every turn,
- * so a couple of full-size pictures in the history would otherwise fail each later request.
+ * until the body fits every limit in {@link budget}. Every image is resent with every turn,
+ * so a few pictures in the history would otherwise fail each later request.
  * @returns How many images were removed.
  */
-export function fitImagesToRequestBudget(body: IEndpointBody, maxBytes: number): number {
-	const images: { content: unknown[]; index: number }[] = [];
+export function fitImagesToRequestBudget(body: IEndpointBody, budget: IRequestImageBudget): number {
+	const images: { content: unknown[]; index: number; part: IImagePart }[] = [];
 	for (const message of body.messages ?? []) {
 		const content: unknown = message?.content;
 		if (!Array.isArray(content)) {
@@ -40,7 +66,7 @@ export function fitImagesToRequestBudget(body: IEndpointBody, maxBytes: number):
 		}
 		content.forEach((part, index) => {
 			if ((part as IImagePart | undefined)?.type === 'image_url') {
-				images.push({ content, index });
+				images.push({ content, index, part: part as IImagePart });
 			}
 		});
 	}
@@ -50,13 +76,17 @@ export function fitImagesToRequestBudget(body: IEndpointBody, maxBytes: number):
 
 	const placeholder = { type: 'text', text: OMITTED_IMAGE_TEXT };
 	const placeholderBytes = byteLength(placeholder);
-	let total = byteLength(body);
+	let bodyBytes = byteLength(body);
+	let imageBytes = images.reduce((sum, image) => sum + decodedImageBytes(image.part), 0);
+	let count = images.length;
 	let removed = 0;
-	for (const { content, index } of images) {
-		if (total <= maxBytes) {
+	for (const { content, index, part } of images) {
+		if (bodyBytes <= budget.maxBodyBytes && imageBytes <= budget.maxImageBytes && count <= budget.maxImages) {
 			break;
 		}
-		total -= byteLength(content[index]) - placeholderBytes;
+		bodyBytes -= byteLength(part) - placeholderBytes;
+		imageBytes -= decodedImageBytes(part);
+		count--;
 		content[index] = { ...placeholder };
 		removed++;
 	}

@@ -251,7 +251,8 @@ describe('Model catalog source', () => {
 			expect({ ids: models.map(model => model.id), headers: fetchMock.mock.calls[0][1].headers }).toEqual({
 				ids: ['us.anthropic.second-v1:0', 'us.anthropic.test-v1:0'], headers: { Authorization: 'Bearer test-account-token' },
 			});
-			expect(models.filter(model => model.isDefault).map(model => model.id)).toEqual(['us.anthropic.test-v1:0']);
+			// A paid model never becomes the default, even when an older backend marks it so.
+			expect(models.filter(model => model.isDefault).map(model => model.id)).toEqual([]);
 		} finally { provider.dispose(); vi.unstubAllGlobals(); }
 	});
 
@@ -332,5 +333,18 @@ describe('OpenRouter free-model ranking', () => {
 			{ id: 'poolside/laguna-s-2.1:free', arni_traffic: 'green' },
 			{ id: 'cohere/north-mini-code:free', arni_traffic: 'green' },
 		])).toBe('poolside/laguna-s-2.1:free');
+	});
+
+	it('never starts a chat on a paid model, even one the backend marks as default', () => {
+		expect([
+			preferredDefaultModelId([
+				{ id: 'minimax.minimax-m2.5', arni_default: true, arni_traffic: undefined },
+				{ id: 'google/gemma-4-31b-it:free', arni_free: true, arni_traffic: 'green' },
+			]),
+			preferredDefaultModelId([
+				{ id: 'minimax.minimax-m2.5', arni_default: true },
+				{ id: 'google/gemma-4-31b-it:free', arni_free: true, arni_default: true, arni_traffic: 'green' },
+			]),
+		]).toEqual(['google/gemma-4-31b-it:free', 'google/gemma-4-31b-it:free']);
 	});
 });
