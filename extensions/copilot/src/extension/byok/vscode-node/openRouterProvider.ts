@@ -8,12 +8,14 @@ import { IDomainService } from '../../../platform/endpoint/common/domainService'
 import { IChatModelInformation, ModelSupportedEndpoint } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService } from '../../../platform/networking/common/fetcherService';
+import { IChatEndpoint, ICreateEndpointBodyOptions, IEndpointBody } from '../../../platform/networking/common/networking';
 
 import { IChatWebSocketManager } from '../../../platform/networking/node/chatWebSocketManager';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITokenizerProvider } from '../../../platform/tokenizer/node/tokenizer';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { BYOKModelCapabilities } from '../common/byokProvider';
+import { ARNI_PROXY_MAX_BODY_BYTES, fitImagesToRequestBudget } from '../common/requestImageBudget';
 import { OpenAIEndpoint } from '../node/openAIEndpoint';
 import { AbstractOpenAICompatibleLMProvider, LanguageModelChatConfiguration, OpenAICompatibleLanguageModelChatInformation } from './abstractLanguageModelChatProvider';
 import { IBYOKStorageService } from './byokStorageService';
@@ -894,6 +896,24 @@ export class OpenRouterEndpoint extends OpenAIEndpoint {
 	 */
 	protected override get useMessagesApi(): boolean {
 		return !!this.modelMetadata.supported_endpoints?.includes(ModelSupportedEndpoint.Messages);
+	}
+
+	override createRequestBody(options: ICreateEndpointBodyOptions): IEndpointBody {
+		const body = super.createRequestBody(options);
+		// The Arni proxy (Vercel) refuses bodies above 4.5 MB; OpenRouter itself has no such limit.
+		if (!isOpenRouterBaseUrl(this.urlOrRequestMetadata)) {
+			const removed = fitImagesToRequestBudget(body, ARNI_PROXY_MAX_BODY_BYTES);
+			if (removed) {
+				this.logService.warn(`[Arni] Removed ${removed} earlier image(s) from the request to stay under the proxy size limit.`);
+			}
+		}
+		return body;
+	}
+
+	override cloneWithTokenOverride(modelMaxPromptTokens: number): IChatEndpoint {
+		// Keep the clone an OpenRouterEndpoint so it also keeps the request size guard.
+		const newModelInfo = { ...this.modelMetadata, maxInputTokens: modelMaxPromptTokens };
+		return this.instantiationService.createInstance(OpenRouterEndpoint, newModelInfo, this._apiKey, this._modelUrl);
 	}
 
 	public override getExtraHeaders(): Record<string, string> {

@@ -95,9 +95,10 @@ export async function resizeImage(data: Uint8Array | string, mimeType?: string):
  * re-encoded as PNG.
  * @param data The image bytes.
  * @param maxSize The maximum width or height of the thumbnail, in pixels.
+ * @param jpegQuality When set, always encode a JPEG of this quality (0–1) over a white background.
  * @returns A promise that resolves to a {@link Blob} of the thumbnail, or `undefined` on failure.
  */
-function createImageThumbnail(data: Uint8Array, maxSize: number): Promise<Blob | undefined> {
+function createImageThumbnail(data: Uint8Array, maxSize: number, jpegQuality?: number): Promise<Blob | undefined> {
 	return new Promise((resolve) => {
 		const blob = new Blob([data as Uint8Array<ArrayBuffer>]);
 		const img = document.createElement('img');
@@ -120,10 +121,15 @@ function createImageThumbnail(data: Uint8Array, maxSize: number): Promise<Blob |
 				return;
 			}
 
+			if (jpegQuality !== undefined) {
+				// JPEG has no transparency; without a fill, transparent pixels turn black.
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, targetWidth, targetHeight);
+			}
 			ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 			// JPEG (FF D8 FF) re-encodes far smaller than PNG for photos, so keep it as JPEG.
-			const outputMimeType = data.length >= 3 && data[0] === 0xFF && data[1] === 0xD8 && data[2] === 0xFF ? 'image/jpeg' : 'image/png';
-			canvas.toBlob(thumbnail => resolve(thumbnail ?? undefined), outputMimeType);
+			const isJpeg = jpegQuality !== undefined || (data.length >= 3 && data[0] === 0xFF && data[1] === 0xD8 && data[2] === 0xFF);
+			canvas.toBlob(thumbnail => resolve(thumbnail ?? undefined), isJpeg ? 'image/jpeg' : 'image/png', jpegQuality);
 		};
 		img.onerror = () => {
 			URL.revokeObjectURL(url);
@@ -270,4 +276,17 @@ CommandsRegistry.registerCommand('_chat.resizeImage', async (_accessor, data: Ui
 		data = data.buffer;
 	}
 	return resizeImage(data, mimeType);
+});
+
+/**
+ * Returns a JPEG of at most `maxSize` pixels on its longer side, or `undefined` if the image cannot be decoded.
+ * Tools use it for the copy of an image they hand to the model: the history resends that copy with every
+ * request, so a full-size PNG would make later requests too large.
+ */
+CommandsRegistry.registerCommand('_chat.createModelImagePreview', async (_accessor, data: Uint8Array | VSBuffer, maxSize: number, quality: number): Promise<Uint8Array | undefined> => {
+	if (data instanceof VSBuffer) {
+		data = data.buffer;
+	}
+	const preview = await raceTimeout(createImageThumbnail(data, maxSize, quality), THUMBNAIL_DECODE_TIMEOUT_MS);
+	return preview ? new Uint8Array(await preview.arrayBuffer()) : undefined;
 });

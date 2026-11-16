@@ -79,9 +79,29 @@ export class ArniImageTool implements vscode.LanguageModelTool<ArniImageInput> {
 		await imageTarget(root, input.savePath);
 		await fs.writeFile(target, bytes, { flag: 'wx' });
 		try { await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(target)); } catch { /* Artifact remains usable without a preview editor. */ }
+		const preview = await modelPreview(bytes);
 		return new vscode.LanguageModelToolResult([
 			new vscode.LanguageModelTextPart(vscode.l10n.t('Generated PNG saved at {0}. Model: Stable Image Core; price: $0.04. Use this project asset in the page.', target)),
-			...(bytes.length <= 2_500_000 ? [vscode.LanguageModelDataPart.image(bytes, 'image/png')] : []),
+			...(preview ? [vscode.LanguageModelDataPart.image(preview, 'image/jpeg')] : []),
 		]);
+	}
+}
+
+/** Largest side and quality of the copy the model sees: legible enough to judge the picture, ~100–250 KB. */
+const previewMaxSize = 1024;
+const previewQuality = 0.85;
+const previewMaxBytes = 600_000;
+
+/**
+ * The chat history resends this image with every later request, and the Arni API refuses bodies over 4.5 MB.
+ * The full PNG (up to 3 MB, a third more as base64) broke the chat after one or two pictures, so send a small JPEG,
+ * or nothing when it cannot be made; the file on disk keeps full quality.
+ */
+async function modelPreview(bytes: Uint8Array): Promise<Uint8Array | undefined> {
+	try {
+		const preview = await vscode.commands.executeCommand<Uint8Array | undefined>('_chat.createModelImagePreview', bytes, previewMaxSize, previewQuality);
+		return preview instanceof Uint8Array && preview.byteLength > 0 && preview.byteLength <= previewMaxBytes ? preview : undefined;
+	} catch {
+		return undefined;
 	}
 }
