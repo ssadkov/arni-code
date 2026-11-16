@@ -33,7 +33,9 @@ describe('Arni generated image tool', () => {
 		await expect(imageTarget(api.root, 'linked/asset.png')).rejects.toThrow();
 		expect(await fs.readFile(path.join(api.root, 'existing.png'), 'utf8')).toBe('keep');
 	});
-	it('saves a PNG, previews it and exposes it to the vision model using signed-in auth', async () => {
+	it('saves a PNG, previews it and exposes a small JPEG copy to the vision model using signed-in auth', async () => {
+		const jpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]);
+		api.open.mockImplementation(async (command: string) => command === '_chat.createModelImagePreview' ? jpeg : undefined);
 		const calls: Array<{ url: string; options: any }> = [];
 		const fetcher = { fetch: vi.fn(async (url: string, options: any) => { calls.push({ url, options }); return options.method === 'POST'
 			? { ok: true, json: async () => ({ id: 'image-123' }) }
@@ -46,10 +48,18 @@ describe('Arni generated image tool', () => {
 		expect(calls[0].options.headers.Authorization).toBe('Bearer test-only');
 		expect(calls[0].options.retryFallbacks).toBe(false);
 		expect(calls[0].options.headers['Idempotency-Key']).toBe(imageRequestKey(api.root, input));
-		expect(result.content).toHaveLength(2);
-		expect((result.content[1] as any).mimeType).toBe('image/png');
+		expect(api.open).toHaveBeenCalledWith('_chat.createModelImagePreview', png, 1024, 0.85);
+		expect(result.content.slice(1)).toEqual([{ data: jpeg, mimeType: 'image/jpeg' }]);
 		await expect(tool.invoke({ input } as any, { isCancellationRequested: false } as any)).rejects.toThrow();
 		expect(fetcher.fetch).toHaveBeenCalledTimes(2);
+	});
+	it('never sends the full PNG to the model when no preview can be made', async () => {
+		const fetcher = { fetch: vi.fn(async (_url: string, options: any) => options.method === 'POST'
+			? { ok: true, json: async () => ({ id: 'image-123' }) }
+			: { ok: true, body: (async function* () { yield png; })() }) };
+		const tool = new ArniImageTool(fetcher as any, async () => ({ apiBase: 'https://backend.invalid/api', token: 'test-only' }));
+		const result = await tool.invoke({ input: { prompt: 'A hero illustration', savePath: 'hero.png' } } as any, { isCancellationRequested: false } as any);
+		expect(result.content).toHaveLength(1);
 	});
 	it('recovers a failed download using the original key and never changes origin', async () => {
 		let failed = true; const keys: string[] = [];
