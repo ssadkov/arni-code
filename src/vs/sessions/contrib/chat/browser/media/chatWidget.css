@@ -553,6 +553,10 @@
 	font-size: 12px;
 }
 
+.agent-first-model-chip.hidden {
+	display: none;
+}
+
 /* First run: the starter gallery is the only way in. The folder picker and
  * composer come back once the user starts a project or opts to use an
  * existing folder. */

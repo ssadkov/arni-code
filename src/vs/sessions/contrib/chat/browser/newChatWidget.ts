@@ -542,7 +542,12 @@ export class NewChatWidget extends Disposable {
 		const firstScreenHint = dom.append(firstScreenCopy, dom.$('p.agent-first-hint'));
 		firstScreenHint.textContent = localize('agentFirst.hint', "Напишите, что сделать. Агент создаст и поправит файлы в этой папке.");
 		const firstScreenChip = dom.append(firstScreenCopy, dom.$('span.agent-first-model-chip'));
-		firstScreenChip.textContent = localize('agentFirst.modelChip', "Модель Nemotron — бесплатная, иногда отвечает до минуты");
+		firstScreenChip.textContent = localize('agentFirst.modelChip', "Бесплатная модель, ответ может занять время");
+		// Only shown while a free model is selected; the provider marks those with "Бесплатно" in the model name.
+		this._register(autorun(reader => {
+			const model = this._newChatInput.selectedModelState.read(reader).currentModel;
+			firstScreenChip.classList.toggle('hidden', !model?.metadata.name.includes('Бесплатно'));
+		}));
 		const updateFirstScreenCopy = () => {
 			const hasFolder = !!this._workspacePicker.selectedFolderUri;
 			firstScreenCopy.classList.toggle('hidden', !hasFolder);
