@@ -40,6 +40,11 @@ function isWindowNearLimit(window: IArniBudgetWindow): boolean {
 	return window.usedMicros >= window.limitMicros * WARNING_SHARE || window.requests >= window.requestLimit * WARNING_SHARE;
 }
 
+/** The whole remaining balance of an active budget; zero when access is paused or expired. */
+export function arniBudgetTotalMicros(budget: IArniBudget): number {
+	return budget.enabled && !budget.expired ? Math.max(0, budget.balanceMicros) : 0;
+}
+
 /** What can be spent right now: the smallest of the balance and both rate windows. */
 export function arniBudgetAvailability(budget: IArniBudget): IArniBudgetAvailability {
 	let availableMicros = Math.max(0, budget.balanceMicros);

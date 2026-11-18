@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { arniBudgetAvailability, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
+import { arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
 
 suite('Sessions - Arni budget display', () => {
 
@@ -34,6 +34,21 @@ suite('Sessions - Arni budget display', () => {
 
 	test('tolerates a backend without windows and a negative balance', () => {
 		assert.deepStrictEqual(arniBudgetAvailability({ balanceMicros: -5, enabled: true, expired: false, validUntil: '' }), { availableMicros: 0, limit: 'balance', level: 'exhausted' });
+	});
+
+	test('the whole balance is shown even when a rate window caps what is available now', () => {
+		const capped = budget(15_000_000, window(0, 2_000_000), window(0, 5_000_000));
+		assert.deepStrictEqual([
+			{ total: arniBudgetTotalMicros(capped), available: arniBudgetAvailability(capped).availableMicros },
+			arniBudgetTotalMicros({ ...capped, enabled: false }),
+			arniBudgetTotalMicros({ ...capped, expired: true }),
+			arniBudgetTotalMicros({ ...capped, balanceMicros: -5 }),
+		], [
+			{ total: 15_000_000, available: 2_000_000 },
+			0,
+			0,
+			0,
+		]);
 	});
 
 	test('window share follows money or requests, whichever is larger', () => {
