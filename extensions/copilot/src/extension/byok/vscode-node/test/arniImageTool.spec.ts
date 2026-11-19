@@ -46,6 +46,8 @@ describe('Arni generated image tool', () => {
 		expect(await fs.readFile(path.join(api.root, input.savePath))).toEqual(png);
 		expect(api.open).toHaveBeenCalledWith('vscode.open', path.join(api.root, input.savePath));
 		expect(calls[0].options.headers.Authorization).toBe('Bearer test-only');
+		expect(calls[0].options.headers['X-Arni-Client']).toBe('arni-code');
+		expect(calls[0].options.headers['X-Arni-Client']).toBe('arni-code');
 		expect(calls[0].options.retryFallbacks).toBe(false);
 		expect(calls[0].options.headers['Idempotency-Key']).toBe(imageRequestKey(api.root, input));
 		expect(api.open).toHaveBeenCalledWith('_chat.createModelImagePreview', png, 1024, 0.85);

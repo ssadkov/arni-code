@@ -17,7 +17,8 @@ export class ArniProvider implements AIProvider {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'X-Arni-Client': 'arni-code'
                 },
                 body: JSON.stringify({
                     model: model,
