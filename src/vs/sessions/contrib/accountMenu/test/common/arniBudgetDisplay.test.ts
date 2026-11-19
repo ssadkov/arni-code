@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { arniBudgetAvailability, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
+import { arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowLimits, arniBudgetWindowRemainingMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
 
 suite('Sessions - Arni budget display', () => {
 
@@ -34,6 +34,39 @@ suite('Sessions - Arni budget display', () => {
 
 	test('tolerates a backend without windows and a negative balance', () => {
 		assert.deepStrictEqual(arniBudgetAvailability({ balanceMicros: -5, enabled: true, expired: false, validUntil: '' }), { availableMicros: 0, limit: 'balance', level: 'exhausted' });
+	});
+
+	test('the whole balance is shown even when a rate window caps what is available now', () => {
+		const capped = budget(15_000_000, window(0, 2_000_000), window(0, 5_000_000));
+		assert.deepStrictEqual([
+			{ total: arniBudgetTotalMicros(capped), available: arniBudgetAvailability(capped).availableMicros },
+			arniBudgetTotalMicros({ ...capped, enabled: false }),
+			arniBudgetTotalMicros({ ...capped, expired: true }),
+			arniBudgetTotalMicros({ ...capped, balanceMicros: -5 }),
+		], [
+			{ total: 15_000_000, available: 2_000_000 },
+			0,
+			0,
+			0,
+		]);
+	});
+
+	test('a window limits spending only when it is tighter than the balance', () => {
+		// $2.90 left under $10 windows: the windows are only ceilings that cannot bind yet.
+		const ceiling = budget(2_900_000, window(0, 10_000_000), window(760_000, 10_000_000));
+		const binding = budget(15_000_000, window(0, 2_000_000), window(500_000, 5_000_000));
+		const requestsUsedUp = budget(15_000_000, window(0, 2_000_000, 150), window(0, 5_000_000));
+		assert.deepStrictEqual([
+			[arniBudgetWindowLimits(ceiling, ceiling.fiveHour!), arniBudgetWindowLimits(ceiling, ceiling.weekly!)],
+			[arniBudgetWindowLimits(binding, binding.fiveHour!), arniBudgetWindowLimits(binding, binding.weekly!)],
+			arniBudgetWindowLimits(requestsUsedUp, requestsUsedUp.fiveHour!),
+			[arniBudgetWindowRemainingMicros(binding.fiveHour!), arniBudgetWindowRemainingMicros(binding.weekly!), arniBudgetWindowRemainingMicros(requestsUsedUp.fiveHour!)],
+		], [
+			[false, false],
+			[true, true],
+			true,
+			[2_000_000, 4_500_000, 0],
+		]);
 	});
 
 	test('window share follows money or requests, whichever is larger', () => {

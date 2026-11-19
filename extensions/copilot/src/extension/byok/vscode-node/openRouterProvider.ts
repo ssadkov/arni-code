@@ -800,9 +800,11 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		const free = openRouterModelData.arni_free ?? isFreeOpenRouterModel(openRouterModelData);
 		const priceLabel = !free && rates?.every(value => Number.isFinite(value) && value >= 0)
 			? vscode.l10n.t(' · {0} / {1} за 1М вх./вых.', this.money(rates[0] * 1_000_000, 6), this.money(rates[1] * 1_000_000, 6)) : '';
+		const modalities = openRouterModelData.architecture?.input_modalities;
 		const labels = openRouterModelData.arni_provider || free ? [
 			free ? vscode.l10n.t('Бесплатно · {0}', this.money(0)) : vscode.l10n.t('Платная'),
-			...(openRouterModelData.architecture?.input_modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : []),
+			// Say so up front: sending a picture to a text-only model fails with "vision_unavailable". An older backend sends no modalities and gets no label.
+			...(modalities?.includes('image') ? [vscode.l10n.t('Изображения')] : modalities ? [vscode.l10n.t('Без изображений')] : []),
 			...(openRouterModelData.arni_cache ? [vscode.l10n.t('Кэш')] : []),
 			// The API answers a red free model with another free model; say so before the user picks it.
 			...(free && openRouterModelData.arni_traffic === 'red' ? [vscode.l10n.t('Перегружена, ответит другая')] : []),

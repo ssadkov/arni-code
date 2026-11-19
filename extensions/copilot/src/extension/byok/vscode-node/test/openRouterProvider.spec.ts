@@ -70,6 +70,21 @@ describe('OpenRouterLMProvider context window (issue #324671)', () => {
 		expect(caps?.name.replace(/\s/g, ' ')).toBe('OpenRouter · Vision · Бесплатно · 0,00 ₽ · Изображения');
 		expect(caps?.vision).toBe(true);
 	});
+	it('tells in the picker which models cannot take pictures, and stays silent when the backend does not say', () => {
+		const label = (architecture?: { input_modalities: string[] }, extra: object = {}) => createProvider().resolveCapabilities({ id: 'minimax.test', name: 'MiniMax', arni_provider: 'bedrock', supported_parameters: ['tools'],
+			context_length: 131072, top_provider: { context_length: 131072 }, pricing: { prompt: '0.0000003', completion: '0.0000012' }, ...(architecture ? { architecture } : {}), ...extra })?.name.replace(/\s/g, ' ');
+		expect([
+			label({ input_modalities: ['text'] }),
+			label({ input_modalities: ['text', 'image'] }),
+			label(),
+			label({ input_modalities: ['text'] }, { arni_provider: 'openrouter', arni_free: true, pricing: { prompt: '0', completion: '0' } }),
+		]).toEqual([
+			'AWS Bedrock · MiniMax · $0.30 / $1.20 за 1М вх./вых. · Платная · Без изображений',
+			'AWS Bedrock · MiniMax · $0.30 / $1.20 за 1М вх./вых. · Платная · Изображения',
+			'AWS Bedrock · MiniMax · $0.30 / $1.20 за 1М вх./вых. · Платная',
+			'OpenRouter · MiniMax · Бесплатно · 0,00 ₽ · Без изображений',
+		]);
+	});
 	it('warns in the picker that a red free model is answered by another one', () => {
 		const label = (arni_traffic: string) => createProvider().resolveCapabilities({ id: 'test/busy:free', name: 'Busy', arni_provider: 'openrouter', arni_free: true, arni_traffic,
 			context_length: 131072, supported_parameters: ['tools'], top_provider: { context_length: 131072 }, pricing: { prompt: '0', completion: '0' } })?.name.replace(/\s/g, ' ');
