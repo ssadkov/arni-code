@@ -822,8 +822,12 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	protected override async createOpenAIEndPoint(model: OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>): Promise<OpenAIEndpoint> {
 		const modelInfo = this.getModelInfo(model.id, model.url);
 		const chatId = (model.configuration as LanguageModelChatConfiguration & { arniChatId?: string } | undefined)?.arniChatId;
-		if (chatId && !isOpenRouterBaseUrl(model.url)) {
-			modelInfo.requestHeaders = { ...modelInfo.requestHeaders, 'X-Arni-Chat-Id': chatId };
+		if (!isOpenRouterBaseUrl(model.url)) {
+			modelInfo.requestHeaders = {
+				...modelInfo.requestHeaders,
+				'X-Arni-Client': 'arni-code',
+				...(chatId ? { 'X-Arni-Chat-Id': chatId } : {}),
+			};
 		}
 		// The Arni proxy exposes only an OpenAI-compatible `/chat/completions`
 		// route, so Anthropic's native Messages API is reachable solely when

@@ -65,7 +65,7 @@ export class ArniImageTool implements vscode.LanguageModelTool<ArniImageInput> {
 		const target = await imageTarget(root, input.savePath);
 		const auth = await this.authorize();
 		if (token.isCancellationRequested) { throw new vscode.CancellationError(); }
-		const headers = { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json', 'Idempotency-Key': imageRequestKey(root, input) };
+		const headers = { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json', 'Idempotency-Key': imageRequestKey(root, input), 'X-Arni-Client': 'arni-code' };
 		// Retry recovery uses the same key and same origin; never fall back to another backend after dispatch.
 		const response = await this.fetcher.fetch(`${auth.apiBase}/images/generations`, { method: 'POST', headers,
 			body: JSON.stringify({ prompt: input.prompt, aspect_ratio: input.aspectRatio || '16:9', n: 1 }), retryFallbacks: false, timeout: 240_000, callSite: 'arni-image-generation' });
