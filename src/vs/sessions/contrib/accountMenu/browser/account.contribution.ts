@@ -24,7 +24,7 @@ import { fillInActionBarActions } from '../../../../platform/actions/browser/men
 import { $, addDisposableListener, append, clearNode, disposableWindowInterval, EventType, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { ArniBillingRates, arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
+import { ArniBillingRates, arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowLimits, arniBudgetWindowRemainingMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
 import { ActionBar, ActionsOrientation } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Action, IAction, Separator, toAction } from '../../../../base/common/actions.js';
@@ -717,12 +717,15 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		return formatArniMoney(micros, this.configurationService.getValue<string>('arni.billing.displayCurrency'), this.arniAccount?.billingRates, fractionDigits);
 	}
 
-	private renderArniBudgetWindow(parent: HTMLElement, label: string, budgetWindow: IArniBudgetWindow): void {
+	private renderArniBudgetWindow(parent: HTMLElement, label: string, budgetWindow: IArniBudgetWindow, budget: IArniBudget): void {
 		const row = append(parent, $('.arni-budget-window'));
 		const reset = budgetWindow.resetsAt
 			? localize('arni.windowReset', "сброс {0}", safeIntl.DateTimeFormat(language, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).value.format(new Date(budgetWindow.resetsAt)))
 			: localize('arni.windowNotStarted', "начнётся с первого запроса");
-		append(row, $('div')).textContent = localize('arni.windowUsage', "{0}: {1} из {2} · запросы {3} из {4} · {5}", label, this.formatArniAmount(budgetWindow.usedMicros), this.formatArniAmount(budgetWindow.limitMicros), budgetWindow.requests, budgetWindow.requestLimit, reset);
+		// A window limit above the remaining balance is only a ceiling; saying "of 822 ₽" next to a 238 ₽ balance reads as money that is not there.
+		append(row, $('div')).textContent = arniBudgetWindowLimits(budget, budgetWindow)
+			? localize('arni.windowUsageLimiting', "{0}: потрачено {1} из {2} · можно ещё {3} · запросы {4} из {5} · {6}", label, this.formatArniAmount(budgetWindow.usedMicros), this.formatArniAmount(budgetWindow.limitMicros), this.formatArniAmount(arniBudgetWindowRemainingMicros(budgetWindow)), budgetWindow.requests, budgetWindow.requestLimit, reset)
+			: localize('arni.windowUsageCeiling', "{0}: потрачено {1} · лимит {2} выше остатка и не ограничивает · запросы {3} из {4} · {5}", label, this.formatArniAmount(budgetWindow.usedMicros), this.formatArniAmount(budgetWindow.limitMicros), budgetWindow.requests, budgetWindow.requestLimit, reset);
 		const share = arniBudgetWindowShare(budgetWindow);
 		const bar = append(row, $('.arni-budget-bar'));
 		bar.setAttribute('role', 'progressbar');
@@ -758,8 +761,8 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			if (arni.budget) {
 				append(summary, $('div')).textContent = localize('arni.budgetState', "Доступ к платным моделям: {0}",
 					arni.budget.expired ? localize('arni.expired', "срок истёк") : arni.budget.enabled ? localize('arni.enabled', "активен") : localize('arni.paused', "приостановлен"));
-				if (arni.budget.fiveHour) { this.renderArniBudgetWindow(summary, localize('arni.windowFiveHour', "5 часов"), arni.budget.fiveHour); }
-				if (arni.budget.weekly) { this.renderArniBudgetWindow(summary, localize('arni.windowWeekly', "Неделя"), arni.budget.weekly); }
+				if (arni.budget.fiveHour) { this.renderArniBudgetWindow(summary, localize('arni.windowFiveHour', "5 часов"), arni.budget.fiveHour, arni.budget); }
+				if (arni.budget.weekly) { this.renderArniBudgetWindow(summary, localize('arni.windowWeekly', "Неделя"), arni.budget.weekly, arni.budget); }
 			}
 			if (arni.chatCostMicros !== undefined) {
 				append(summary, $('div')).textContent = localize('arni.chatSpend', "Последний чат: {0}", this.formatArniAmount(arni.chatCostMicros, 6));
