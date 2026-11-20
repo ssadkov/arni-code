@@ -254,3 +254,48 @@
 	font-size: var(--vscode-bodyFontSize-small, 12px);
 	color: var(--vscode-descriptionForeground);
 }
+
+/* Warns that a new project would hide the files already in the save location. */
+.starter-project-files-notice {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 12px;
+	padding: 12px 14px;
+	border: 1px solid var(--vscode-inputValidation-warningBorder);
+	border-radius: 8px;
+	background: var(--vscode-inputValidation-warningBackground);
+	color: var(--vscode-foreground);
+}
+
+.starter-project-files-notice-text {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.starter-project-files-notice-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.starter-project-use-folder {
+	padding: 7px 16px;
+	border: 0;
+	border-radius: 4px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.starter-project-use-folder:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.starter-project-use-folder:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}

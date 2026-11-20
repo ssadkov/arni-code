@@ -8,7 +8,7 @@ import * as dom from '../../../../base/browser/dom.js';
 import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Codicon } from '../../../../base/common/codicons.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { dirname, joinPath } from '../../../../base/common/resources.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -212,6 +212,10 @@ function getStarterIdeas(): readonly IStarterIdea[] {
 
 const CUSTOM_PROJECT_FOLDER_NAME = 'my-project';
 const MAX_FOLDER_NAME_ATTEMPTS = 50;
+/** How many found file names the warning lists before trailing off. */
+const MAX_LISTED_FILES = 3;
+/** System files Windows and macOS drop into any folder; they are not the user's work. */
+const SYSTEM_FILE_NAMES = new Set(['desktop.ini', 'thumbs.db']);
 
 /** Registered by the Copilot extension's OpenRouter provider. */
 const JOIN_PRO_WAITLIST_COMMAND = 'arni.joinProWaitlist';
@@ -230,6 +234,9 @@ export class StarterProjectGallery extends Disposable {
 	private readonly _moreButton: HTMLButtonElement;
 	private readonly _path: HTMLElement;
 	private readonly _status: HTMLElement;
+	private readonly _filesNoticeHost: HTMLElement;
+	/** Shown when the save location already holds the user's own files. */
+	private readonly _filesNotice = this._register(new MutableDisposable<DisposableStore>());
 	private _parentUri: URI;
 	/** A folder this gallery created whose task has not started yet, reused on retry. */
 	private _pendingFolder: { readonly uri: URI; readonly prompt: string; readonly professionId: string } | undefined;
@@ -237,8 +244,11 @@ export class StarterProjectGallery extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		/** Opens a session in the folder with `prompt` in the composer; sends it when `submit` is set. */
-		private readonly _startProject: (folderUri: URI, prompt: string, professionId: string, submit: boolean) => Promise<void>,
+		/**
+		 * Opens a session in the folder with `prompt` in the composer; sends it when `submit` is set.
+		 * Without `professionId` the session keeps the agent the user already has selected.
+		 */
+		private readonly _startProject: (folderUri: URI, prompt: string, professionId: string | undefined, submit: boolean) => Promise<void>,
 		/** Opens a chat without a folder with `prompt` in the composer. */
 		private readonly _startTask: (prompt: string, professionId: string) => Promise<void>,
 		/** Hides the gallery and returns to the plain chat. */
@@ -291,6 +301,9 @@ export class StarterProjectGallery extends Disposable {
 				void this._createFromIdea();
 			}
 		}));
+		// The warning answers the idea as it was when Create was pressed.
+		this._register(dom.addDisposableListener(this._ideaInput, dom.EventType.INPUT, () => this._filesNotice.clear()));
+		this._filesNoticeHost = dom.append(this.element, dom.$('.starter-project-files-notice-host'));
 
 		dom.append(this.element, dom.$('p.starter-project-cards-heading')).textContent = localize('starterProjects.readyIdeas', "Или начните с готовой идеи:");
 		this._cards = dom.append(this.element, dom.$('.starter-project-cards'));
@@ -385,6 +398,7 @@ export class StarterProjectGallery extends Disposable {
 			});
 			const selected = result?.[0];
 			if (selected?.scheme === 'file') {
+				this._filesNotice.clear();
 				this._parentUri = selected;
 				this._storageService.store(STARTER_PROJECT_PARENT_KEY, selected.toString(), StorageScope.APPLICATION, StorageTarget.MACHINE);
 				this._path.textContent = selected.fsPath;
@@ -401,9 +415,88 @@ export class StarterProjectGallery extends Disposable {
 			this._ideaInput.focus();
 			return;
 		}
+		if (this._busy) {
+			return;
+		}
+		this._filesNotice.clear();
+		// A project lives in a new empty subfolder, so files already in the save
+		// location stay out of the agent's reach. People who pointed the location
+		// at their files mean to work with them: ask before hiding them.
+		const files = await this._listUserFiles(this._parentUri);
+		if (files.length > 0) {
+			this._showFilesNotice(idea, files);
+			return;
+		}
+		await this._createCustomProject(idea);
+	}
+
+	private async _createCustomProject(idea: string): Promise<void> {
 		// The user wrote the task and pressed Create, so it is sent right away.
 		const title = localize('starterProjects.custom.title', "Мой проект");
 		await this._createProject(CUSTOM_PROJECT_FOLDER_NAME, getProjectRulesFile(title, getWebPageRules()), idea, 'programmer', true);
+	}
+
+	/** Names of the user's own files directly in `folder`; subfolders and system files do not count. */
+	private async _listUserFiles(folder: URI): Promise<string[]> {
+		try {
+			const stat = await this._fileService.resolve(folder);
+			return (stat.children ?? [])
+				.filter(child => !child.isDirectory && !child.name.startsWith('.') && !SYSTEM_FILE_NAMES.has(child.name.toLowerCase()))
+				.map(child => child.name);
+		} catch {
+			// The location does not exist yet (the default one is created with the first project).
+			return [];
+		}
+	}
+
+	private _showFilesNotice(idea: string, files: readonly string[]): void {
+		const store = new DisposableStore();
+		this._filesNotice.value = store;
+		const notice = dom.append(this._filesNoticeHost, dom.$('.starter-project-files-notice'));
+		store.add(toDisposable(() => notice.remove()));
+		notice.setAttribute('role', 'alert');
+		const listed = files.slice(0, MAX_LISTED_FILES).join(', ');
+		dom.append(notice, dom.$('p.starter-project-files-notice-text')).textContent = files.length > MAX_LISTED_FILES
+			? localize('starterProjects.filesFoundMore', "В папке {0} уже есть ваши файлы: {1} и ещё {2}. Новый проект создаст рядом пустую папку, и агент этих файлов не увидит.", this._parentUri.fsPath, listed, files.length - MAX_LISTED_FILES)
+			: localize('starterProjects.filesFound', "В папке {0} уже есть ваши файлы: {1}. Новый проект создаст рядом пустую папку, и агент этих файлов не увидит.", this._parentUri.fsPath, listed);
+		const actions = dom.append(notice, dom.$('.starter-project-files-notice-actions'));
+		const useFolder = dom.append(actions, dom.$('button.starter-project-use-folder')) as HTMLButtonElement;
+		useFolder.type = 'button';
+		useFolder.textContent = localize('starterProjects.useFolder', "Работать с файлами этой папки");
+		const createAnyway = dom.append(actions, dom.$('button.starter-project-link.starter-project-create-anyway')) as HTMLButtonElement;
+		createAnyway.type = 'button';
+		createAnyway.textContent = localize('starterProjects.createAnyway', "Всё равно создать новый проект");
+		store.add(dom.addDisposableListener(useFolder, dom.EventType.CLICK, () => void this._startInParent(idea)));
+		store.add(dom.addDisposableListener(createAnyway, dom.EventType.CLICK, () => {
+			if (!this._busy) {
+				this._filesNotice.clear();
+				void this._createCustomProject(idea);
+			}
+		}));
+		useFolder.focus();
+	}
+
+	/** Opens the chat right in the save location, with no project rules and the agent the user already chose. */
+	private async _startInParent(idea: string): Promise<void> {
+		if (this._busy) {
+			return;
+		}
+		this._filesNotice.clear();
+		this._busy = true;
+		this.element.classList.add('busy');
+		this._ideaButton.disabled = true;
+		this._status.textContent = localize('starterProjects.openingFolder', "Открываем чат в папке {0}…", this._parentUri.fsPath);
+		try {
+			await this._startProject(this._parentUri, idea, undefined, true);
+			this._ideaInput.value = '';
+			this._status.textContent = '';
+		} catch (error) {
+			this._status.textContent = localize('starterProjects.folderChatFailed', "Не удалось открыть чат в папке: {0}", error instanceof Error ? error.message : String(error));
+		} finally {
+			this._busy = false;
+			this.element.classList.remove('busy');
+			this._ideaButton.disabled = false;
+		}
 	}
 
 	private async _startIdea(idea: IStarterIdea): Promise<void> {
