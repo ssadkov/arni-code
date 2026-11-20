@@ -103,6 +103,16 @@
 	border-bottom: 1px solid var(--vscode-widget-border);
 }
 
+.agent-sessions-workbench .arni-billing-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--vscode-spacing-size60);
+}
+
+.agent-sessions-workbench .arni-billing-links button {
+	flex: 1 1 auto;
+}
+
 .agent-sessions-workbench .arni-account-summary button {
 	background: var(--vscode-button-secondaryBackground);
 	color: var(--vscode-button-secondaryForeground);

@@ -49,6 +49,7 @@ import { IChatDashboardService } from '../../../browser/chatDashboardService.js'
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
 import { AICustomizationManagementCommands } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.js';
@@ -327,6 +328,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IProductService private readonly productService: IProductService,
+		@IOpenerService private readonly openerService: IOpenerService,
 	) {
 		super(undefined, action, options);
 		this.lastCodexAccount = this.codexAccountService.account;
@@ -749,7 +751,9 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				const panelAvailability = arniBudgetAvailability(panelBudget);
 				const validUntil = new Date(panelBudget.validUntil);
 				if (!Number.isNaN(validUntil.getTime())) {
-					append(summary, $('div')).textContent = localize('arni.validUntil', "Действует до {0}", safeIntl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric' }).value.format(validUntil));
+					append(summary, $('div')).textContent = validUntil.getUTCFullYear() >= 2099
+						? localize('arni.validOpen', "Без срока")
+						: localize('arni.validUntil', "Действует до {0}", safeIntl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric' }).value.format(validUntil));
 				}
 				append(summary, $('div')).textContent = panelAvailability.limit === 'balance'
 					? localize('arni.availableNowBalance', "Доступно сейчас: {0}", this.formatArniAmount(panelAvailability.availableMicros))
@@ -766,6 +770,18 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			}
 			if (arni.chatCostMicros !== undefined) {
 				append(summary, $('div')).textContent = localize('arni.chatSpend', "Последний чат: {0}", this.formatArniAmount(arni.chatCostMicros, 6));
+			}
+			const links = append(summary, $('.arni-billing-links'));
+			for (const [section, label] of [
+				['topup', localize('arni.billingTopUp', "Пополнить")],
+				['expenses', localize('arni.billingExpenses', "Расходы")],
+				['tariffs', localize('arni.billingTariffs', "Тарифы")],
+			] as const) {
+				const link = append(links, $('button', { type: 'button' }));
+				link.textContent = label;
+				panelStore.add(addDisposableListener(link, EventType.CLICK, () => {
+					void this.openerService.open(URI.parse(`https://chat.arnion.kz/#${section}`));
+				}));
 			}
 			const usage = append(summary, $('button', { type: 'button' }));
 			usage.textContent = localize('arni.showUsage', "Расходы и история запросов");

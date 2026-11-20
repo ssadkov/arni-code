@@ -600,6 +600,38 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			}
 		}
 
+		class OpenArniBillingAction extends Action2 {
+			constructor(private readonly section: 'topup' | 'expenses' | 'tariffs', title: string, order: number) {
+				super({
+					id: `workbench.action.chat.openArniBilling.${section}`,
+					title: localize2(`openArniBilling.${section}`, title),
+					category: localize2('chat.category', 'Chat'),
+					f1: true,
+					menu: {
+						id: MenuId.AccountsContext,
+						group: '3_billing',
+						order,
+					}
+				});
+			}
+
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(IOpenerService).open(URI.parse(`https://chat.arnion.kz/#${this.section}`));
+			}
+		}
+
+		class OpenArniTopUpAction extends OpenArniBillingAction {
+			constructor() { super('topup', 'Пополнить', 1); }
+		}
+
+		class OpenArniExpensesAction extends OpenArniBillingAction {
+			constructor() { super('expenses', 'Расходы', 2); }
+		}
+
+		class OpenArniTariffsAction extends OpenArniBillingAction {
+			constructor() { super('tariffs', 'Тарифы', 3); }
+		}
+
 		registerAction2(ChatSetupTriggerAction);
 		registerAction2(ChatSetupTriggerForceSignInDialogAction);
 		registerAction2(SignInWithYandexAccountsAction);
@@ -611,6 +643,9 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 		registerAction2(ChatSetupTriggerSupportAnonymousAction);
 		registerAction2(UpgradePlanAction);
 		registerAction2(ManageAdditionalSpendAction);
+		registerAction2(OpenArniTopUpAction);
+		registerAction2(OpenArniExpensesAction);
+		registerAction2(OpenArniTariffsAction);
 
 		//#endregion
 
