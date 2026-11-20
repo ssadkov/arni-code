@@ -600,36 +600,49 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			}
 		}
 
-		class OpenArniBillingAction extends Action2 {
-			constructor(private readonly section: 'topup' | 'expenses' | 'tariffs', title: string, order: number) {
+		class OpenArniTopUpAction extends Action2 {
+			constructor() {
 				super({
-					id: `workbench.action.chat.openArniBilling.${section}`,
-					title: localize2(`openArniBilling.${section}`, title),
+					id: 'workbench.action.chat.openArniBilling.topup',
+					title: localize2('openArniBilling.topup', 'Пополнить'),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
-					menu: {
-						id: MenuId.AccountsContext,
-						group: '3_billing',
-						order,
-					}
+					menu: { id: MenuId.AccountsContext, group: '3_billing', order: 1 }
 				});
 			}
-
 			override async run(accessor: ServicesAccessor): Promise<void> {
-				await accessor.get(IOpenerService).open(URI.parse(`https://chat.arnion.kz/#${this.section}`));
+				await accessor.get(IOpenerService).open(URI.parse('https://chat.arnion.kz/#topup'));
 			}
 		}
 
-		class OpenArniTopUpAction extends OpenArniBillingAction {
-			constructor() { super('topup', 'Пополнить', 1); }
+		class OpenArniExpensesAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.chat.openArniBilling.expenses',
+					title: localize2('openArniBilling.expenses', 'Расходы'),
+					category: localize2('chat.category', 'Chat'),
+					f1: true,
+					menu: { id: MenuId.AccountsContext, group: '3_billing', order: 2 }
+				});
+			}
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(IOpenerService).open(URI.parse('https://chat.arnion.kz/#expenses'));
+			}
 		}
 
-		class OpenArniExpensesAction extends OpenArniBillingAction {
-			constructor() { super('expenses', 'Расходы', 2); }
-		}
-
-		class OpenArniTariffsAction extends OpenArniBillingAction {
-			constructor() { super('tariffs', 'Тарифы', 3); }
+		class OpenArniTariffsAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.chat.openArniBilling.tariffs',
+					title: localize2('openArniBilling.tariffs', 'Тарифы'),
+					category: localize2('chat.category', 'Chat'),
+					f1: true,
+					menu: { id: MenuId.AccountsContext, group: '3_billing', order: 3 }
+				});
+			}
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(IOpenerService).open(URI.parse('https://chat.arnion.kz/#tariffs'));
+			}
 		}
 
 		registerAction2(ChatSetupTriggerAction);
