@@ -24,7 +24,7 @@ suite('StarterProjectGallery', () => {
 	test('project ideas get a folder with rules, task ideas open a chat, nothing is sent unasked', async () => {
 		const hoverTips: string[] = [];
 		const existingFolders = new Set<string>();
-		const startedProjects: { readonly folder: string; readonly prompt: string; readonly professionId: string; readonly submit: boolean }[] = [];
+		const startedProjects: { readonly folder: string; readonly prompt: string; readonly professionId: string | undefined; readonly submit: boolean }[] = [];
 		const startedTasks: { readonly prompt: string; readonly professionId: string }[] = [];
 		const writtenFiles = new Map<string, string>();
 		let existingFolderRequests = 0;
@@ -130,6 +130,75 @@ suite('StarterProjectGallery', () => {
 			closeRequests: 1,
 			expanded: { cards: 15, label: 'Свернуть' },
 			collapsed: { cards: 6, label: 'Все идеи' },
+		});
+	});
+
+	test('own files in the save location are offered instead of an empty project folder', async () => {
+		const parent = URI.file('/home/test/Урок06');
+		const existingFolders = new Set<string>([parent.path]);
+		const startedProjects: { readonly folder: string; readonly prompt: string; readonly professionId: string | undefined; readonly submit: boolean }[] = [];
+		const child = (name: string, isDirectory: boolean) => upcastPartial<IFileStatWithMetadata>({ name, isDirectory });
+		const gallery = disposables.add(new StarterProjectGallery(
+			document.createElement('div'),
+			async (folder, prompt, professionId, submit) => { startedProjects.push({ folder: folder.path, prompt, professionId, submit }); },
+			async () => { },
+			() => { },
+			() => { },
+			upcastPartial<IFileDialogService>({}),
+			upcastPartial<IFileService>({
+				exists: async folder => existingFolders.has(folder.path),
+				resolve: async folder => upcastPartial<IFileStatWithMetadata>({
+					resource: folder,
+					children: [child('06_Sales-october.xlsx', false), child('06_Support-october.docx', false), child('desktop.ini', false), child('.DS_Store', false), child('Старое', true)],
+				}),
+				createFolder: async folder => {
+					existingFolders.add(folder.path);
+					return upcastPartial<IFileStatWithMetadata>({ resource: folder });
+				},
+				writeFile: async file => upcastPartial<IFileStatWithMetadata>({ resource: file }),
+			}),
+			upcastPartial<IHoverService>({ setupDelayedHover: () => ({ dispose() { } }) }),
+			upcastPartial<IStorageService>({ get: () => parent.toString() }),
+			new class extends mock<IPathService>() {
+				override userHome(options: { preferLocal: true }): URI;
+				override userHome(options?: { preferLocal: boolean }): Promise<URI>;
+				override userHome(options?: { preferLocal: boolean }): URI | Promise<URI> {
+					const home = URI.file('/home/test');
+					return options?.preferLocal ? home : Promise.resolve(home);
+				}
+			}(),
+			upcastPartial<ICommandService>({}),
+		));
+		const input = gallery.element.querySelector<HTMLTextAreaElement>('.starter-project-idea-input')!;
+		const create = gallery.element.querySelector<HTMLButtonElement>('.starter-project-create')!;
+		const notice = () => gallery.element.querySelector('.starter-project-files-notice');
+
+		input.value = 'сводный отчёт';
+		create.click();
+		await timeout(0);
+		const warning = notice()?.querySelector('.starter-project-files-notice-text')?.textContent;
+		notice()!.querySelector<HTMLButtonElement>('.starter-project-use-folder')!.click();
+		await timeout(0);
+		const noticeAfterUse = !!notice();
+
+		input.value = 'сайт';
+		create.click();
+		await timeout(0);
+		input.dispatchEvent(new Event('input'));
+		const noticeAfterEdit = !!notice();
+		create.click();
+		await timeout(0);
+		notice()!.querySelector<HTMLButtonElement>('.starter-project-create-anyway')!.click();
+		await timeout(0);
+
+		assert.deepStrictEqual({ warning, noticeAfterUse, noticeAfterEdit, startedProjects }, {
+			warning: `В папке ${parent.fsPath} уже есть ваши файлы: 06_Sales-october.xlsx, 06_Support-october.docx. Новый проект создаст рядом пустую папку, и агент этих файлов не увидит.`,
+			noticeAfterUse: false,
+			noticeAfterEdit: false,
+			startedProjects: [
+				{ folder: '/home/test/Урок06', prompt: 'сводный отчёт', professionId: undefined, submit: true },
+				{ folder: '/home/test/Урок06/my-project', prompt: 'сайт', professionId: 'programmer', submit: true },
+			],
 		});
 	});
 });
