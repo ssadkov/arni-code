@@ -5,60 +5,79 @@
 
 import type { IEndpointBody } from '../../../platform/networking/common/networking';
 
-/**
- * The Arni API runs on Vercel, which rejects request bodies above 4.5 MB with
- * `413 FUNCTION_PAYLOAD_TOO_LARGE`. Leave room for headers and rounding.
- */
-export const ARNI_PROXY_MAX_BODY_BYTES = 4_000_000;
+/** The Arni backend rejects request bodies above this size before parsing JSON. */
+const ARNI_MAX_BODY_BYTES = 3_800_000;
+const ARNI_MAX_IMAGES = 6;
+const ARNI_MAX_IMAGE_BYTES = 2_500_000;
 
 /** Text the model sees in place of an image dropped from the history. */
-export const OMITTED_IMAGE_TEXT = '[An image from earlier in this chat was removed so the request fits the size limit. View the file again if you need it.]';
+export const OMITTED_IMAGE_TEXT = '[Старый скриншот удалён из истории, чтобы уложиться в лимит. Сделайте новый, если он нужен.]';
 
 interface IImagePart {
 	type: 'image_url';
-	image_url?: { url?: unknown };
+	image_url?: { url?: string };
 }
 
 const encoder = new TextEncoder();
 
-function byteLength(value: unknown): number {
+/** Returns the number of UTF-8 bytes the value occupies in the request JSON. */
+function byteLength(value: object): number {
 	return encoder.encode(JSON.stringify(value)).byteLength;
 }
 
 /**
- * Replaces Chat Completions image parts with {@link OMITTED_IMAGE_TEXT}, oldest first,
- * until the serialized body fits {@link maxBytes}. Every image is resent with every turn,
- * so a couple of full-size pictures in the history would otherwise fail each later request.
+ * Estimates the decoded size without allocating a buffer for the screenshot.
+ * Matches the backend's estimate, including base64 padding.
+ */
+function imageBytes(url: string | undefined): number {
+	const comma = url?.startsWith('data:') ? url.indexOf(',') : -1;
+	return url && comma >= 0 ? Math.floor((url.length - comma - 1) * 3 / 4) : 0;
+}
+
+/**
+ * Keeps the newest Chat Completions images that fit the Arni image and body limits.
+ * Replaces the others in the serialized request body with {@link OMITTED_IMAGE_TEXT}.
  * @returns How many images were removed.
  */
-export function fitImagesToRequestBudget(body: IEndpointBody, maxBytes: number): number {
-	const images: { content: unknown[]; index: number }[] = [];
+export function fitImagesToRequestBudget(body: IEndpointBody, maxBytes = ARNI_MAX_BODY_BYTES): number {
+	const placeholder = { type: 'text', text: OMITTED_IMAGE_TEXT };
+	const images: { content: unknown[]; index: number; part: IImagePart }[] = [];
 	for (const message of body.messages ?? []) {
 		const content: unknown = message?.content;
 		if (!Array.isArray(content)) {
 			continue;
 		}
-		content.forEach((part, index) => {
-			if ((part as IImagePart | undefined)?.type === 'image_url') {
-				images.push({ content, index });
+		for (let index = 0; index < content.length; index++) {
+			const part = content[index] as IImagePart | undefined;
+			if (part?.type === 'image_url') {
+				images.push({ content, index, part });
+				content[index] = placeholder;
 			}
-		});
+		}
 	}
 	if (!images.length) {
 		return 0;
 	}
 
-	const placeholder = { type: 'text', text: OMITTED_IMAGE_TEXT };
+	// Measure the text, tools and placeholder bytes once, before restoring images.
 	const placeholderBytes = byteLength(placeholder);
-	let total = byteLength(body);
-	let removed = 0;
-	for (const { content, index } of images) {
-		if (total <= maxBytes) {
-			break;
+	let bodyBytes = byteLength(body);
+	let totalImageBytes = 0;
+	let kept = 0;
+	for (let i = images.length - 1; i >= 0 && kept < ARNI_MAX_IMAGES; i--) {
+		const { content, index, part } = images[i];
+		const size = imageBytes(part.image_url?.url);
+		if (totalImageBytes + size > ARNI_MAX_IMAGE_BYTES) {
+			continue;
 		}
-		total -= byteLength(content[index]) - placeholderBytes;
-		content[index] = { ...placeholder };
-		removed++;
+		const extraBodyBytes = byteLength(part) - placeholderBytes;
+		if (bodyBytes + extraBodyBytes > maxBytes) {
+			continue;
+		}
+		content[index] = part;
+		bodyBytes += extraBodyBytes;
+		totalImageBytes += size;
+		kept++;
 	}
-	return removed;
+	return images.length - kept;
 }

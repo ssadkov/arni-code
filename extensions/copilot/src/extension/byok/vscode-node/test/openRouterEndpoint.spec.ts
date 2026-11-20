@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Raw } from '@vscode/prompt-tsx';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { IChatModelInformation, ModelSupportedEndpoint } from '../../../../platform/endpoint/common/endpointProvider';
+import { ICreateEndpointBodyOptions } from '../../../../platform/networking/common/networking';
 import { ITestingServicesAccessor } from '../../../../platform/test/node/services';
 import { TokenizerType } from '../../../../util/common/tokenizer';
 import { DisposableStore } from '../../../../util/vs/base/common/lifecycle';
@@ -113,6 +116,62 @@ describe('OpenRouterEndpoint', () => {
 				'https://openrouter.ai/api/v1/chat/completions');
 
 			expect(endpoint.apiType).toBe('chatCompletions');
+		});
+
+		it('sends only the six newest images from user and tool messages through Arni', () => {
+			const screenshots = Array.from({ length: 10 }, (_, index): Raw.ChatCompletionContentPartImage => ({
+				type: Raw.ChatCompletionContentPartKind.Image,
+				imageUrl: { url: `data:image/png;base64,${Buffer.from([index]).toString('base64')}` },
+			}));
+			const messages: Raw.ChatMessage[] = [
+				{ role: Raw.ChatRole.User, content: screenshots.slice(0, 3) },
+				{
+					role: Raw.ChatRole.Tool,
+					toolCallId: 'call_1',
+					content: [
+						screenshots[3],
+						{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Browser result' },
+						...screenshots.slice(4, 7),
+					],
+				},
+				{ role: Raw.ChatRole.User, content: screenshots.slice(7) },
+				{ role: Raw.ChatRole.Assistant, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Continue' }] },
+			];
+			const history = structuredClone(messages);
+			const options: ICreateEndpointBodyOptions = {
+				debugName: 'test',
+				messages,
+				requestId: 'request-1',
+				postOptions: {},
+				finishedCb: undefined,
+				location: ChatLocation.Panel,
+			};
+			const endpoint = instaService.createInstance(OpenRouterEndpoint, nonAnthropicMetadata, 'test-api-key',
+				'https://api.arnion.ru/api/chat/completions');
+			const directEndpoint = instaService.createInstance(OpenRouterEndpoint, nonAnthropicMetadata, 'test-api-key',
+				'https://openrouter.ai/api/v1/chat/completions');
+			const images = screenshots.map(({ imageUrl }) => ({ type: 'image_url', image_url: imageUrl }));
+			const note = { type: 'text', text: '[Старый скриншот удалён из истории, чтобы уложиться в лимит. Сделайте новый, если он нужен.]' };
+			const toolText = { type: 'text', text: 'Browser result' };
+
+			const arniBody = endpoint.createRequestBody(options);
+			endpoint.interceptBody(arniBody);
+			expect(arniBody.messages).toEqual([
+				{ role: 'user', content: [note, note, note] },
+				{ role: 'tool', tool_call_id: 'call_1', content: [note, toolText, ...images.slice(4, 7)] },
+				{ role: 'user', content: images.slice(7) },
+				{ role: 'assistant', content: 'Continue' },
+			]);
+			expect(messages).toEqual(history);
+
+			const directBody = directEndpoint.createRequestBody(options);
+			directEndpoint.interceptBody(directBody);
+			expect(directBody.messages).toEqual([
+				{ role: 'user', content: images.slice(0, 3) },
+				{ role: 'tool', tool_call_id: 'call_1', content: [images[3], toolText, ...images.slice(4, 7)] },
+				{ role: 'user', content: images.slice(7) },
+				{ role: 'assistant', content: 'Continue' },
+			]);
 		});
 	});
 });

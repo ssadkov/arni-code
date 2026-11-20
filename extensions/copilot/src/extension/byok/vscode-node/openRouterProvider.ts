@@ -8,14 +8,14 @@ import { IDomainService } from '../../../platform/endpoint/common/domainService'
 import { IChatModelInformation, ModelSupportedEndpoint } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService } from '../../../platform/networking/common/fetcherService';
-import { IChatEndpoint, ICreateEndpointBodyOptions, IEndpointBody } from '../../../platform/networking/common/networking';
+import { IChatEndpoint, IEndpointBody } from '../../../platform/networking/common/networking';
 
 import { IChatWebSocketManager } from '../../../platform/networking/node/chatWebSocketManager';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITokenizerProvider } from '../../../platform/tokenizer/node/tokenizer';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { BYOKModelCapabilities } from '../common/byokProvider';
-import { ARNI_PROXY_MAX_BODY_BYTES, fitImagesToRequestBudget } from '../common/requestImageBudget';
+import { fitImagesToRequestBudget } from '../common/requestImageBudget';
 import { OpenAIEndpoint } from '../node/openAIEndpoint';
 import { AbstractOpenAICompatibleLMProvider, LanguageModelChatConfiguration, OpenAICompatibleLanguageModelChatInformation } from './abstractLanguageModelChatProvider';
 import { IBYOKStorageService } from './byokStorageService';
@@ -904,16 +904,15 @@ export class OpenRouterEndpoint extends OpenAIEndpoint {
 		return !!this.modelMetadata.supported_endpoints?.includes(ModelSupportedEndpoint.Messages);
 	}
 
-	override createRequestBody(options: ICreateEndpointBodyOptions): IEndpointBody {
-		const body = super.createRequestBody(options);
-		// The Arni proxy (Vercel) refuses bodies above 4.5 MB; OpenRouter itself has no such limit.
-		if (!isOpenRouterBaseUrl(this.urlOrRequestMetadata)) {
-			const removed = fitImagesToRequestBudget(body, ARNI_PROXY_MAX_BODY_BYTES);
+	/** Fits images to the Arni limits after the base class finishes preparing the HTTP body. */
+	override interceptBody(body: IEndpointBody | undefined): void {
+		super.interceptBody(body);
+		if (body && !isOpenRouterBaseUrl(this.urlOrRequestMetadata)) {
+			const removed = fitImagesToRequestBudget(body);
 			if (removed) {
-				this.logService.warn(`[Arni] Removed ${removed} earlier image(s) from the request to stay under the proxy size limit.`);
+				this.logService.debug(`[Arni] Omitted ${removed} image(s) from the request to fit the image and body limits.`);
 			}
 		}
-		return body;
 	}
 
 	override cloneWithTokenOverride(modelMaxPromptTokens: number): IChatEndpoint {
