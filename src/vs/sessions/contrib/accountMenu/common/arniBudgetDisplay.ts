@@ -11,6 +11,15 @@ export interface IArniBudgetWindow {
 	readonly resetsAt: string | null;
 }
 
+export interface IArniDeepSeekBonus {
+	readonly balanceMicros: number;
+	readonly grantedMicros: number;
+	readonly expiresAt: string;
+	readonly expired: boolean;
+	readonly fiveHour: { readonly remainingMicros: number };
+	readonly weekly: { readonly remainingMicros: number };
+}
+
 export interface IArniBudget {
 	readonly balanceMicros: number;
 	readonly enabled: boolean;
@@ -19,6 +28,13 @@ export interface IArniBudget {
 	/** Absent when an older backend answers. */
 	readonly fiveHour?: IArniBudgetWindow;
 	readonly weekly?: IArniBudgetWindow;
+	readonly bonus?: IArniDeepSeekBonus | null;
+}
+
+/** A bonus can still pay for DeepSeek after the main budget has expired. */
+export function activeArniDeepSeekBonus(budget: IArniBudget | null | undefined, now = Date.now()): IArniDeepSeekBonus | undefined {
+	const bonus = budget?.bonus;
+	return budget?.enabled && bonus && !bonus.expired && bonus.balanceMicros > 0 && Date.parse(bonus.expiresAt) > now ? bonus : undefined;
 }
 
 export type ArniBudgetLimit = 'balance' | 'fiveHour' | 'weekly';

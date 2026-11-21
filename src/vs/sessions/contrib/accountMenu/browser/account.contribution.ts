@@ -24,7 +24,7 @@ import { fillInActionBarActions } from '../../../../platform/actions/browser/men
 import { $, addDisposableListener, append, clearNode, disposableWindowInterval, EventType, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { ArniBillingRates, arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowLimits, arniBudgetWindowRemainingMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
+import { activeArniDeepSeekBonus, ArniBillingRates, arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowLimits, arniBudgetWindowRemainingMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../common/arniBudgetDisplay.js';
 import { ActionBar, ActionsOrientation } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Action, IAction, Separator, toAction } from '../../../../base/common/actions.js';
@@ -35,6 +35,8 @@ import { registerUpdateTitleBarMenuPlacement } from '../../../../workbench/contr
 import { ChatEntitlement, ChatEntitlementService, getChatPlanName, getQuotaReset, getQuotaUsage, IChatEntitlementService, IQuotaSnapshot, QuotaUsageKind } from '../../../../workbench/services/chat/common/chatEntitlementService.js';
 import { ChatStatusDashboard, IChatStatusDashboardOptions } from '../../../../workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
+import type { IManagedHover } from '../../../../base/browser/ui/hover/hover.js';
+import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { ARNI_PRODUCT_AUTH_PROVIDERS, ArniAccountSignedInContext, hasArniProductSignIn, isArniProductAuthProvider } from '../../../../workbench/services/authentication/common/arniProductAuth.js';
 import { getAccountProfileImageUrl, getAccountTitleBarBadgeKey, getAccountTitleBarState, IAccountTitleBarState, resolveAccountInfo } from '../../../browser/accountTitleBarState.js';
@@ -309,6 +311,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 	private dismissedBadgeKey: string | undefined;
 	private readonly copilotDashboardStore = this._register(new MutableDisposable<DisposableStore>());
 	private readonly clickPanelDisposable = this._register(new MutableDisposable<DisposableStore>());
+	private readonly arniBalanceHover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly avatarLoadDisposable = this._register(new MutableDisposable());
 	private readonly codexAvatarLoadDisposable = this._register(new MutableDisposable());
 	/** Whether the conditional-auth opt-in permits signed-out operation. */
@@ -481,16 +484,39 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		const arni = this.arniAccount;
 		this.container.classList.toggle('arni-account-visible', !!arni);
 		const activeBudget = arni?.budget?.enabled && !arni.budget.expired ? arni.budget : undefined;
+		const mainBalance = activeBudget ? arniBudgetTotalMicros(activeBudget) : 0;
+		const bonus = activeArniDeepSeekBonus(arni?.budget);
 		const availability = activeBudget && arniBudgetAvailability(activeBudget);
 		const limitName = availability?.limit === 'fiveHour' ? localize('arni.limitFiveHour', "5 ч") : availability?.limit === 'weekly' ? localize('arni.limitWeekly', "неделя") : undefined;
 		// The whole balance comes first; the rate-window cap is shown only when it is what limits spending now.
 		const availableNow = limitName ? localize('arni.availableNowTitle', " (сейчас доступно {0} · {1})", this.formatArniAmount(availability?.availableMicros ?? 0), limitName) : '';
-		this.labelElement.textContent = arni ? localize('arni.balanceTitle', "Баланс: {0}{1} · {2}", this.formatArniAmount(activeBudget ? arniBudgetTotalMicros(activeBudget) : 0), availableNow, arni.email) : '';
-		this.labelElement.classList.toggle('arni-budget-warning', availability?.level === 'warning');
-		this.labelElement.classList.toggle('arni-budget-exhausted', availability?.level === 'exhausted');
+		if (bonus) {
+			this.labelElement.textContent = localize('arni.balanceWithBonus', "{0}*", this.formatArniAmount(mainBalance + bonus.balanceMicros));
+		} else {
+			this.labelElement.textContent = arni ? localize('arni.balanceTitle', "Баланс: {0}{1} · {2}", this.formatArniAmount(mainBalance), availableNow, arni.email) : '';
+		}
+		this.labelElement.classList.toggle('arni-budget-warning', !bonus && availability?.level === 'warning');
+		this.labelElement.classList.toggle('arni-budget-exhausted', !bonus && availability?.level === 'exhausted');
+		const bonusTooltip = bonus
+			? localize('arni.deepSeekBonusTooltip', "* Из этой суммы {0} доступны только для DeepSeek V4.1 Flash.", this.formatArniAmount(bonus.balanceMicros))
+			: undefined;
+		if (bonusTooltip) {
+			this.container.removeAttribute('title');
+			if (this.arniBalanceHover.value) {
+				this.arniBalanceHover.value.update(bonusTooltip);
+			} else {
+				this.arniBalanceHover.value = this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), this.container, bonusTooltip);
+			}
+		} else {
+			this.arniBalanceHover.clear();
+		}
 		if (arni) {
-			this.container.title = this.labelElement.textContent;
-			this.container.setAttribute('aria-label', this.labelElement.textContent);
+			if (!bonusTooltip) {
+				this.container.title = this.labelElement.textContent;
+			}
+			this.container.setAttribute('aria-label', bonusTooltip
+				? localize('arni.balanceWithBonusAria', "Баланс {0}. {1}", this.labelElement.textContent, bonusTooltip)
+				: this.labelElement.textContent);
 		} else {
 			this.container.removeAttribute('title');
 		}
@@ -747,6 +773,18 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			append(summary, $('strong')).textContent = arni.email;
 			const panelBudget = arni.budget?.enabled && !arni.budget.expired ? arni.budget : undefined;
 			append(summary, $('strong.arni-account-balance')).textContent = localize('arni.totalBalance', "Остаток на счёте: {0}", this.formatArniAmount(panelBudget ? arniBudgetTotalMicros(panelBudget) : 0));
+			const bonus = activeArniDeepSeekBonus(arni.budget);
+			if (bonus) {
+				const expiresAt = safeIntl.DateTimeFormat(language, {
+					day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+					timeZone: 'Asia/Almaty', timeZoneName: 'short',
+				}).value.format(new Date(bonus.expiresAt));
+				append(summary, $('div')).textContent = localize('arni.deepSeekBonusBalance', "Бонус DeepSeek V4.1 Flash: {0} из {1} · до {2}",
+					this.formatArniAmount(bonus.balanceMicros), this.formatArniAmount(bonus.grantedMicros), expiresAt);
+				append(summary, $('div')).textContent = localize('arni.deepSeekBonusLimits', "Доступно из бонуса: {0} на 5 часов · {1} на неделю",
+					this.formatArniAmount(Math.min(bonus.balanceMicros, bonus.fiveHour.remainingMicros)),
+					this.formatArniAmount(Math.min(bonus.balanceMicros, bonus.weekly.remainingMicros)));
+			}
 			if (panelBudget) {
 				const panelAvailability = arniBudgetAvailability(panelBudget);
 				const validUntil = new Date(panelBudget.validUntil);

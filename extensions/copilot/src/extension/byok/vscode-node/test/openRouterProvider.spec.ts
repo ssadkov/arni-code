@@ -202,6 +202,29 @@ describe('Arni backend URL', () => {
 });
 
 describe('Model discovery records capabilities', () => {
+	it('shows the paid DeepSeek bonus once in the selected currency and hides it after expiry', async () => {
+		const provider = createProvider();
+		const name = 'DeepSeek V4.1 Flash 1017 · бонус $12.40 до 14.12';
+		const row = {
+			id: 'deepseek/deepseek-v4.1-flash-1017', name, arni_provider: 'openrouter', supported_parameters: ['tools'],
+			top_provider: { context_length: 131072 }, arni_bonus: { balanceMicros: 12_400_000, expiresAt: '2099-12-14T18:59:59Z' },
+		};
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({ arni_managed: true, billingRates: { RUB: 100 }, data: [row] }),
+		}));
+		try {
+			const [model] = await provider.listModels(true, 'local-test-token');
+			expect(model.id).toBe(row.id);
+			expect(model.name.replace(/\s/g, ' ')).toBe('OpenRouter · DeepSeek V4.1 Flash 1017 · Бонус ≈ 1 240,00 ₽ до 14.12 · Платная');
+			expect(provider.resolveCapabilities({ ...row, arni_bonus: { ...row.arni_bonus, expiresAt: '2000-12-14T18:59:59Z' } })?.name)
+				.toBe('OpenRouter · DeepSeek V4.1 Flash 1017 · Платная');
+		} finally {
+			vi.unstubAllGlobals();
+			provider.dispose();
+		}
+	});
+
 	it('keeps tool calling enabled so the request is not stripped of its tools', async () => {
 		const provider = createProvider();
 		const fetchMock = vi.fn().mockResolvedValue({

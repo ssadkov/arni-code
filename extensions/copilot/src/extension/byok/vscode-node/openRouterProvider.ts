@@ -35,6 +35,16 @@ interface ArniBudgetWindow {
 	resetsAt: string | null;
 }
 
+interface ArniModelBonus {
+	readonly balanceMicros: number;
+	readonly expiresAt: string;
+	readonly expired?: boolean;
+}
+
+function activeModelBonus(bonus: ArniModelBonus | null | undefined): ArniModelBonus | undefined {
+	return bonus && !bonus.expired && bonus.balanceMicros > 0 && Date.parse(bonus.expiresAt) > Date.now() ? bonus : undefined;
+}
+
 interface ArniBudget {
 	enabled: boolean;
 	expired: boolean;
@@ -42,6 +52,7 @@ interface ArniBudget {
 	validUntil: string;
 	fiveHour: ArniBudgetWindow;
 	weekly: ArniBudgetWindow;
+	bonus?: ArniModelBonus | null;
 }
 
 type ArniBillingRates = Partial<Record<'RUB' | 'KZT', number | null>>;
@@ -57,6 +68,7 @@ interface OpenRouterModelData {
 	name: string;
 	arni_provider?: 'bedrock' | 'openrouter';
 	arni_free?: boolean;
+	arni_bonus?: ArniModelBonus;
 	/** The backend recommends this model; the picker leads with it. */
 	arni_recommended?: boolean;
 	arni_cache?: 'explicit' | 'automatic';
@@ -216,6 +228,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	private _activeChatId: string | undefined;
 	private _billingRates: ArniBillingRates | undefined;
 	private _managedAccount: boolean | undefined;
+	private _bonusLabelKey: string | undefined;
 	private _accountRefresh = 0;
 	private readonly _disposables = new DisposableStore();
 	private readonly _onDidChangeLanguageModelChatInformation = this._disposables.add(new vscode.EventEmitter<void>());
@@ -254,6 +267,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 					this._arniJwt = undefined;
 					this._activeChatId = undefined;
 					this._managedAccount = undefined;
+					this._bonusLabelKey = undefined;
 					this._accountRefresh++;
 					this._freeStepsItem?.hide();
 					this._onDidChangeLanguageModelChatInformation.fire();
@@ -419,8 +433,13 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 				if (refresh !== this._accountRefresh) { return; }
 				this._billingRates = data.user?.billingRates;
 				const wasManaged = this._managedAccount;
+				const previousBonusLabelKey = this._bonusLabelKey;
 				this._managedAccount = Boolean(data.user?.budget);
-				if (wasManaged !== undefined && wasManaged !== this._managedAccount) { this._onDidChangeLanguageModelChatInformation.fire(); }
+				const bonus = data.user?.budget?.enabled ? activeModelBonus(data.user.budget.bonus) : undefined;
+				this._bonusLabelKey = bonus ? `${this.money(bonus.balanceMicros)}|${bonus.expiresAt}` : undefined;
+				if (wasManaged !== undefined && (wasManaged !== this._managedAccount || previousBonusLabelKey !== this._bonusLabelKey)) {
+					this._onDidChangeLanguageModelChatInformation.fire();
+				}
 				if (data.user?.budget) { this.showBudget(data.user.budget); }
 				else { this.showFreeSteps(data.user?.freeSteps); }
 				const chatId = this._activeChatId;
@@ -810,9 +829,15 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			...(free && openRouterModelData.arni_traffic === 'red' ? [vscode.l10n.t('Перегружена, ответит другая')] : []),
 		].join(' · ') : '';
 		const source = openRouterModelData.arni_provider === 'bedrock' ? 'AWS Bedrock' : openRouterModelData.arni_provider === 'openrouter' ? 'OpenRouter' : undefined;
-		const name = source ? vscode.l10n.t('{0} · {1}', source, openRouterModelData.name) : openRouterModelData.name;
+		const bonus = activeModelBonus(openRouterModelData.arni_bonus);
+		const modelName = openRouterModelData.arni_bonus
+			? openRouterModelData.name.replace(/ · бонус \$[\d.]+ до \d{2}\.\d{2}$/, '')
+			: openRouterModelData.name;
+		const name = source ? vscode.l10n.t('{0} · {1}', source, modelName) : modelName;
+		const bonusLabel = bonus ? vscode.l10n.t(' · Бонус {0} до {1}', this.money(bonus.balanceMicros),
+			new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Almaty' }).format(new Date(bonus.expiresAt))) : '';
 		return {
-			name: name + priceLabel + (labels ? ` · ${labels}` : ''),
+			name: name + bonusLabel + priceLabel + (labels ? ` · ${labels}` : ''),
 			toolCalling: supportedParameters.includes('tools'),
 			vision: openRouterModelData.architecture?.input_modalities?.includes('image') ?? false,
 			maxInputTokens: contextWindow - maxOutputTokens,

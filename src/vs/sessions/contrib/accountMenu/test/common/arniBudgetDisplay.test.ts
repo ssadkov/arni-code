@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowLimits, arniBudgetWindowRemainingMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
+import { activeArniDeepSeekBonus, arniBudgetAvailability, arniBudgetTotalMicros, arniBudgetWindowLimits, arniBudgetWindowRemainingMicros, arniBudgetWindowShare, formatArniMoney, IArniBudget, IArniBudgetWindow } from '../../common/arniBudgetDisplay.js';
 
 suite('Sessions - Arni budget display', () => {
 
@@ -49,6 +49,24 @@ suite('Sessions - Arni budget display', () => {
 			0,
 			0,
 		]);
+	});
+
+	test('shows a live DeepSeek bonus independently of the main balance and its validity', () => {
+		const now = Date.parse('2026-12-14T18:00:00Z');
+		const main = budget(1_000_000, window(0, 2_000_000), window(0, 5_000_000));
+		const bonus = {
+			balanceMicros: 12_400_000, grantedMicros: 15_000_000, expiresAt: '2026-12-14T18:59:59Z', expired: false,
+			fiveHour: { remainingMicros: 5_000_000 }, weekly: { remainingMicros: 7_400_000 },
+		};
+		assert.strictEqual(activeArniDeepSeekBonus({ ...main, expired: true, bonus }, now), bonus);
+		assert.strictEqual(arniBudgetTotalMicros({ ...main, bonus }), 1_000_000);
+		for (const unavailable of [
+			undefined, main, { ...main, bonus: null }, { ...main, bonus, enabled: false },
+			{ ...main, bonus: { ...bonus, balanceMicros: 0 } }, { ...main, bonus: { ...bonus, expired: true } },
+			{ ...main, bonus: { ...bonus, expiresAt: new Date(now).toISOString() } },
+		]) {
+			assert.strictEqual(activeArniDeepSeekBonus(unavailable, now), undefined);
+		}
 	});
 
 	test('a window limits spending only when it is tighter than the balance', () => {
