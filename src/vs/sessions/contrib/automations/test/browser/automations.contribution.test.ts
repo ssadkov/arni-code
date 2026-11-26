@@ -6,7 +6,6 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import product from '../../../../../platform/product/common/product.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { CHAT_AUTOMATIONS_ENABLED_SETTING } from '../../../../../workbench/contrib/chat/common/automations/automationsEnabled.js';
 
@@ -19,13 +18,13 @@ const automationEnabledProperty = configurationRegistry.getConfigurationProperti
 suite('Automations Contribution', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('defaults Automations to enabled in non-Stable builds', () => {
+	test('enables Automations in stable Arni builds', () => {
 		assert.deepStrictEqual({
 			default: automationEnabledProperty.default,
 			included: automationEnabledProperty.included,
 		}, {
-			default: product.quality !== 'stable',
-			included: product.quality !== 'stable',
+			default: true,
+			included: true,
 		});
 	});
 });

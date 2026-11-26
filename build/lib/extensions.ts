@@ -79,11 +79,21 @@ function fromLocal(extensionPath: string, forWeb: boolean, _disableMangle: boole
 		}
 	}
 
+	// Arni extensions bundle through esbuild.js. CI writes dist/extension.js before
+	// packaging (the Google client secret is injected there). A local package that
+	// skipped that step ships package.json with no extension.js, so sign-in cannot
+	// register. Build the missing bundle here, and leave an existing dist alone so
+	// a secret already baked into it is not replaced.
+	if (!hasEsbuild && !forWeb && fs.existsSync(path.join(extensionPath, 'esbuild.js')) && !fs.existsSync(path.join(extensionPath, 'dist', 'extension.js'))) {
+		esbuildConfigFileName = 'esbuild.js';
+		hasEsbuild = true;
+	}
+
 	let input: Stream;
 	let isBundled = false;
 
 	if (hasEsbuild) {
-		const isStandardEsbuild = !esbuildConfigFileName.startsWith('.');
+		const isStandardEsbuild = !esbuildConfigFileName.startsWith('.') && esbuildConfigFileName !== 'esbuild.js';
 		input = isStandardEsbuild
 			? es.merge(
 				fromLocalEsbuild(extensionPath, esbuildConfigFileName),
@@ -163,7 +173,11 @@ function fromLocalEsbuild(extensionPath: string, esbuildConfigFileName: string):
 
 	// Run esbuild, then collect the files
 	new Promise<void>((resolve, reject) => {
-		const proc = cp.execFile(process.argv[0], [esbuildScript], { cwd: extensionPath }, (error, _stdout, stderr) => {
+		const esbuildArgs = [esbuildScript];
+		if (esbuildConfigFileName === 'esbuild.js') {
+			esbuildArgs.push('--production');
+		}
+		const proc = cp.execFile(process.argv[0], esbuildArgs, { cwd: extensionPath, env: process.env }, (error, _stdout, stderr) => {
 			if (error) {
 				return reject(error);
 			}
@@ -480,15 +494,27 @@ export function packageCopilotExtensionStream(disableMangle: boolean): Stream {
 			.pipe(rename(p => p.dirname = `extensions/copilot/${p.dirname}`))
 	);
 
-	const productionDependencies = getProductionDependencies('extensions/copilot');
-	const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat();
+	// Copilot's esbuild runs postinstall, which deletes and recreates
+	// node_modules/@github/copilot/sdk. Scanning those dependencies in parallel
+	// lstats paths that postinstall removes mid-walk (sdk/ripgrep).
+	const result = es.through();
+	localExtensionsStream.on('error', err => result.emit('error', err));
+	localExtensionsStream.pipe(result, { end: false });
+	localExtensionsStream.on('end', () => {
+		try {
+			const productionDependencies = getProductionDependencies('extensions/copilot');
+			const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat();
+			const dependenciesStream = gulp.src(dependenciesSrc, { base: '.', allowEmpty: true })
+				.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
+				.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`)));
+			dependenciesStream.on('error', err => result.emit('error', err));
+			dependenciesStream.pipe(result);
+		} catch (err) {
+			result.emit('error', err);
+		}
+	});
 
-	return es.merge(
-		localExtensionsStream,
-		gulp.src(dependenciesSrc, { base: '.' })
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`)))
-	).pipe(util2.setExecutableBit(['**/*.sh']));
+	return result.pipe(util2.setExecutableBit(['**/*.sh']));
 }
 
 export function packageMarketplaceExtensionsStream(forWeb: boolean): Stream {

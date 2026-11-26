@@ -21,16 +21,18 @@ suite('StarterProfession', () => {
 		const selected = observableValue<{ id: string; kind: string } | undefined>('mode', undefined);
 		const mode = upcastPartial<IChatMode>({ id: 'file:///skills/programmer.agent.md', name: constObservable('Программист') });
 		const modes = upcastPartial<IChatModes & { dispose(): void }>({ custom: [mode], waitForPendingUpdates: async () => { }, dispose() { } });
-		const provider = upcastPartial<IAgentHostSessionsProvider>({ id: 'local-agent-host', setAgent: (sessionId, agent) => {
-			assert.strictEqual(sessionId, 'draft');
-			assert.deepStrictEqual(agent, { uri: mode.id, name: 'Программист' });
-			selected.set({ id: agent!.uri, kind: 'agent' }, undefined);
-		} });
+		const provider = upcastPartial<IAgentHostSessionsProvider>({
+			id: 'local-agent-host', setAgent: (sessionId, agent) => {
+				assert.strictEqual(sessionId, 'draft');
+				assert.deepStrictEqual(agent, { uri: mode.id, name: 'Программист' });
+				selected.set({ id: agent!.uri, kind: 'agent' }, undefined);
+			}
+		});
 		await selectStarterProfession(
 			upcastPartial<ISession>({ sessionId: 'draft', providerId: provider.id, resource: URI.parse('agent-host-copilotcli:/draft'), mode: selected }),
 			'programmer',
 			upcastPartial<IChatModeService>({ createModes: () => modes }),
-			upcastPartial<ISessionsProvidersService>({ getProvider: <T extends ISessionsProvider>() => provider as T }),
+			upcastPartial<ISessionsProvidersService>({ getProvider: <T extends ISessionsProvider>() => provider as unknown as T }),
 		);
 		assert.strictEqual(selected.get()?.id, mode.id);
 	});
@@ -48,11 +50,13 @@ suite('StarterProfession', () => {
 				dispose: () => calls.push('dispose'),
 			});
 			const service = upcastPartial<IChatModeService>({ createModes: value => { assert.strictEqual(value, resource); return modes; } });
-			const provider = upcastPartial<ISessionsProvider>({ id: 'local', setMode: (sessionId: string, id: string) => {
-				assert.strictEqual(sessionId, 'draft');
-				calls.push('select');
-				if (refusal !== 'ignored') { selected.set({ id, kind: 'agent' }, undefined); }
-			} });
+			const provider = upcastPartial<ISessionsProvider>({
+				id: 'local', setMode: (sessionId: string, id: string) => {
+					assert.strictEqual(sessionId, 'draft');
+					calls.push('select');
+					if (refusal !== 'ignored') { selected.set({ id, kind: 'agent' }, undefined); }
+				}
+			});
 			const providers = upcastPartial<ISessionsProvidersService>({ getProvider: <T extends ISessionsProvider>() => provider as T });
 			const session = upcastPartial<ISession>({ resource, providerId: 'local', sessionId: 'draft', mode: selected });
 			if (refusal === 'none') {

@@ -195,6 +195,16 @@ async function copyCopilotCliQueryFiles(copilotCliSourceDir: string) {
 	await copyCopilotCLIFolders(sourceDir, targetDir);
 }
 
+async function copyCopilotCliRipgrepFiles(copilotCliSourceDir: string) {
+	const sourceDir = path.join(copilotCliSourceDir, 'ripgrep');
+	if (!fs.existsSync(sourceDir)) {
+		return;
+	}
+
+	const targetDir = path.join(COPILOT_PACKAGE_DIR, 'sdk', 'ripgrep');
+	await copyCopilotCLIFolders(sourceDir, targetDir);
+}
+
 async function copyCopilotCliPrebuildFiles(copilotCliSourceDir: string) {
 	const sourceDir = path.join(copilotCliSourceDir, 'prebuilds');
 	const targetDir = path.join(COPILOT_PACKAGE_DIR, 'sdk', 'prebuilds');
@@ -286,6 +296,7 @@ async function main() {
 	await copyCopilotCliTGrepFiles(copilotCliSourceDir);
 	await copyCopilotCliQueryFiles(copilotCliSourceDir);
 	await copyCopilotCliPrebuildFiles(copilotCliSourceDir);
+	await copyCopilotCliRipgrepFiles(copilotCliSourceDir);
 
 	// Check if the base cache file exists (dev-only sanity check, non-fatal in CI)
 	const baseCachePath = path.join('test', 'simulation', 'cache', 'base.sqlite');

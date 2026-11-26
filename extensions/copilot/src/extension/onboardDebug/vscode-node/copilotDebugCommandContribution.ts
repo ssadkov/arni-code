@@ -21,6 +21,7 @@ import { assertNever } from '../../../util/vs/base/common/assert';
 import { CancellationTokenSource } from '../../../util/vs/base/common/cancellation';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import * as path from '../../../util/vs/base/common/path';
+import { encodeCmdScript } from '../../../util/common/windowsCmdScript';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatSessionsUriHandler, CustomUriHandler } from '../../chatSessions/vscode/chatSessionsUriHandler';
@@ -313,7 +314,7 @@ export class CopilotDebugCommandContribution extends Disposable implements vscod
 			await fs.writeFile(ps1Path, powershellScript
 				.replaceAll('__CALLBACK_URL_PLACEHOLDER__', callbackUri)
 				.replaceAll('__REMOTE_COMMAND_PLACEHOLDER__', remoteCommand));
-			await fs.writeFile(path.join(storagePath, `${COPILOT_DEBUG_COMMAND}.bat`), makeBatScript(ps1Path));
+			await fs.writeFile(path.join(storagePath, `${COPILOT_DEBUG_COMMAND}.bat`), encodeCmdScript(makeBatScript(ps1Path)));
 		} else {
 			const shPath = path.join(storagePath, COPILOT_DEBUG_COMMAND);
 			await fs.writeFile(shPath, makeShellScript(remoteCommand, storagePath, callbackUri));

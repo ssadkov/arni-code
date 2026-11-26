@@ -45,7 +45,7 @@ suite('platform - terminalEnvironment', async () => {
 		// These tests are only expected to work on Windows 10 build 18309 and above
 		(getWindowsBuildNumberSync() < 18309 ? suite.skip : suite)('pwsh', async () => {
 			const expectedPs1 = process.platform === 'win32'
-				? `try { . "${shellIntegrationScriptRoot}\\shellIntegration.ps1" } catch {}`
+				? `chcp 65001>$null; try { . "${shellIntegrationScriptRoot}\\shellIntegration.ps1" } catch {}`
 				: `. "${shellIntegrationScriptRoot}/shellIntegration.ps1"`;
 			suite('should override args', async () => {
 				const enabledExpectedResult = Object.freeze<IShellIntegrationConfigInjection>({

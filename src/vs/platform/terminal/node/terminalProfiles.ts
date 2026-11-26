@@ -111,6 +111,7 @@ async function detectAvailableWindowsProfiles(
 		});
 		detectedProfiles.set('Command Prompt', {
 			path: `${system32Path}\\cmd.exe`,
+			args: ['/K', 'chcp 65001>nul'],
 			icon: Codicon.terminalCmd,
 			isAutoDetected: true
 		});

@@ -11,7 +11,6 @@ import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurati
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import product from '../../../../platform/product/common/product.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as WorkbenchExtensions, IWorkbenchContribution, IWorkbenchContributionsRegistry, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IAutomationDialogService } from '../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
@@ -44,11 +43,12 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	properties: {
 		[CHAT_AUTOMATIONS_ENABLED_SETTING]: {
 			type: 'boolean',
-			default: product.quality !== 'stable',
+			// ARNION: stable product.json would otherwise hide Automations and leave the agent host disabled.
+			default: true,
 			scope: ConfigurationScope.MACHINE,
 			tags: ['experimental', 'advanced'],
 			description: localize('chat.automations.enabled', "Enables the Automations feature: scheduling agent sessions to run on a cadence. When disabled, the Automations entry in the Customizations sidebar, the Automations section in the Customizations editor, and the Automation option in the new-session composer are hidden, and scheduled automations are not dispatched."),
-			included: product.quality !== 'stable',
+			included: true,
 			experiment: { mode: 'auto' },
 			agentHost: { key: AGENT_HOST_AUTOMATIONS_ENABLED_CONFIG_KEY },
 		},
@@ -59,7 +59,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			scope: ConfigurationScope.MACHINE,
 			tags: ['experimental', 'advanced'],
 			description: localize('chat.automations.runTimeoutMinutes', "Maximum number of minutes an automation run is allowed to take before it is ended. Prevents a single hung run from permanently blocking subsequent runs."),
-			included: product.quality !== 'stable',
+			included: true,
 			agentHost: { key: AGENT_HOST_AUTOMATION_RUN_TIMEOUT_MINUTES_CONFIG_KEY },
 		},
 	},

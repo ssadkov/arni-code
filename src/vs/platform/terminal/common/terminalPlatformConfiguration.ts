@@ -239,7 +239,9 @@ const terminalPlatformConfiguration: IConfigurationNode = {
 						'${env:windir}\\Sysnative\\cmd.exe',
 						'${env:windir}\\System32\\cmd.exe'
 					],
-					args: [],
+					// cmd reads input in the OEM code page. The terminal sends UTF-8, so a
+					// Cyrillic path is otherwise opened as CP866 mojibake.
+					args: ['/K', 'chcp 65001>nul'],
 					icon: Codicon.terminalCmd.id,
 				},
 				'Git Bash': {

@@ -16,6 +16,7 @@ import { ITelemetryService } from '../../../platform/telemetry/common/telemetry'
 import { ITerminalService } from '../../../platform/terminal/common/terminalService';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { createServiceIdentifier } from '../../../util/common/services';
+import { encodeCmdScript } from '../../../util/common/windowsCmdScript';
 import { disposableTimeout } from '../../../util/vs/base/common/async';
 import { Disposable, DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import * as path from '../../../util/vs/base/common/path';
@@ -108,7 +109,7 @@ export class CopilotCLITerminalIntegration extends Disposable implements ICopilo
 powershell -ExecutionPolicy Bypass -File "${this.powershellScriptPath}" %*
 `;
 			this.shellScriptPath = path.join(storageLocation, `${COPILOT_CLI_COMMAND}.bat`);
-			await fs.writeFile(this.shellScriptPath, copilotPowershellScript);
+			await fs.writeFile(this.shellScriptPath, encodeCmdScript(copilotPowershellScript));
 
 			// Also create a POSIX shell script for Git Bash on Windows. Bash cannot
 			// execute the .bat shim directly inside a `bash -c` string, and we cannot run
