@@ -468,7 +468,7 @@ export class NewChatWidget extends Disposable {
 		if (!isWeb) {
 			// The home is a plain chat. Ready ideas open on request ("Идеи для
 			// начала" or the New Project command) and only prefill the composer.
-			const gallery = this._starterGallery = this._register(this.instantiationService.createInstance(StarterProjectGallery, chatWidgetContent, async (folderUri: URI, prompt: string, professionId: string, submit: boolean) => {
+			const gallery = this._starterGallery = this._register(this.instantiationService.createInstance(StarterProjectGallery, chatWidgetContent, async (folderUri: URI, prompt: string, professionId: string | undefined, submit: boolean) => {
 				const selectedModel = this._newChatInput.selectedModelState.get().currentModel?.identifier;
 				const result = await this._createNewSession(folderUri);
 				if (!result.session) {
@@ -477,7 +477,9 @@ export class NewChatWidget extends Disposable {
 						: localize('starterProjects.sessionUnavailable', "Агент пока недоступен для этой папки."));
 				}
 				this._workspacePicker.setSelectedWorkspace(folderUri, { fireEvent: false });
-				await selectStarterProfession(result.session, professionId, this.chatModeService, this.sessionsProvidersService);
+				if (professionId) {
+					await selectStarterProfession(result.session, professionId, this.chatModeService, this.sessionsProvidersService);
+				}
 				if (this._session.get()?.sessionId !== result.session.sessionId) {
 					throw new Error(localize('starterProjects.sessionChanged', "Подключение агента изменилось. Повторите запуск карточки."));
 				}
